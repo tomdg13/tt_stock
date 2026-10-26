@@ -1,0 +1,490 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'api.dart';
+import 'crud.dart';
+import 'lao.dart';
+import 'pages.dart';
+import 'specs.dart';
+import 'theme.dart';
+import 'widgets.dart';
+
+// ---------------------------------------------------------------- Login
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _phone = TextEditingController();
+  final _pin = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _submit() async {
+    if (_phone.text.trim().isEmpty || _pin.text.isEmpty) {
+      setState(() { _error = 'ໃສ່ເບີໂທ ແລະ PIN'; });
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await Api.login(_phone.text.trim(), _pin.text);
+    } catch (e) {
+      if (mounted) setState(() { _error = '$e'; });
+    } finally {
+      if (mounted) setState(() { _busy = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = pal(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('TT Stock', style: TextStyle(fontWeight: FontWeight.w700)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Server',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+          ),
+        ],
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 380),
+            child: AppCard(
+              title: 'ເຂົ້າສູ່ລະບົບ',
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                TextField(
+                  controller: _phone,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: 'ເບີໂທ', hintText: '020 5555 0001'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _pin,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  maxLength: 6,
+                  onSubmitted: (_) => _submit(),
+                  decoration: const InputDecoration(labelText: 'PIN', hintText: '••••', counterText: ''),
+                ),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text(_error!, style: TextStyle(color: p.bad), textAlign: TextAlign.center),
+                  ),
+                const SizedBox(height: 16),
+                saveButton('ເຂົ້າສູ່ລະບົບ', _busy, _submit),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ----------------------------------------------------------------- Home
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  late String _key = _firstKey();
+
+  bool _allowed(MenuItemDef m) => m.need.isEmpty || m.need.any(Api.can);
+
+  String _firstKey() {
+    final pref = Api.user?['role'] == 'warehouse' ? 'stock' : 'dash';
+    for (final g in menuGroups) {
+      for (final i in g.items) {
+        if (i.key == pref && _allowed(i)) return pref;
+      }
+    }
+    for (final g in menuGroups) {
+      for (final i in g.items) {
+        if (_allowed(i)) return i.key;
+      }
+    }
+    return 'dash';
+  }
+
+  Widget _page(String k) {
+    final sp = crudSpec(k);
+    if (sp != null) return CrudPage(sp);
+    switch (k) {
+      case 'dash': return const DashboardScreen();
+      case 'stock': return const StockScreen();
+      case 'recv': return const StockFormPage(issue: false);
+      case 'issue': return const StockFormPage(issue: true);
+      case 'trf': return const TransferScreen();
+      case 'hist': return const HistoryScreen();
+      case 'ser': return const SearchPage();
+      case 'bins':
+        return const ListPage(title: 'ບ່ອນເກັບ', path: '/bins', titleKeys: ['code', 'name'], subKeys: ['name', 'description'], searchable: false);
+      case 'plans':
+        return ListPage(
+          title: 'ແຜນຈັດຊື້', path: '/plans', searchable: false,
+          titleKeys: const ['planNo', 'name', 'id'], subKeys: const ['vendorName', 'brandName'],
+          tagKeys: const ['status'], detailPath: (m) => '/plans/${pick(m, ['id'])}',
+        );
+      case 'vendors':
+        return const ListPage(title: 'Vendor', path: '/vendors', titleKeys: ['name'], subKeys: ['phone', 'contact'], searchable: false);
+      case 'prod':
+        return ListPage(
+          title: 'ສິນຄ້າ', path: '/products', extraQuery: 'limit=100',
+          titleKeys: const ['name', 'productName'], subKeys: const ['typeName', 'brandName', 'code'],
+          trailKeys: const ['stock', 'qty'], detailPath: (m) => '/products/${pick(m, ['id', 'productId'])}',
+        );
+      case 'brand':
+        return const ListPage(title: 'BRAND', path: '/brands', titleKeys: ['name'], searchable: false);
+      case 'model':
+        return const ListPage(title: 'MODEL', path: '/models', titleKeys: ['name'], subKeys: ['brandName', 'legacyName'], searchable: false);
+      case 'atms':
+        return ListPage(
+          title: 'ຕູ້ ATM', path: '/atms', extraQuery: 'limit=100',
+          titleKeys: const ['atmId'], subKeys: const ['atmLocation', 'location', 'groupName', 'atmGroupId'],
+          tagKeys: const ['atmStatus', 'status'], detailPath: (m) => '/atms/${Uri.encodeComponent(pick(m, ['atmId']))}',
+        );
+      case 'terms':
+        return ListPage(
+          title: 'Terminal', path: '/terminals', extraQuery: 'limit=100',
+          titleKeys: const ['barcode'], subKeys: const ['typeName', 'atmId'], tagKeys: const ['state', 'status'],
+          detailPath: (m) => '/terminals/${Uri.encodeComponent(pick(m, ['barcode']))}',
+        );
+      case 'actrep':
+        return const ListPage(
+          title: 'Activity Report', path: '/activity-report',
+          titleKeys: ['barcode'], subKeys: ['atmId', 'user', 'createdAt'], tagKeys: ['status'],
+        );
+      case 'ttypes':
+        return const ListPage(title: 'ປະເພດ Terminal', path: '/terminal-types', titleKeys: ['name', 'code'], subKeys: ['code', 'id'], searchable: false);
+      case 'users':
+        return const ListPage(
+          title: 'ຜູ້ໃຊ້', path: '/users', searchable: false,
+          titleKeys: ['fullName', 'name', 'phone'], subKeys: ['phone', 'branchName'], tagKeys: ['roleName', 'role'],
+        );
+      case 'roles':
+        return const ListPage(title: 'ບົດບາດ', path: '/roles', searchable: false, titleKeys: ['name', 'roleName'], subKeys: ['scope']);
+      case 'funcs':
+        return const ListPage(title: 'ຟັງຊັນ', path: '/functions', searchable: false, titleKeys: ['name', 'id'], subKeys: ['id']);
+      case 'branches':
+        return const ListPage(title: 'ສາຂາ', path: '/branches', searchable: false, titleKeys: ['name'], subKeys: ['code']);
+    }
+    return const SizedBox();
+  }
+
+  Widget _tile(MenuItemDef m) {
+    final p = pal(context);
+    final sel = m.key == _key;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+      child: Material(
+        color: sel ? p.pri : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: ListTile(
+          dense: true,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          leading: Icon(m.icon, size: 20, color: sel ? p.prit : p.tx),
+          title: Text(m.label,
+              style: TextStyle(color: sel ? p.prit : p.tx, fontWeight: sel ? FontWeight.w600 : FontWeight.w400)),
+          onTap: () {
+            setState(() { _key = m.key; });
+            Navigator.pop(context);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _drawer() {
+    final p = pal(context);
+    final u = Api.user ?? {};
+    final role = pick(u, ['role']);
+    final hasBranch = pick(u, ['branchId']).isNotEmpty;
+    return Drawer(
+      child: SafeArea(
+        child: Column(children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.bd))),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('TT Stock', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Text(pick(u, ['name', 'fullName', 'phone']), style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Wrap(spacing: 6, children: [
+                if (role.isNotEmpty) Tag(roleNames[role] ?? role),
+                Tag(hasBranch ? 'ສາຂາຕົນເອງ' : 'ທຸກສາຂາ', hasBranch ? '' : 'in'),
+              ]),
+            ]),
+          ),
+          Expanded(
+            child: ListView(padding: const EdgeInsets.symmetric(vertical: 8), children: [
+              for (final g in menuGroups) ..._group(g),
+            ]),
+          ),
+          Divider(height: 1, color: p.bd),
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.settings_outlined),
+            title: const Text('ຕັ້ງຄ່າ Server'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+            },
+          ),
+          ListTile(
+            dense: true,
+            leading: Icon(Icons.logout, color: p.bad),
+            title: Text('ອອກຈາກລະບົບ', style: TextStyle(color: p.bad)),
+            onTap: () => Api.logout(),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  List<Widget> _group(MenuGroup g) {
+    final p = pal(context);
+    final items = g.items.where(_allowed).toList();
+    if (items.isEmpty) return [];
+    if (g.title == null) return [for (final i in items) _tile(i)];
+    return [
+      Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: true,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 18),
+          childrenPadding: EdgeInsets.zero,
+          title: Text(g.title!, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: p.mut)),
+          children: [for (final i in items) _tile(i)],
+        ),
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(labelOf(_key), style: const TextStyle(fontWeight: FontWeight.w700)),
+        actions: [
+          if (Api.can('STOCK_VIEW'))
+            IconButton(
+              icon: const Icon(Icons.search),
+              tooltip: 'ຄົ້ນຫາ Serial',
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())),
+            ),
+        ],
+      ),
+      drawer: _drawer(),
+      body: KeyedSubtree(key: ValueKey(_key), child: _page(_key)),
+    );
+  }
+}
+
+// ------------------------------------------------------------ Dashboard
+class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  late Future<dynamic> _f = Api.get('/dashboard');
+  void _reload() => setState(() { _f = Api.get('/dashboard'); });
+
+  bool _warn(String k) {
+    final s = k.toLowerCase();
+    return s.contains('low') || s.contains('pending') || s.contains('transit');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder(
+      future: _f,
+      builder: (c, s) {
+        if (s.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (s.hasError) return ErrorView(s.error!, _reload);
+        dynamic d = s.data;
+        if (d is Map && d.length == 1 && d['data'] is Map) d = d['data'];
+        if (d is! Map) {
+          return ListView(padding: const EdgeInsets.all(16), children: [AppCard(child: DataView(d))]);
+        }
+        final kpis = <Widget>[];
+        final cards = <Widget>[];
+        d.forEach((k, v) {
+          final key = k.toString(), label = prettyKey(key);
+          if (v is num || (v is String && num.tryParse(v) != null)) {
+            kpis.add(Kpi('$v', label));
+          } else if (v is List) {
+            kpis.add(Kpi('${v.length}', label, warn: v.isNotEmpty && _warn(key)));
+            cards.add(AppCard(title: label, child: _rows(context, v)));
+          } else if (v is Map) {
+            cards.add(AppCard(
+              title: label,
+              child: Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final e in v.entries) InfoChip(prettyKey('${e.key}'), '${e.value}'),
+              ]),
+            ));
+          }
+        });
+        return RefreshIndicator(
+          onRefresh: () async => _reload(),
+          child: ListView(padding: const EdgeInsets.all(16), children: [
+            LayoutBuilder(
+              builder: (_, bc) => Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [for (final k in kpis) SizedBox(width: (bc.maxWidth - 12) / 2, child: k)],
+              ),
+            ),
+            const SizedBox(height: 14),
+            ...cards,
+          ]),
+        );
+      },
+    );
+  }
+
+  Widget _rows(BuildContext context, List v) {
+    final p = pal(context);
+    if (v.isEmpty) return Text('ບໍ່ມີລາຍການ', style: TextStyle(color: p.mut));
+    return Column(children: [
+      for (final x in v.take(10))
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.bd))),
+          child: _row(context, x),
+        ),
+    ]);
+  }
+
+  Widget _row(BuildContext context, dynamic x) {
+    final p = pal(context);
+    if (x is! Map) return Text('$x');
+    final vals = x.entries.where((e) => e.value != null && e.value is! Map && e.value is! List).toList();
+    if (vals.isEmpty) return const SizedBox();
+    final rest = vals.skip(1).take(3).map((e) => '${prettyKey('${e.key}')}: ${e.value}').join(' · ');
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('${vals.first.value}', style: const TextStyle(fontWeight: FontWeight.w600)),
+      if (rest.isNotEmpty) Text(rest, style: TextStyle(color: p.mut, fontSize: 12)),
+    ]);
+  }
+}
+
+// --------------------------------------------------------------- Search
+class SearchScreen extends StatelessWidget {
+  const SearchScreen({super.key});
+  @override
+  Widget build(BuildContext context) =>
+      Scaffold(appBar: AppBar(title: const Text('ຄົ້ນຫາ Serial')), body: const SearchPage());
+}
+
+class SearchPage extends StatefulWidget {
+  const SearchPage({super.key});
+  @override
+  State<SearchPage> createState() => _SearchPageState();
+}
+
+class _SearchPageState extends State<SearchPage> {
+  final _q = TextEditingController();
+  Future<dynamic>? _f;
+
+  void _go() {
+    final q = _q.text.trim();
+    if (q.isEmpty) return;
+    setState(() { _f = Api.get('/search?q=${Uri.encodeQueryComponent(q)}'); });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = pal(context);
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.all(16),
+        child: TextField(
+          controller: _q,
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) => _go(),
+          decoration: InputDecoration(
+            hintText: 'ຄົ້ນຫາ Serial (Enter)',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: IconButton(icon: const Icon(Icons.arrow_forward), onPressed: _go),
+          ),
+        ),
+      ),
+      Expanded(
+        child: _f == null
+            ? Center(child: Text('Serial → Terminal → ຕູ້', style: TextStyle(color: p.mut)))
+            : FutureBuilder(
+                future: _f,
+                builder: (c, s) {
+                  if (s.connectionState != ConnectionState.done) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (s.hasError) return ErrorView(s.error!, _go);
+                  return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), children: [AppCard(child: DataView(s.data))]);
+                }),
+      ),
+    ]);
+  }
+}
+
+// ------------------------------------------------------------- Settings
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  late final _url = TextEditingController(text: Api.baseUrl);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('ຕັ້ງຄ່າ Server')),
+      body: ListView(padding: const EdgeInsets.all(16), children: [
+        AppCard(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            TextField(
+              controller: _url,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(labelText: 'Server URL (ລົງທ້າຍດ້ວຍ /api)'),
+            ),
+            const SizedBox(height: 12),
+            Row(children: [
+              OutlinedButton(onPressed: () => _url.text = defaultBaseUrl, child: const Text('ຣີເຊັດ')),
+              const SizedBox(width: 12),
+              FilledButton(
+                onPressed: () async {
+                  await Api.saveBaseUrl(_url.text);
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ບັນທຶກແລ້ວ')));
+                  Navigator.pop(context);
+                },
+                child: const Text('ບັນທຶກ'),
+              ),
+            ]),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
