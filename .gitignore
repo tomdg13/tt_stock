@@ -52,3 +52,6 @@ build/
 *.keystore
 *.jks
 key.properties
+*.mine
+*.old
+patch_*.py
