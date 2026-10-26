@@ -55,3 +55,6 @@ key.properties
 *.mine
 *.old
 patch_*.py
+node_modules/
+dist/
+uploads/
