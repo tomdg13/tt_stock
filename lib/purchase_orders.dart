@@ -400,9 +400,7 @@ class _PoFormPageState extends State<PoFormPage> {
                 controller: _title,
                 decoration: const InputDecoration(labelText: 'ຫົວຂໍ້')),
             const SizedBox(height: 12),
-            TextField(
-                controller: _vendor,
-                decoration: const InputDecoration(labelText: 'ຜູ້ສະໜອງ')),
+            VendorDropdown(controller: _vendor),
             const SizedBox(height: 12),
             TextField(
                 controller: _note,
@@ -576,5 +574,134 @@ class _PoDropdownState extends State<PoDropdown> {
           onPressed: _edit,
         ),
     ]);
+  }
+}
+
+// ---------------------------------------------------------- vendor dropdown
+class VendorDropdown extends StatefulWidget {
+  final TextEditingController controller;
+  const VendorDropdown({super.key, required this.controller});
+  @override
+  State<VendorDropdown> createState() => _VendorDropdownState();
+}
+
+class _VendorDropdownState extends State<VendorDropdown> {
+  List<String> _names = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final d = await Api.get('/vendors');
+      final names = <String>[];
+      for (final m in asList(d)) {
+        final off = '${m['isActive'] ?? 1}';
+        if (off == '0' || off == 'false') continue;
+        final n = pick(m, ['name']);
+        if (n.isNotEmpty) names.add(n);
+      }
+      if (mounted) {
+        setState(() {
+          _names = names;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _add() async {
+    final name = await showDialog<String>(
+        context: context, builder: (_) => const _VendorDialog());
+    if (name == null || name.isEmpty || !mounted) return;
+    final exists = _names.any((n) => n.toLowerCase() == name.toLowerCase());
+    if (!exists) {
+      try {
+        await Api.post('/vendors', {'name': name});
+        await _load();
+      } catch (e) {
+        if (mounted) toastMsg(context, '$e');
+        return;
+      }
+    }
+    if (mounted) setState(() => widget.controller.text = name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cur = widget.controller.text.trim();
+    final items = [..._names];
+    if (cur.isNotEmpty && !items.contains(cur)) items.add(cur);
+    return Row(children: [
+      Expanded(
+        child: DropdownButtonFormField<String>(
+          key: ValueKey('v-${items.length}-$cur'),
+          initialValue: cur.isEmpty ? null : cur,
+          isExpanded: true,
+          decoration: InputDecoration(
+              labelText: 'ຜູ້ສະໜອງ', hintText: _loading ? 'ກຳລັງໂຫຼດ…' : null),
+          items: [
+            const DropdownMenuItem<String>(
+                value: null, child: Text('— ບໍ່ລະບຸ —')),
+            for (final n in items)
+              DropdownMenuItem<String>(
+                  value: n, child: Text(n, overflow: TextOverflow.ellipsis)),
+          ],
+          onChanged: (v) => setState(() => widget.controller.text = v ?? ''),
+        ),
+      ),
+      IconButton.filledTonal(
+        icon: const Icon(Icons.add),
+        tooltip: 'ເພີ່ມຜູ້ສະໜອງ',
+        onPressed: _add,
+      ),
+    ]);
+  }
+}
+
+class _VendorDialog extends StatefulWidget {
+  const _VendorDialog();
+  @override
+  State<_VendorDialog> createState() => _VendorDialogState();
+}
+
+class _VendorDialogState extends State<_VendorDialog> {
+  final _c = TextEditingController();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('ເພີ່ມຜູ້ສະໜອງ'),
+      content: TextField(
+        controller: _c,
+        autofocus: true,
+        textCapitalization: TextCapitalization.words,
+        decoration: const InputDecoration(labelText: 'ຊື່ຜູ້ສະໜອງ'),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('ຍົກເລີກ')),
+        FilledButton(
+          onPressed: () {
+            final n = _c.text.trim();
+            Navigator.pop(context, n.isEmpty ? null : n);
+          },
+          child: const Text('ບັນທຶກ'),
+        ),
+      ],
+    );
   }
 }
