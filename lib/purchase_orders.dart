@@ -106,7 +106,9 @@ class _PoPickerPageState extends State<PoPickerPage> {
 
   Future<dynamic> _load() =>
       Api.get('/purchase-orders?q=${Uri.encodeQueryComponent(_q.text.trim())}');
-  void _reload() => setState(() => _f = _load());
+  void _reload() => setState(() {
+        _f = _load();
+      });
 
   @override
   void dispose() {

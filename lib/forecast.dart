@@ -42,7 +42,9 @@ class _ForecastPageState extends State<ForecastPage> {
       'pct=$pct',
       if (_branchId != null) 'branchId=$_branchId'
     ].join('&');
-    setState(() => _f = Api.get('/stock/forecast?$q'));
+    setState(() {
+      _f = Api.get('/stock/forecast?$q');
+    });
   }
 
   @override
