@@ -7,6 +7,7 @@ import 'lao.dart';
 import 'pages.dart';
 import 'specs.dart';
 import 'terminal_actions.dart';
+import 'forecast.dart';
 import 'terminal_model_filter.dart';
 import 'terminal_pick_list.dart';
 import 'terminal_history.dart';
@@ -434,8 +435,15 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           if (Api.can('STOCK_VIEW'))
             IconButton(
+              icon: const Icon(Icons.trending_up),
+              tooltip: 'ຄາດການຊື້ອາໄຫຼ່',
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ForecastPage())),
+            ),
+          if (Api.can('STOCK_VIEW'))
+            IconButton(
               icon: const Icon(Icons.search),
-              tooltip: 'ຄົ້ນຫາ Serial',
+              tooltip: 'ຄົ້ນຫາ',
               onPressed: () => Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const SearchScreen())),
             ),
