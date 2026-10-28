@@ -8,6 +8,7 @@ import 'pages.dart';
 import 'specs.dart';
 import 'terminal_actions.dart';
 import 'forecast.dart';
+import 'atm_ocr.dart';
 import 'terminal_model_filter.dart';
 import 'terminal_pick_list.dart';
 import 'terminal_history.dart';
@@ -433,6 +434,12 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(labelOf(_key),
             style: const TextStyle(fontWeight: FontWeight.w700)),
         actions: [
+          if (Api.can('STOCK_VIEW'))
+            IconButton(
+              icon: const Icon(Icons.photo_camera_outlined),
+              tooltip: 'ຖ່າຍຮູບເລກຕູ້ ATM',
+              onPressed: () => openAtmFromPhoto(context),
+            ),
           if (Api.can('STOCK_VIEW'))
             IconButton(
               icon: const Icon(Icons.trending_up),
