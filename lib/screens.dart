@@ -8,6 +8,7 @@ import 'pages.dart';
 import 'specs.dart';
 import 'terminal_actions.dart';
 import 'forecast.dart';
+import 'atm_info.dart';
 import 'atm_ocr.dart';
 import 'terminal_model_filter.dart';
 import 'terminal_pick_list.dart';
@@ -1122,29 +1123,36 @@ class _AtmTerminalTreeState extends State<AtmTerminalTree> {
         final terms = d is Map && d['terminals'] is List
             ? asList(d['terminals'])
             : <Map<String, dynamic>>[];
+        final info =
+            d is Map ? Map<String, dynamic>.from(d) : <String, dynamic>{};
         return RefreshIndicator(
           onRefresh: () async => _reload(),
           child: terms.isEmpty
-              ? ListView(children: [
-                  const SizedBox(height: 120),
-                  Center(
-                      child: Text('ຍັງບໍ່ມີ Terminal ໃນຕູ້ນີ້',
-                          style: TextStyle(color: p.mut))),
-                  if (widget.onAdd != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16),
-                      child: Center(
-                        child: FilledButton.tonalIcon(
-                          onPressed: widget.onAdd,
-                          icon: const Icon(Icons.qr_code_scanner),
-                          label: const Text('ເພີ່ມ Terminal'),
+              ? ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  children: [
+                      AtmInfoCard(info),
+                      const SizedBox(height: 80),
+                      Center(
+                          child: Text('ຍັງບໍ່ມີ Terminal ໃນຕູ້ນີ້',
+                              style: TextStyle(color: p.mut))),
+                      if (widget.onAdd != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Center(
+                            child: FilledButton.tonalIcon(
+                              onPressed: widget.onAdd,
+                              icon: const Icon(Icons.qr_code_scanner),
+                              label: const Text('ເພີ່ມ Terminal'),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                ])
+                    ])
               : ListView(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   children: [
+                    AtmInfoCard(info),
+                    const SizedBox(height: 8),
                     for (final t in terms)
                       _TerminalTile(t, atmId: widget.atmId, onChanged: _reload)
                   ],

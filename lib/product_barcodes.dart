@@ -1,6 +1,8 @@
 // Many barcodes per product.
 // Server: GET/PUT /products/:id/barcodes, GET /products/by-barcode/:code
 import 'package:flutter/material.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:image_picker/image_picker.dart';
 import 'api.dart';
 import 'crud.dart';
 import 'screens.dart' show BarcodeScanPage;
@@ -90,6 +92,104 @@ class _ProductBarcodesEditorState extends State<ProductBarcodesEditor> {
     if (mounted) setState(() {});
   }
 
+  /// Photo of the printed number -> read the text on the phone -> add the barcode (pick one if several).
+  Future<void> _scanText() async {
+    final shot = await ImagePicker()
+        .pickImage(source: ImageSource.camera, imageQuality: 90);
+    if (shot == null || !mounted) return;
+    var text = '';
+    final rec = TextRecognizer(script: TextRecognitionScript.latin);
+    try {
+      text = (await rec.processImage(InputImage.fromFilePath(shot.path))).text;
+    } catch (e) {
+      if (mounted) setState(() => _err = 'ອ່ານຮູບບໍ່ໄດ້: $e');
+      return;
+    } finally {
+      await rec.close();
+    }
+    if (!mounted) return;
+    final cands = <String>[];
+    for (final line in text.split('\n')) {
+      final joined = line.replaceAll(RegExp(r'\s*-\s*'), '-');
+      for (final raw in joined.split(RegExp(r'\s+'))) {
+        final t = raw.replaceAll(RegExp(r'[^A-Za-z0-9\-]'), '');
+        if (t.length >= 5 && RegExp(r'\d').hasMatch(t) && !cands.contains(t))
+          cands.add(t);
+      }
+    }
+    if (cands.isEmpty) {
+      setState(
+          () => _err = 'ບໍ່ເຫັນເລກ barcode ໃນຮູບ. ຖ່າຍໃກ້ໆ ໃຫ້ເຫັນຕົວເລກຊັດ');
+      return;
+    }
+    if (cands.length == 1) {
+      await _add(cands.first);
+      return;
+    }
+    final picked = await showModalBottomSheet<List<String>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (c) {
+        // codes with a hyphen (part / serial numbers) are ticked by default
+        final on = <String>{...cands.where((t) => t.contains('-'))};
+        if (on.isEmpty) on.addAll(cands);
+        return StatefulBuilder(
+          builder: (c, setS) => SafeArea(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
+                child: Row(children: [
+                  const Expanded(
+                    child: Text('ເລືອກເລກທີ່ຈະເພີ່ມ',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                  TextButton(
+                    onPressed: () => setS(() => on.addAll(cands)),
+                    child: const Text('ເລືອກທັງໝົດ'),
+                  ),
+                ]),
+              ),
+              Flexible(
+                child: ListView(shrinkWrap: true, children: [
+                  for (final t in cands)
+                    CheckboxListTile(
+                      value: on.contains(t),
+                      title: Text(t),
+                      onChanged: (v) => setS(() {
+                        if (v == true) {
+                          on.add(t);
+                        } else {
+                          on.remove(t);
+                        }
+                      }),
+                    ),
+                ]),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: on.isEmpty
+                        ? null
+                        : () =>
+                            Navigator.pop(c, cands.where(on.contains).toList()),
+                    child: Text('ເພີ່ມ ${on.length} ລາຍການ'),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        );
+      },
+    );
+    if (picked != null && mounted) {
+      for (final t in picked) {
+        await _add(t);
+      }
+    }
+  }
+
   Future<void> _scan() async {
     final s = await Navigator.push<String>(
         context, MaterialPageRoute(builder: (_) => const BarcodeScanPage()));
@@ -111,11 +211,17 @@ class _ProductBarcodesEditorState extends State<ProductBarcodesEditor> {
             textInputAction: TextInputAction.done,
             onSubmitted: (_) => _add(),
             decoration: InputDecoration(
-              hintText: 'ພິມ ຫຼື ສະແກນ barcode',
-              suffixIcon: IconButton(
-                  icon: const Icon(Icons.qr_code_scanner),
-                  tooltip: 'ສະແກນ',
-                  onPressed: _scan),
+              hintText: 'ພິມ ຫຼື ສະແກນ',
+              suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+                IconButton(
+                    icon: const Icon(Icons.qr_code_scanner),
+                    tooltip: 'ສະແກນ barcode',
+                    onPressed: _scan),
+                IconButton(
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    tooltip: 'ຖ່າຍຮູບອ່ານເລກ',
+                    onPressed: _scanText),
+              ]),
             ),
           ),
         ),
