@@ -378,6 +378,7 @@ class _StockReportState extends State<StockReport> {
   String? _branchF;
   String? _dBrand;
   String? _dModel;
+  String? _dBranch;
   bool _showTerm = true;
   List<List<String>> _lines = [];
   late Future<dynamic> _f = Api.get('/stock/overview');
@@ -405,6 +406,7 @@ class _StockReportState extends State<StockReport> {
   }
 
   String _keyOf(Map<String, dynamic> r) {
+    if (_dBranch != null && _dBrand == null) return _brandOf(r);
     if (_dBrand != null) return _modelOf(r);
     switch (_by) {
       case 'model':
@@ -419,13 +421,25 @@ class _StockReportState extends State<StockReport> {
     }
   }
 
-  String get _groupLabel => _dBrand != null ? 'ຮຸ່ນ' : _byLabels[_by]!;
+  String get _groupLabel => _dBrand != null
+      ? 'ຮຸ່ນ'
+      : (_dBranch != null ? 'Brand' : _byLabels[_by]!);
 
-  bool get _canDrill => _dBrand != null || _by == 'brand' || _by == 'model';
+  bool get _canDrill =>
+      _dBrand != null ||
+      _dBranch != null ||
+      _by == 'brand' ||
+      _by == 'model' ||
+      _by == 'branch';
 
   void _drill(String k) => setState(() {
         if (_dBrand != null) {
           _dModel = k;
+          _showTerm = _dBranch == null;
+        } else if (_dBranch != null) {
+          _dBrand = k;
+        } else if (_by == 'branch') {
+          _dBranch = k;
         } else if (_by == 'brand') {
           _dBrand = k;
         } else if (_by == 'model') {
@@ -436,8 +450,10 @@ class _StockReportState extends State<StockReport> {
   void _back() => setState(() {
         if (_dModel != null) {
           _dModel = null;
-        } else {
+        } else if (_dBrand != null) {
           _dBrand = null;
+        } else {
+          _dBranch = null;
         }
       });
 
@@ -447,6 +463,7 @@ class _StockReportState extends State<StockReport> {
       if (_low && !_isLow(r)) return false;
       if (_brandF != null && _brandOf(r) != _brandF) return false;
       if (_branchF != null && _branchOf(r) != _branchF) return false;
+      if (_dBranch != null && _branchOf(r) != _dBranch) return false;
       if (_dBrand != null && _brandOf(r) != _dBrand) return false;
       if (_dModel != null && _modelOf(r) != _dModel) return false;
       if (q.isEmpty) return true;
@@ -495,6 +512,7 @@ class _StockReportState extends State<StockReport> {
           child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
             InkWell(
               onTap: () => setState(() {
+                _dBranch = null;
                 _dBrand = null;
                 _dModel = null;
               }),
@@ -721,7 +739,7 @@ class _StockReportState extends State<StockReport> {
   @override
   Widget build(BuildContext context) {
     final p = pal(context);
-    final drilled = _dBrand != null || _dModel != null;
+    final drilled = _dBranch != null || _dBrand != null || _dModel != null;
     return PopScope(
       canPop: !drilled,
       onPopInvokedWithResult: (didPop, _) {
@@ -810,8 +828,18 @@ class _StockReportState extends State<StockReport> {
                     ],
                   ),
                 ),
-              ] else
+              ] else ...[
+                if (_dBranch != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('ສາຂາ: $_dBranch',
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                  ),
                 _crumbs(p),
+              ],
               if (_dModel != null)
                 _ViewToggle(
                     term: _showTerm,
