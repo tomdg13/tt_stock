@@ -18,6 +18,8 @@ import 'terminal_history.dart';
 import 'type_image.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'transfer_report.dart';
+import 'stock_count.dart';
 
 // ---------------------------------------------------------------- Login
 class LoginScreen extends StatefulWidget {
@@ -1255,6 +1257,13 @@ class DashMenuScreen extends StatelessWidget {
             Colors.brown,
             () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const TransferScreen()))),
+      if (Api.can('STOCK_COUNT'))
+        _DashMenuItem(
+            Icons.fact_check_outlined,
+            'ນັບສະຕັອກ',
+            Colors.cyan,
+            () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const StockCountPage()))),
     ];
     return GridView.count(
       crossAxisCount: 5,
@@ -1372,6 +1381,15 @@ class ReportsScreen extends StatelessWidget {
               'ATM spare part change report',
               ['Date range', 'By ATM', 'By part'],
               const ReportAtmPartsPage()),
+          const SizedBox(height: 12),
+          _card(
+              context,
+              Icons.swap_horiz,
+              Colors.brown,
+              '3 · ລາຍງານໂອນອາໄຫຼ່ລະຫວ່າງສາຂາ',
+              'Spare part transfer report',
+              ['Date range', 'By branch', 'Status'],
+              const TransferReportPage()),
         ],
       ),
     );
