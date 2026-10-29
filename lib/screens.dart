@@ -149,7 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (sp != null) return CrudPage(sp);
     switch (k) {
       case 'dash':
-        return const DashboardScreen();
+        return const DashMenuScreen();
       case 'stock':
         return const StockScreen();
       case 'recv':
@@ -435,20 +435,20 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(labelOf(_key),
             style: const TextStyle(fontWeight: FontWeight.w700)),
         actions: [
-          if (Api.can('STOCK_VIEW'))
+          if (_key != 'dash' && Api.can('STOCK_VIEW'))
             IconButton(
               icon: const Icon(Icons.photo_camera_outlined),
               tooltip: 'ຖ່າຍຮູບເລກຕູ້ ATM',
               onPressed: () => openAtmFromPhoto(context),
             ),
-          if (Api.can('STOCK_VIEW'))
+          if (_key != 'dash' && Api.can('STOCK_VIEW'))
             IconButton(
               icon: const Icon(Icons.trending_up),
               tooltip: 'ຄາດການຊື້ອາໄຫຼ່',
               onPressed: () => Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const ForecastPage())),
             ),
-          if (Api.can('STOCK_VIEW'))
+          if (_key != 'dash' && Api.can('STOCK_VIEW'))
             IconButton(
               icon: const Icon(Icons.search),
               tooltip: 'ຄົ້ນຫາ',
@@ -1195,6 +1195,77 @@ class _TerminalTile extends StatelessWidget {
           onChanged: onChanged,
         ),
       ),
+    );
+  }
+}
+
+// ------------------------------------------------------------ Dashboard menu grid
+class _DashMenuItem {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _DashMenuItem(this.icon, this.label, this.color, this.onTap);
+}
+
+class DashMenuScreen extends StatelessWidget {
+  const DashMenuScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final items = <_DashMenuItem>[
+      if (Api.can('STOCK_VIEW'))
+        _DashMenuItem(Icons.photo_camera_outlined, 'ຖ່າຍຮູບເລກຕູ້ ATM',
+            Colors.blue, () => openAtmFromPhoto(context)),
+      if (Api.can('STOCK_VIEW'))
+        _DashMenuItem(
+            Icons.trending_up,
+            'ຄາດການຊື້ອາໄຫຼ່',
+            Colors.teal,
+            () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const ForecastPage()))),
+      if (Api.can('STOCK_VIEW'))
+        _DashMenuItem(
+            Icons.search,
+            'ຄົ້ນຫາ',
+            Colors.deepOrange,
+            () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const SearchScreen()))),
+    ];
+    return GridView.count(
+      crossAxisCount: 3,
+      padding: const EdgeInsets.fromLTRB(8, 24, 8, 8),
+      mainAxisSpacing: 12,
+      childAspectRatio: 0.85,
+      children: [
+        for (final it in items)
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: it.onTap,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: cs.surface,
+                    border: Border.all(color: cs.outlineVariant),
+                  ),
+                  child: Icon(it.icon, size: 30, color: it.color),
+                ),
+                const SizedBox(height: 8),
+                Text(it.label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13)),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
