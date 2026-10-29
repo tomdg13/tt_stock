@@ -822,7 +822,7 @@ class _StockReportState extends State<StockReport> {
                         child: Text('ຍັງບໍ່ມີລາຍການ',
                             style: TextStyle(color: p.mut)))
                     : (_dModel != null
-                        ? (_showTerm ? _ModelTerminals(model: _dModel!) : _itemView(p, rows))
+                        ? (_showTerm ? _ModelTerminals(brand: _dBrand ?? "", model: _dModel!) : _itemView(p, rows))
                         : _groupView(p, rows)),
               ),
             ]);
@@ -862,21 +862,14 @@ class _ViewToggle extends StatelessWidget {
 
 class _ModelTerminals extends StatefulWidget {
   final String model;
-  const _ModelTerminals({required this.model});
+  final String brand;
+  const _ModelTerminals({required this.model, this.brand = ''});
   @override
   State<_ModelTerminals> createState() => _ModelTerminalsState();
 }
 
 class _ModelTerminalsState extends State<_ModelTerminals> {
   late Future<dynamic> _f = Api.get('/terminals?limit=500');
-  final _q = TextEditingController();
-  String? _type;
-
-  @override
-  void dispose() {
-    _q.dispose();
-    super.dispose();
-  }
 
   bool _match(Map<String, dynamic> t) {
     final m = widget.model.toLowerCase();
@@ -895,6 +888,9 @@ class _ModelTerminalsState extends State<_ModelTerminals> {
     final v = pick(t, ['typeName']);
     return v.isEmpty ? '(ບໍ່ມີ type)' : v;
   }
+
+  String get _path =>
+      [widget.brand, widget.model].where((e) => e.isNotEmpty).join(' › ');
 
   @override
   Widget build(BuildContext context) {
@@ -925,100 +921,285 @@ class _ModelTerminalsState extends State<_ModelTerminals> {
               ),
           ]);
         }
-
-        final counts = <String, int>{};
+        final byType = <String, List<Map<String, dynamic>>>{};
         for (final t in ofModel) {
-          counts[_typeOf(t)] = (counts[_typeOf(t)] ?? 0) + 1;
+          byType.putIfAbsent(_typeOf(t), () => []).add(t);
         }
-        final types = counts.keys.toList()..sort();
-        final typeSel = counts.containsKey(_type) ? _type : null;
-
-        final q = _q.text.trim().toLowerCase();
-        final list = ofModel.where((t) {
-          if (typeSel != null && _typeOf(t) != typeSel) return false;
-          if (q.isEmpty) return true;
-          return pick(t, ['barcode']).toLowerCase().contains(q) ||
-              pick(t, ['serial']).toLowerCase().contains(q);
-        }).toList()
-          ..sort((a, b) =>
-              pick(a, ['barcode']).compareTo(pick(b, ['barcode'])));
-
-        return Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-            child: TextField(
-              controller: _q,
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                  hintText: 'ຄົ້ນຫາ barcode / serial',
-                  prefixIcon: Icon(Icons.search),
-                  isDense: true),
-            ),
-          ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Row(children: [
-              ChoiceChip(
-                label: Text('ທັງໝົດ (${ofModel.length})'),
-                selected: typeSel == null,
-                onSelected: (_) => setState(() => _type = null),
-              ),
-              for (final t in types) ...[
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: Text('$t (${counts[t]})'),
-                  selected: typeSel == t,
-                  onSelected: (_) => setState(() => _type = t),
-                ),
-              ],
-            ]),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text('${list.length} / ${ofModel.length} terminal',
-                  style: TextStyle(color: p.mut, fontSize: 12)),
-            ),
-          ),
-          Expanded(
-            child: list.isEmpty
-                ? Center(
-                    child: Text('ບໍ່ພົບລາຍການ', style: TextStyle(color: p.mut)))
-                : ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    children: [
-                      for (final t in list)
-                        Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            title: Text(pick(t, ['barcode']),
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w700)),
-                            subtitle: Text([
-                              pick(t, ['typeName']),
-                              pick(t, ['serial'])
-                            ].where((e) => e.isNotEmpty).join(' · ')),
-                            trailing:
-                                Row(mainAxisSize: MainAxisSize.min, children: [
-                              Text(pick(t, ['state', 'status']),
-                                  style:
-                                      TextStyle(color: p.mut, fontSize: 12)),
-                              const Icon(Icons.chevron_right),
-                            ]),
-                            onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => HistoryPage(
-                                        barcode: pick(t, ['barcode'])))),
-                          ),
+        final types = byType.keys.toList()..sort();
+        const bold = TextStyle(fontWeight: FontWeight.w700);
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          children: [
+            AppCard(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                      minWidth: MediaQuery.of(context).size.width - 64),
+                  child: DataTable(
+                    showCheckboxColumn: false,
+                    columnSpacing: 20,
+                    horizontalMargin: 8,
+                    headingRowHeight: 38,
+                    dataRowMinHeight: 46,
+                    dataRowMaxHeight: 54,
+                    dividerThickness: 0.6,
+                    headingTextStyle: TextStyle(
+                        color: p.mut,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600),
+                    columns: const [
+                      DataColumn(label: Text('Type')),
+                      DataColumn(label: Text('Terminal'), numeric: true),
+                      DataColumn(label: Text('')),
+                    ],
+                    rows: [
+                      for (final t in types)
+                        DataRow(
+                          onSelectChanged: (_) => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => _TypeTerminalsPage(
+                                      path: '$_path › $t',
+                                      items: byType[t]!))),
+                          cells: [
+                            DataCell(Text(t, style: bold)),
+                            DataCell(Text('${byType[t]!.length}')),
+                            const DataCell(Icon(Icons.chevron_right)),
+                          ],
                         ),
+                      DataRow(cells: [
+                        const DataCell(Text('ລວມ', style: bold)),
+                        DataCell(Text('${ofModel.length}', style: bold)),
+                        const DataCell(Text('')),
+                      ]),
                     ],
                   ),
-          ),
-        ]);
+                ),
+              ),
+            ),
+          ],
+        );
       },
+    );
+  }
+}
+
+class _TypeTerminalsPage extends StatefulWidget {
+  final String path;
+  final List<Map<String, dynamic>> items;
+  const _TypeTerminalsPage({required this.path, required this.items});
+  @override
+  State<_TypeTerminalsPage> createState() => _TypeTerminalsPageState();
+}
+
+class _TypeTerminalsPageState extends State<_TypeTerminalsPage> {
+  final _q = TextEditingController();
+
+  @override
+  void dispose() {
+    _q.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = pal(context);
+    final q = _q.text.trim().toLowerCase();
+    final list = widget.items.where((t) {
+      if (q.isEmpty) return true;
+      return pick(t, ['barcode']).toLowerCase().contains(q) ||
+          pick(t, ['serial']).toLowerCase().contains(q);
+    }).toList()
+      ..sort((a, b) => pick(a, ['barcode']).compareTo(pick(b, ['barcode'])));
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.path,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+      ),
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: TextField(
+            controller: _q,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+                hintText: 'ຄົ້ນຫາ barcode / serial',
+                prefixIcon: Icon(Icons.search),
+                isDense: true),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text('${list.length} / ${widget.items.length} terminal',
+                style: TextStyle(color: p.mut, fontSize: 12)),
+          ),
+        ),
+        Expanded(
+          child: list.isEmpty
+              ? Center(
+                  child: Text('ບໍ່ພົບລາຍການ', style: TextStyle(color: p.mut)))
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  children: [
+                    for (final t in list)
+                      Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          title: Text(pick(t, ['barcode']),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w700)),
+                          subtitle: Text([
+                            pick(t, ['serial']),
+                            pick(t, ['state', 'status'])
+                          ].where((e) => e.isNotEmpty).join(' · ')),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => _TerminalPartsPage(
+                                      path: widget.path,
+                                      barcode: pick(t, ['barcode'])))),
+                        ),
+                      ),
+                  ],
+                ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _TerminalPartsPage extends StatefulWidget {
+  final String path;
+  final String barcode;
+  const _TerminalPartsPage({required this.path, required this.barcode});
+  @override
+  State<_TerminalPartsPage> createState() => _TerminalPartsPageState();
+}
+
+class _TerminalPartsPageState extends State<_TerminalPartsPage> {
+  late Future<List<Map<String, dynamic>>> _f = _load();
+
+  void _reload() => setState(() {
+        _f = _load();
+      });
+
+  Future<List<Map<String, dynamic>>> _load() async {
+    final d = await Api.get(
+        '/install/log?barcode=${Uri.encodeComponent(widget.barcode)}&limit=300');
+    final rows = asList(d).where((l) {
+      final up = pick(l, ['action']).toUpperCase();
+      return up.startsWith('MA PART') ||
+          up.startsWith('INSTALL') ||
+          up.startsWith('REMOVE');
+    }).toList();
+    final zero = DateTime.fromMillisecondsSinceEpoch(0);
+    rows.sort((a, b) =>
+        (DateTime.tryParse(pick(b, ['logDate'])) ?? zero)
+            .compareTo(DateTime.tryParse(pick(a, ['logDate'])) ?? zero));
+    return rows;
+  }
+
+  String _actionLabel(String action) {
+    final up = action.toUpperCase();
+    if (up.startsWith('INSTALL')) return 'ຕິດຕັ້ງ';
+    if (up.startsWith('REMOVE')) return 'ເອົາອອກ';
+    return 'ໃຊ້';
+  }
+
+  String _qty(String action) {
+    final m = RegExp(r'X(\d+)$').firstMatch(action.toUpperCase());
+    return m == null ? '' : ' × ${m.group(1)}';
+  }
+
+  String _date(String raw) {
+    final d = DateTime.tryParse(raw);
+    if (d == null) return '';
+    final l = d.toLocal();
+    String t(int n) => n.toString().padLeft(2, '0');
+    return '${l.year}-${t(l.month)}-${t(l.day)}\n${t(l.hour)}:${t(l.minute)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = pal(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('${widget.path} › ${widget.barcode}',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'ປະຫວັດທັງໝົດ',
+            onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => HistoryPage(barcode: widget.barcode))),
+          ),
+          IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'ໂຫຼດໃໝ່',
+              onPressed: _reload),
+        ],
+      ),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _f,
+        builder: (c, s) {
+          if (s.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (s.hasError) {
+            return Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text('${s.error}', textAlign: TextAlign.center),
+              TextButton(onPressed: _reload, child: const Text('ລອງໃໝ່')),
+            ]));
+          }
+          final rows = s.data ?? [];
+          if (rows.isEmpty) {
+            return Center(
+                child: Text('ຍັງບໍ່ມີອາໄຫຼ່', style: TextStyle(color: p.mut)));
+          }
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text('${rows.length} ລາຍການ',
+                    style: TextStyle(color: p.mut, fontSize: 12)),
+              ),
+              for (final l in rows)
+                Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    title: Text(
+                        pick(l, ['productName']).isEmpty
+                            ? '-'
+                            : pick(l, ['productName']),
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text(
+                      [
+                        '${_actionLabel(pick(l, ['action']))}${_qty(pick(l, ['action']))}',
+                        pick(l, ['serialNo']),
+                        pick(l, ['userName']),
+                      ].where((e) => e.isNotEmpty).join(' · '),
+                      style: TextStyle(
+                          color: _actionLabel(pick(l, ['action'])) == 'ເອົາອອກ'
+                              ? p.bad
+                              : p.mut),
+                    ),
+                    trailing: Text(_date(pick(l, ['logDate'])),
+                        textAlign: TextAlign.right,
+                        style: TextStyle(color: p.mut, fontSize: 12)),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
