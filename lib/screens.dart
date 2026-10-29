@@ -1,4 +1,5 @@
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'stock_drill.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api.dart';
@@ -1346,7 +1347,7 @@ class ReportsScreen extends StatelessWidget {
               '1 · ລາຍງານສະຕັອກ',
               'Stock report',
               ['By brand', 'By product', 'By warehouse'],
-              const ReportStockView()),
+              const StockReport()),
           const SizedBox(height: 12),
           _card(
               context,

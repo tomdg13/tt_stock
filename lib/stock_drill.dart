@@ -1,6 +1,7 @@
 // Stock drill-down: Brand > Model > products (qty, min, low flag, branch, bin).
 // Data: GET /stock/overview (one row per product x model x branch).
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'api.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -357,5 +358,298 @@ class _StockDrillState extends State<StockDrill> {
       ],
       dataRows,
     ));
+  }
+}
+
+// ------------------------------------------------------------ Stock report
+class StockReport extends StatefulWidget {
+  const StockReport({super.key});
+  @override
+  State<StockReport> createState() => _StockReportState();
+}
+
+class _StockReportState extends State<StockReport> {
+  final _q = TextEditingController();
+  bool _low = false;
+  String _by = 'brand';
+  String? _brandF;
+  String? _branchF;
+  List<List<String>> _lines = [];
+  late Future<dynamic> _f = Api.get('/stock/overview');
+
+  static const _byLabels = {
+    'brand': 'Brand',
+    'model': 'ຮຸ່ນ',
+    'branch': 'ສາຂາ',
+    'product': 'ສິນຄ້າ',
+  };
+
+  void _reload() => setState(() {
+        _f = Api.get('/stock/overview');
+      });
+
+  @override
+  void dispose() {
+    _q.dispose();
+    super.dispose();
+  }
+
+  String _branchOf(Map<String, dynamic> r) {
+    final v = pick(r, ['branchName']);
+    return v.isEmpty ? '(ບໍ່ມີສາຂາ)' : v;
+  }
+
+  String _keyOf(Map<String, dynamic> r) {
+    switch (_by) {
+      case 'model':
+        return _modelOf(r);
+      case 'branch':
+        return _branchOf(r);
+      case 'product':
+        final v = pick(r, ['productName']);
+        return v.isEmpty ? '-' : v;
+      default:
+        return _brandOf(r);
+    }
+  }
+
+  List<Map<String, dynamic>> _filter(List<Map<String, dynamic>> rows) {
+    final q = _q.text.trim().toLowerCase();
+    return rows.where((r) {
+      if (_low && !_isLow(r)) return false;
+      if (_brandF != null && _brandOf(r) != _brandF) return false;
+      if (_branchF != null && _branchOf(r) != _branchF) return false;
+      if (q.isEmpty) return true;
+      return pick(r, ['productName']).toLowerCase().contains(q) ||
+          pick(r, ['brandName']).toLowerCase().contains(q) ||
+          pick(r, ['modelName']).toLowerCase().contains(q);
+    }).toList();
+  }
+
+  void _copy() {
+    if (_lines.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('ບໍ່ມີຂໍ້ມູນ')));
+      return;
+    }
+    String q(String s) => '"${s.replaceAll('"', '""')}"';
+    final text = _lines.map((l) => l.map(q).join(',')).join('\n');
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('ຄັດລອກ CSV ແລ້ວ')));
+  }
+
+  Widget _dd(String label, List<String> items, String? val,
+      ValueChanged<String?> on) {
+    return DropdownButton<String?>(
+      isExpanded: true,
+      value: items.contains(val) ? val : null,
+      hint: Text(label),
+      items: [
+        DropdownMenuItem<String?>(value: null, child: Text('$label: ທັງໝົດ')),
+        for (final i in items)
+          DropdownMenuItem<String?>(
+              value: i, child: Text(i, overflow: TextOverflow.ellipsis)),
+      ],
+      onChanged: on,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = pal(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('ລາຍງານສະຕັອກ',
+            style: TextStyle(fontWeight: FontWeight.w700)),
+        actions: [
+          IconButton(
+              icon: const Icon(Icons.copy_all_outlined),
+              tooltip: 'ຄັດລອກ CSV',
+              onPressed: _copy),
+          IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'ໂຫຼດໃໝ່',
+              onPressed: _reload),
+        ],
+      ),
+      body: FutureBuilder(
+        future: _f,
+        builder: (c, s) {
+          if (s.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (s.hasError) {
+            return Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text('${s.error}', textAlign: TextAlign.center),
+              TextButton(onPressed: _reload, child: const Text('ລອງໃໝ່')),
+            ]));
+          }
+          final allRows = asList(s.data);
+          final brands = allRows.map(_brandOf).toSet().toList()..sort();
+          final branches = allRows.map(_branchOf).toSet().toList()..sort();
+          final rows = _filter(allRows);
+
+          final groups = <String, _Agg>{};
+          final all = <String, double>{};
+          final allP = <String>{};
+          final allLow = <String>{};
+          for (final r in rows) {
+            final a = groups.putIfAbsent(_keyOf(r), () => _Agg());
+            final pid = pick(r, ['productId']);
+            final pk = '$pid|${pick(r, ['branchId'])}';
+            a.products.add(pid);
+            a.qty[pk] = _n(r, 'qty');
+            all[pk] = _n(r, 'qty');
+            allP.add(pid);
+            if (_isLow(r)) {
+              a.low.add(pid);
+              allLow.add(pid);
+            }
+          }
+          final keys = groups.keys.toList()
+            ..sort((x, y) {
+              final ax = x.startsWith('('), ay = y.startsWith('(');
+              if (ax != ay) return ax ? 1 : -1;
+              return x.toLowerCase().compareTo(y.toLowerCase());
+            });
+          final totalQty = all.values.fold(0.0, (a, b) => a + b);
+
+          _lines = [
+            [_byLabels[_by]!, 'ສິນຄ້າ', 'ຈຳນວນ', 'ໃກ້ໝົດ'],
+            for (final k in keys)
+              [
+                k,
+                '${groups[k]!.products.length}',
+                _fmt(groups[k]!.total),
+                '${groups[k]!.low.length}'
+              ],
+            ['ລວມ', '${allP.length}', _fmt(totalQty), '${allLow.length}'],
+          ];
+
+          const bold = TextStyle(fontWeight: FontWeight.w700);
+          final dataRows = <DataRow>[
+            for (final k in keys)
+              DataRow(cells: [
+                DataCell(Text(k, style: bold)),
+                DataCell(Text('${groups[k]!.products.length}')),
+                DataCell(Text(_fmt(groups[k]!.total), style: bold)),
+                DataCell(Text('${groups[k]!.low.length}',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: groups[k]!.low.isEmpty ? p.mut : p.bad))),
+              ]),
+            DataRow(cells: [
+              const DataCell(Text('ລວມ', style: bold)),
+              DataCell(Text('${allP.length}', style: bold)),
+              DataCell(Text(_fmt(totalQty), style: bold)),
+              DataCell(Text('${allLow.length}',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: allLow.isEmpty ? p.mut : p.bad))),
+            ]),
+          ];
+
+          return Column(children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Row(children: [
+                Expanded(
+                  child: TextField(
+                    controller: _q,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                        hintText: 'ຄົ້ນຫາສິນຄ້າ / Brand / ຮຸ່ນ',
+                        prefixIcon: Icon(Icons.search)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilterChip(
+                  label: const Text('ໃກ້ໝົດ'),
+                  selected: _low,
+                  onSelected: (v) => setState(() => _low = v),
+                ),
+              ]),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: Row(children: [
+                Expanded(
+                    child: _dd('Brand', brands, _brandF,
+                        (v) => setState(() => _brandF = v))),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: _dd('ສາຂາ', branches, _branchF,
+                        (v) => setState(() => _branchF = v))),
+              ]),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Wrap(
+                spacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text('ຈັດກຸ່ມ:', style: TextStyle(color: p.mut)),
+                  for (final e in _byLabels.entries)
+                    ChoiceChip(
+                      label: Text(e.value),
+                      selected: _by == e.key,
+                      onSelected: (_) => setState(() => _by = e.key),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: rows.isEmpty
+                  ? Center(
+                      child: Text('ຍັງບໍ່ມີລາຍການ',
+                          style: TextStyle(color: p.mut)))
+                  : RefreshIndicator(
+                      onRefresh: () async => _reload(),
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        children: [
+                          AppCard(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                    minWidth:
+                                        MediaQuery.of(context).size.width -
+                                            64),
+                                child: DataTable(
+                                  columnSpacing: 20,
+                                  horizontalMargin: 8,
+                                  headingRowHeight: 38,
+                                  dataRowMinHeight: 46,
+                                  dataRowMaxHeight: 54,
+                                  dividerThickness: 0.6,
+                                  headingTextStyle: TextStyle(
+                                      color: p.mut,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600),
+                                  columns: [
+                                    DataColumn(label: Text(_byLabels[_by]!)),
+                                    const DataColumn(
+                                        label: Text('ສິນຄ້າ'), numeric: true),
+                                    const DataColumn(
+                                        label: Text('ຈຳນວນ'), numeric: true),
+                                    const DataColumn(
+                                        label: Text('ໃກ້ໝົດ'), numeric: true),
+                                  ],
+                                  rows: dataRows,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+            ),
+          ]);
+        },
+      ),
+    );
   }
 }
