@@ -1232,6 +1232,13 @@ class DashMenuScreen extends StatelessWidget {
             Colors.deepOrange,
             () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const SearchScreen()))),
+      if (Api.can('REPORT_VIEW'))
+        _DashMenuItem(
+            Icons.assessment_outlined,
+            'ລາຍງານ',
+            Colors.purple,
+            () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const ReportsScreen()))),
     ];
     return GridView.count(
       crossAxisCount: 3,
@@ -1268,4 +1275,105 @@ class DashMenuScreen extends StatelessWidget {
       ],
     );
   }
+}
+
+// ------------------------------------------------------------ Reports menu
+class ReportsScreen extends StatelessWidget {
+  const ReportsScreen({super.key});
+
+  Widget _card(BuildContext context, IconData icon, Color color, String title,
+      String sub, List<String> chips, Widget page) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => Navigator.push(
+            context, MaterialPageRoute(builder: (_) => page)),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                CircleAvatar(
+                    radius: 23,
+                    backgroundColor: color.withOpacity(0.12),
+                    child: Icon(icon, color: color)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          style: const TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w600)),
+                      Text(sub,
+                          style: TextStyle(
+                              fontSize: 12, color: cs.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right),
+              ]),
+              const SizedBox(height: 12),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                for (final c in chips)
+                  Chip(
+                      label: Text(c, style: const TextStyle(fontSize: 12)),
+                      visualDensity: VisualDensity.compact),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+          title: const Text('ລາຍງານ',
+              style: TextStyle(fontWeight: FontWeight.w700))),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          _card(
+              context,
+              Icons.inventory_2_outlined,
+              Colors.blue,
+              '1 · ລາຍງານສະຕັອກ',
+              'Stock report',
+              ['By brand', 'By product', 'By warehouse'],
+              const ReportStockPage()),
+          const SizedBox(height: 12),
+          _card(
+              context,
+              Icons.build_outlined,
+              Colors.green,
+              '2 · ຕູ້ ATM ທີ່ປ່ຽນອາໄຫຼ່',
+              'ATM spare part change report',
+              ['Date range', 'By ATM', 'By part'],
+              const ReportAtmPartsPage()),
+        ],
+      ),
+    );
+  }
+}
+
+class ReportStockPage extends StatelessWidget {
+  const ReportStockPage({super.key});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+      appBar: AppBar(title: const Text('ລາຍງານສະຕັອກ')),
+      body: const Center(child: Text('ກຳລັງພັດທະນາ')));
+}
+
+class ReportAtmPartsPage extends StatelessWidget {
+  const ReportAtmPartsPage({super.key});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+      appBar: AppBar(title: const Text('ຕູ້ ATM ທີ່ປ່ຽນອາໄຫຼ່')),
+      body: const Center(child: Text('ກຳລັງພັດທະນາ')));
 }
