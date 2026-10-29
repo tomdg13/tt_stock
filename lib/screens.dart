@@ -1346,7 +1346,7 @@ class ReportsScreen extends StatelessWidget {
               '1 · ລາຍງານສະຕັອກ',
               'Stock report',
               ['By brand', 'By product', 'By warehouse'],
-              const ReportStockPage()),
+              const ReportStockView()),
           const SizedBox(height: 12),
           _card(
               context,
@@ -1376,4 +1376,226 @@ class ReportAtmPartsPage extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
       appBar: AppBar(title: const Text('ຕູ້ ATM ທີ່ປ່ຽນອາໄຫຼ່')),
       body: const Center(child: Text('ກຳລັງພັດທະນາ')));
+}
+
+// ------------------------------------------------------------ Stock report
+const String kStockReportEndpoint = '/stock/summary';
+
+class ReportStockView extends StatefulWidget {
+  const ReportStockView({super.key});
+  @override
+  State<ReportStockView> createState() => _ReportStockViewState();
+}
+
+class _ReportStockViewState extends State<ReportStockView> {
+  late Future<dynamic> _f = Api.get(kStockReportEndpoint);
+  String _q = '';
+  String? _groupBy;
+
+  void _reload() => setState(() {
+        _f = Api.get(kStockReportEndpoint);
+      });
+
+  List<Map<String, dynamic>> _rows(dynamic d) {
+    dynamic l = d;
+    if (l is Map) {
+      l = l.values.firstWhere((v) => v is List, orElse: () => const []);
+    }
+    if (l is! List) return [];
+    return [
+      for (final e in l)
+        if (e is Map) Map<String, dynamic>.from(e)
+    ];
+  }
+
+  bool _hide(String k) => k == 'id' || k.endsWith('_id') || k.endsWith('Id');
+
+  String _fmt(dynamic v) {
+    if (v == null) return '';
+    if (v is double) {
+      return v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
+    }
+    return v.toString();
+  }
+
+  String _label(String c) => c == '_n' ? 'ລາຍການ' : c;
+
+  String _csv(List<String> cols, List<Map<String, dynamic>> data) {
+    String q(String s) => '"${s.replaceAll('"', '""')}"';
+    final b = StringBuffer(cols.map((c) => q(_label(c))).join(','));
+    for (final r in data) {
+      b.write('\n');
+      b.write(cols.map((c) => q(_fmt(r[c]))).join(','));
+    }
+    return b.toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<dynamic>(
+      future: _f,
+      builder: (context, snap) {
+        Widget body;
+        List<String> csvCols = [];
+        List<Map<String, dynamic>> csvData = [];
+
+        if (snap.connectionState != ConnectionState.done) {
+          body = const Center(child: CircularProgressIndicator());
+        } else if (snap.hasError) {
+          body = Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text('${snap.error}', textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              FilledButton(onPressed: _reload, child: const Text('ລອງໃໝ່')),
+            ]),
+          );
+        } else {
+          final all = _rows(snap.data);
+          final first = all.isEmpty ? <String, dynamic>{} : all.first;
+          final cols = first.keys
+              .where((k) => !_hide(k) && first[k] is! Map && first[k] is! List)
+              .toList();
+          final numCols = cols
+              .where((k) => all.every((r) => r[k] == null || r[k] is num))
+              .toList();
+          final textCols = cols.where((k) => !numCols.contains(k)).toList();
+
+          final ql = _q.trim().toLowerCase();
+          var data = ql.isEmpty
+              ? all
+              : all
+                  .where((r) => cols
+                      .any((c) => _fmt(r[c]).toLowerCase().contains(ql)))
+                  .toList();
+          var showCols = cols;
+          var numShow = numCols;
+
+          final g = _groupBy;
+          if (g != null && textCols.contains(g)) {
+            final m = <String, Map<String, dynamic>>{};
+            for (final r in data) {
+              final key = _fmt(r[g]);
+              final row = m.putIfAbsent(key, () => {g: key, '_n': 0});
+              row['_n'] = (row['_n'] as int) + 1;
+              for (final c in numCols) {
+                row[c] = ((row[c] ?? 0) as num) + ((r[c] ?? 0) as num);
+              }
+            }
+            data = m.values.toList();
+            showCols = [g, ...numCols, '_n'];
+            numShow = [...numCols, '_n'];
+          }
+
+          csvCols = showCols;
+          csvData = data;
+
+          final totals = <String, num>{
+            for (final c in numShow)
+              c: data.fold<num>(0, (s, r) => s + ((r[c] ?? 0) as num)),
+          };
+
+          body = Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                child: Row(children: [
+                  Expanded(
+                    child: TextField(
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        hintText: 'ຄົ້ນຫາ',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (v) => setState(() => _q = v),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  DropdownButton<String?>(
+                    value: textCols.contains(_groupBy) ? _groupBy : null,
+                    hint: const Text('ຈັດກຸ່ມ'),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                          value: null, child: Text('ບໍ່ຈັດກຸ່ມ')),
+                      for (final c in textCols)
+                        DropdownMenuItem<String?>(value: c, child: Text(c)),
+                    ],
+                    onChanged: (v) => setState(() => _groupBy = v),
+                  ),
+                ]),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('${data.length} ແຖວ',
+                      style: Theme.of(context).textTheme.bodySmall),
+                ),
+              ),
+              Expanded(
+                child: data.isEmpty
+                    ? const Center(child: Text('ບໍ່ມີຂໍ້ມູນ'))
+                    : SingleChildScrollView(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: DataTable(
+                            columns: [
+                              for (final c in showCols)
+                                DataColumn(
+                                    label: Text(_label(c)),
+                                    numeric: numShow.contains(c)),
+                            ],
+                            rows: [
+                              for (final r in data)
+                                DataRow(cells: [
+                                  for (final c in showCols)
+                                    DataCell(Text(_fmt(r[c]))),
+                                ]),
+                              DataRow(cells: [
+                                for (final c in showCols)
+                                  DataCell(Text(
+                                    numShow.contains(c)
+                                        ? _fmt(totals[c])
+                                        : (c == showCols.first ? 'ລວມ' : ''),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700),
+                                  )),
+                              ]),
+                            ],
+                          ),
+                        ),
+                      ),
+              ),
+            ],
+          );
+        }
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('ລາຍງານສະຕັອກ',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.copy_all_outlined),
+                tooltip: 'ຄັດລອກ CSV',
+                onPressed: csvData.isEmpty
+                    ? null
+                    : () {
+                        Clipboard.setData(
+                            ClipboardData(text: _csv(csvCols, csvData)));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('ຄັດລອກແລ້ວ')));
+                      },
+              ),
+              IconButton(
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'ໂຫຼດໃໝ່',
+                  onPressed: _reload),
+            ],
+          ),
+          body: body,
+        );
+      },
+    );
+  }
 }
