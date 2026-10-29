@@ -1,4 +1,5 @@
 // ignore_for_file: camel_case_types
+import 'plan_import.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -243,6 +244,18 @@ class _CrudPageState extends State<CrudPage> {
                   style: const TextStyle(
                       fontSize: 16, fontWeight: FontWeight.w600)),
             ),
+            if (sp.path == '/plans') ...[
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final ok = await Navigator.push<bool>(context,
+                      MaterialPageRoute(builder: (_) => const PlanImportPage()));
+                  if (ok == true) _reload();
+                },
+                icon: const Icon(Icons.upload_file, size: 18),
+                label: const Text('ນຳເຂົ້າ'),
+              ),
+              const SizedBox(width: 8),
+            ],
             FilledButton.icon(
               onPressed: _add,
               icon: const Icon(Icons.add, size: 18),

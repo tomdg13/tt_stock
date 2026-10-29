@@ -343,9 +343,11 @@ class _StockScreenState extends State<StockScreenOld> {
       final q = num0(pick(r, qk)), min = num0(pick(r, mk));
       final low = min > 0 && q < min;
       total += q;
-      final sub = [pick(r, ['brandName']), pick(r, ['typeName']), pick(r, ['unit'])]
-          .where((e) => e.isNotEmpty)
-          .join(' · ');
+      final sub = [
+        pick(r, ['brandName']),
+        pick(r, ['typeName']),
+        pick(r, ['unit'])
+      ].where((e) => e.isNotEmpty).join(' · ');
       dataRows.add(DataRow(cells: [
         DataCell(Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -375,7 +377,8 @@ class _StockScreenState extends State<StockScreenOld> {
       ]));
     }
     dataRows.add(DataRow(cells: [
-      const DataCell(Text('ລວມ', style: TextStyle(fontWeight: FontWeight.w700))),
+      const DataCell(
+          Text('ລວມ', style: TextStyle(fontWeight: FontWeight.w700))),
       const DataCell(Text('')),
       const DataCell(Text('')),
       const DataCell(Text('')),
@@ -387,8 +390,8 @@ class _StockScreenState extends State<StockScreenOld> {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: ConstrainedBox(
-          constraints: BoxConstraints(
-              minWidth: MediaQuery.of(context).size.width - 64),
+          constraints:
+              BoxConstraints(minWidth: MediaQuery.of(context).size.width - 64),
           child: DataTable(
             columnSpacing: 20,
             horizontalMargin: 8,
@@ -791,7 +794,9 @@ class _StockFormPageState extends State<StockFormPage> {
           PoDropdown(
             value: _ref.text.isEmpty ? null : _ref.text,
             label: widget.issue ? 'ເລກ PO (ບໍ່ບັງຄັບ)' : 'ເລກ PO',
-            onChanged: (v) => setState(() { _ref.text = v ?? ''; }),
+            onChanged: (v) => setState(() {
+              _ref.text = v ?? '';
+            }),
           ),
           const SizedBox(height: 12),
           TextField(
