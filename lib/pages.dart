@@ -163,11 +163,13 @@ Widget moveRow(BuildContext c, Map<String, dynamic> m) {
   final p = pal(c);
   final t = pick(m, ['type', 'movementType']);
   final info = moveTypes[t];
-  final q = num0(m['qty'] ?? m['quantity']);
+  final q = num0(m['qtyChange'] ?? m['qty'] ?? m['quantity']);
+  final dRaw = pick(m, ['movementDate', 'createdAt', 'time', 'ts', 'movedAt']);
+  final dStr = dRaw.length >= 10 ? dRaw.substring(0, 10) : dRaw;
   final meta = [
     pick(m, ['branchName', 'branchId']),
     pick(m, ['ref', 'refNo', 'docNo']),
-    pick(m, ['createdAt', 'time', 'ts', 'movedAt']),
+    dStr,
   ].where((e) => e.isNotEmpty).join(' · ');
   return Container(
     padding: const EdgeInsets.symmetric(vertical: 9),
