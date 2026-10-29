@@ -18,7 +18,7 @@ class ProductBarcodesController {
         {'barcodes': List<String>.from(codes)});
     dirty = false;
   }
-}2
+}
 
 class ProductBarcodesEditor extends StatefulWidget {
   final String? productId; // null while adding a new product

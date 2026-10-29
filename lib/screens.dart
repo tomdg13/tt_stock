@@ -1379,7 +1379,7 @@ class ReportAtmPartsPage extends StatelessWidget {
 }
 
 // ------------------------------------------------------------ Stock report
-const String kStockReportEndpoint = '/stock/summary';
+const String kStockReportEndpoint = '/stock/overview';
 
 class ReportStockView extends StatefulWidget {
   const ReportStockView({super.key});
