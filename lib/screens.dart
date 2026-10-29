@@ -1,5 +1,6 @@
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'stock_drill.dart';
+import 'plan_import.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api.dart';
@@ -1240,6 +1241,13 @@ class DashMenuScreen extends StatelessWidget {
             Colors.purple,
             () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const ReportsScreen()))),
+      if (Api.can('PO_MANAGE'))
+        _DashMenuItem(
+            Icons.event_note_outlined,
+            'ແຜນຈັດຊື້ອາໄຫຼ່',
+            Colors.indigo,
+            () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const PlanImportPage()))),
     ];
     return GridView.count(
       crossAxisCount: 3,
