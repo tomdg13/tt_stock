@@ -590,6 +590,7 @@ class _StockFormPageState extends State<StockFormPage> {
   dynamic _branchId;
   List<Map<String, dynamic>> _atms = [];
   late String? _atmId = widget.atmId;
+  DateTime? _receiptDate;
   String _reason = 'sale';
   bool _busy = false;
   String? _error;
@@ -641,6 +642,8 @@ class _StockFormPageState extends State<StockFormPage> {
         if (_note.text.trim().isNotEmpty) 'note': _note.text.trim(),
         if (_ref.text.trim().isNotEmpty) 'refNo': _ref.text.trim(),
         if (widget.issue) 'reason': _reason,
+        if (!widget.issue && _receiptDate != null && !_isToday(_receiptDate!))
+          'receiptDate': _ymdOf(_receiptDate!),
         if (widget.issue && _atmId != null) 'atmId': _atmId,
       };
       await Api.post(widget.issue ? '/stock/issue' : '/stock/receive', body);
@@ -652,6 +655,7 @@ class _StockFormPageState extends State<StockFormPage> {
         _note.clear();
         _ref.clear();
         _atmId = widget.atmId;
+        _receiptDate = null;
         _recent = Api.get('/stock/movements');
       });
     } catch (e) {
@@ -693,6 +697,47 @@ class _StockFormPageState extends State<StockFormPage> {
             child: const Text('ຕົກລົງ'),
           ),
         ],
+      ),
+    );
+  }
+
+  String _ymdOf(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  bool _isToday(DateTime d) {
+    final n = DateTime.now();
+    return d.year == n.year && d.month == n.month && d.day == n.day;
+  }
+
+  Future<void> _pickReceiptDate() async {
+    final now = DateTime.now();
+    final d = await showDatePicker(
+      context: context,
+      initialDate: _receiptDate ?? now,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year, now.month, now.day),
+    );
+    if (d != null) setState(() => _receiptDate = d);
+  }
+
+  Widget _receiptDateField() {
+    final back = _receiptDate != null && !_isToday(_receiptDate!);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: _pickReceiptDate,
+        child: InputDecorator(
+          decoration: InputDecoration(
+            labelText:
+                back ? 'ວັນທີຮັບເຂົ້າ (ນຳເຂົ້າຍ້ອນຫຼັງ)' : 'ວັນທີຮັບເຂົ້າ',
+            suffixIcon: back
+                ? IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () => setState(() => _receiptDate = null))
+                : const Icon(Icons.calendar_today_outlined),
+          ),
+          child: Text(_ymdOf(_receiptDate ?? DateTime.now())),
+        ),
       ),
     );
   }
@@ -805,6 +850,7 @@ class _StockFormPageState extends State<StockFormPage> {
               decoration:
                   const InputDecoration(labelText: 'ໝາຍເຫດ (ບໍ່ບັງຄັບ)')),
           const SizedBox(height: 12),
+          if (!widget.issue) _receiptDateField(),
           if (!widget.issue) ...[
             InvoiceImportButton(onDone: () {
               if (!mounted) return;
