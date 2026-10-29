@@ -88,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: _phone,
                       keyboardType: TextInputType.phone,
                       decoration: const InputDecoration(
-                          labelText: 'ເບີໂທ', hintText: '020 5555 0001'),
+                          labelText: 'ເບີໂທ', hintText: '20 5555 0001'),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -1248,12 +1248,19 @@ class DashMenuScreen extends StatelessWidget {
             Colors.indigo,
             () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const PurchasePlanPage()))),
+      if (Api.can('TRANSFER_SEND') || Api.can('TRANSFER_RECEIVE'))
+        _DashMenuItem(
+            Icons.swap_horiz,
+            'ໂອນສາຂາ',
+            Colors.brown,
+            () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const TransferScreen()))),
     ];
     return GridView.count(
-      crossAxisCount: 3,
+      crossAxisCount: 5,
       padding: const EdgeInsets.fromLTRB(8, 24, 8, 8),
       mainAxisSpacing: 12,
-      childAspectRatio: 0.85,
+      childAspectRatio: 0.62,
       children: [
         for (final it in items)
           InkWell(

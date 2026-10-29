@@ -869,7 +869,7 @@ class _ModelTerminals extends StatefulWidget {
 }
 
 class _ModelTerminalsState extends State<_ModelTerminals> {
-  late Future<dynamic> _f = Api.get('/terminals?limit=500');
+  late Future<dynamic> _f = Api.get('/terminals?limit=5000');
 
   bool _match(Map<String, dynamic> t) {
     final m = widget.model.toLowerCase();
