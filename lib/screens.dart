@@ -19,6 +19,7 @@ import 'type_image.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'transfer_report.dart';
+import 'usage_report.dart';
 import 'stock_count.dart';
 
 // ---------------------------------------------------------------- Login
@@ -1390,6 +1391,15 @@ class ReportsScreen extends StatelessWidget {
               'Spare part transfer report',
               ['Date range', 'By branch', 'Status'],
               const TransferReportPage()),
+          const SizedBox(height: 12),
+          _card(
+              context,
+              Icons.compare_arrows,
+              Colors.deepPurple,
+              '4 · ລາຍງານການນຳໃຊ້ອາໄຫຼ່',
+              'Receive / issue / closing balance',
+              ['Opening', 'Receive', 'Issue', 'Closing'],
+              const UsageReportPage()),
         ],
       ),
     );
