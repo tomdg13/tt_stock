@@ -6,6 +6,7 @@ import 'screens.dart' show BarcodeScanPage;
 import 'lao.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'invoice_import.dart';
 
 // ------------------------------------------------------------- shared bits
 class Line {
@@ -804,6 +805,15 @@ class _StockFormPageState extends State<StockFormPage> {
               decoration:
                   const InputDecoration(labelText: 'ໝາຍເຫດ (ບໍ່ບັງຄັບ)')),
           const SizedBox(height: 12),
+          if (!widget.issue) ...[
+            InvoiceImportButton(onDone: () {
+              if (!mounted) return;
+              setState(() {
+                _recent = Api.get('/stock/movements');
+              });
+            }),
+            const SizedBox(height: 12),
+          ],
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
