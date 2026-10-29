@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api.dart';
+import 'terminal_history.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -377,6 +378,7 @@ class _StockReportState extends State<StockReport> {
   String? _branchF;
   String? _dBrand;
   String? _dModel;
+  bool _showTerm = true;
   List<List<String>> _lines = [];
   late Future<dynamic> _f = Api.get('/stock/overview');
 
@@ -810,19 +812,213 @@ class _StockReportState extends State<StockReport> {
                 ),
               ] else
                 _crumbs(p),
+              if (_dModel != null)
+                _ViewToggle(
+                    term: _showTerm,
+                    onChanged: (v) => setState(() => _showTerm = v)),
               Expanded(
                 child: rows.isEmpty
                     ? Center(
                         child: Text('ຍັງບໍ່ມີລາຍການ',
                             style: TextStyle(color: p.mut)))
                     : (_dModel != null
-                        ? _itemView(p, rows)
+                        ? (_showTerm ? _ModelTerminals(model: _dModel!) : _itemView(p, rows))
                         : _groupView(p, rows)),
               ),
             ]);
           },
         ),
       ),
+    );
+  }
+}
+
+// ------------------------------------------------------------ Terminals of a model
+class _ViewToggle extends StatelessWidget {
+  final bool term;
+  final ValueChanged<bool> onChanged;
+  const _ViewToggle({required this.term, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: SegmentedButton<bool>(
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment(
+              value: true, label: Text('Terminal'), icon: Icon(Icons.memory)),
+          ButtonSegment(
+              value: false,
+              label: Text('ສະຕັອກ'),
+              icon: Icon(Icons.inventory_2_outlined)),
+        ],
+        selected: {term},
+        onSelectionChanged: (s) => onChanged(s.first),
+      ),
+    );
+  }
+}
+
+class _ModelTerminals extends StatefulWidget {
+  final String model;
+  const _ModelTerminals({required this.model});
+  @override
+  State<_ModelTerminals> createState() => _ModelTerminalsState();
+}
+
+class _ModelTerminalsState extends State<_ModelTerminals> {
+  late Future<dynamic> _f = Api.get('/terminals?limit=500');
+  final _q = TextEditingController();
+  String? _type;
+
+  @override
+  void dispose() {
+    _q.dispose();
+    super.dispose();
+  }
+
+  bool _match(Map<String, dynamic> t) {
+    final m = widget.model.toLowerCase();
+    for (final k in const ['modelName', 'model', 'typeName', 'type']) {
+      final v = pick(t, [k]).toLowerCase();
+      if (v.isEmpty) continue;
+      if (v == m) return true;
+      if (v.length >= 3 && m.length >= 3 && (v.contains(m) || m.contains(v))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String _typeOf(Map<String, dynamic> t) {
+    final v = pick(t, ['typeName']);
+    return v.isEmpty ? '(ບໍ່ມີ type)' : v;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = pal(context);
+    return FutureBuilder(
+      future: _f,
+      builder: (c, s) {
+        if (s.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (s.hasError) {
+          return Center(child: Text('${s.error}', textAlign: TextAlign.center));
+        }
+        final all = asList(s.data);
+        final ofModel = all.where(_match).toList();
+        if (ofModel.isEmpty) {
+          return ListView(padding: const EdgeInsets.all(16), children: [
+            const SizedBox(height: 60),
+            Center(
+                child: Text('ບໍ່ພົບ terminal ຂອງ ${widget.model}',
+                    style: TextStyle(color: p.mut))),
+            if (all.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text('fields: ${all.first.keys.join(', ')}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: p.mut, fontSize: 12)),
+              ),
+          ]);
+        }
+
+        final counts = <String, int>{};
+        for (final t in ofModel) {
+          counts[_typeOf(t)] = (counts[_typeOf(t)] ?? 0) + 1;
+        }
+        final types = counts.keys.toList()..sort();
+        final typeSel = counts.containsKey(_type) ? _type : null;
+
+        final q = _q.text.trim().toLowerCase();
+        final list = ofModel.where((t) {
+          if (typeSel != null && _typeOf(t) != typeSel) return false;
+          if (q.isEmpty) return true;
+          return pick(t, ['barcode']).toLowerCase().contains(q) ||
+              pick(t, ['serial']).toLowerCase().contains(q);
+        }).toList()
+          ..sort((a, b) =>
+              pick(a, ['barcode']).compareTo(pick(b, ['barcode'])));
+
+        return Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            child: TextField(
+              controller: _q,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                  hintText: 'ຄົ້ນຫາ barcode / serial',
+                  prefixIcon: Icon(Icons.search),
+                  isDense: true),
+            ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Row(children: [
+              ChoiceChip(
+                label: Text('ທັງໝົດ (${ofModel.length})'),
+                selected: typeSel == null,
+                onSelected: (_) => setState(() => _type = null),
+              ),
+              for (final t in types) ...[
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: Text('$t (${counts[t]})'),
+                  selected: typeSel == t,
+                  onSelected: (_) => setState(() => _type = t),
+                ),
+              ],
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('${list.length} / ${ofModel.length} terminal',
+                  style: TextStyle(color: p.mut, fontSize: 12)),
+            ),
+          ),
+          Expanded(
+            child: list.isEmpty
+                ? Center(
+                    child: Text('ບໍ່ພົບລາຍການ', style: TextStyle(color: p.mut)))
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    children: [
+                      for (final t in list)
+                        Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            title: Text(pick(t, ['barcode']),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700)),
+                            subtitle: Text([
+                              pick(t, ['typeName']),
+                              pick(t, ['serial'])
+                            ].where((e) => e.isNotEmpty).join(' · ')),
+                            trailing:
+                                Row(mainAxisSize: MainAxisSize.min, children: [
+                              Text(pick(t, ['state', 'status']),
+                                  style:
+                                      TextStyle(color: p.mut, fontSize: 12)),
+                              const Icon(Icons.chevron_right),
+                            ]),
+                            onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => HistoryPage(
+                                        barcode: pick(t, ['barcode'])))),
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+        ]);
+      },
     );
   }
 }
