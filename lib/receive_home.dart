@@ -266,7 +266,7 @@ class _PoPageState extends State<_PoPage> {
     final g = widget.group;
     final p = pal(context);
     return Scaffold(
-      appBar: AppBar(
+      appBar: _tab == 1 ? null : AppBar(
         title: Text(g.label,
             style: const TextStyle(fontWeight: FontWeight.w700)),
       ),
@@ -291,7 +291,7 @@ class _PoPageState extends State<_PoPage> {
                   ),
               ],
             )
-          : PoInfoView(poNo: g.po),
+          : _PoFormTab(poNo: g.po),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
@@ -302,6 +302,40 @@ class _PoPageState extends State<_PoPage> {
               icon: Icon(Icons.info_outline), label: 'ຂໍ້ມູນ PO'),
         ],
       ),
+    );
+  }
+}
+
+/// PO tab: loads the PO by number and shows the normal PO form page.
+class _PoFormTab extends StatefulWidget {
+  final String poNo;
+  const _PoFormTab({required this.poNo});
+  @override
+  State<_PoFormTab> createState() => _PoFormTabState();
+}
+
+class _PoFormTabState extends State<_PoFormTab> {
+  late final Future<Map<String, dynamic>> _f = _load();
+
+  Future<Map<String, dynamic>> _load() async {
+    if (widget.poNo.isEmpty) throw 'ບໍ່ມີເລກ PO';
+    final list = asList(await Api.get(
+        '/purchase-orders?q=${Uri.encodeQueryComponent(widget.poNo)}'));
+    return list.firstWhere((m) => pick(m, ['poNo']) == widget.poNo,
+        orElse: () => throw 'ບໍ່ພົບ PO ${widget.poNo}');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _f,
+      builder: (_, s) {
+        if (s.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (s.hasError) return Center(child: Text('${s.error}'));
+        return PoFormPage(row: s.data!);
+      },
     );
   }
 }
