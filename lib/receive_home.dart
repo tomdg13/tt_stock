@@ -138,72 +138,13 @@ class _ReceiveHomeState extends State<ReceiveHome> {
     );
   }
 
-  // ---- PO detail: nav-bar style tabs (ລາຍການ / ຂໍ້ມູນ PO) ----
+  // ---- PO detail: full page with its own bottom nav bar ----
   void _openPo(_PoGroup g) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (sheetCtx) {
-        var tab = 0;
-        return StatefulBuilder(builder: (ctx, setS) {
-          final p = pal(ctx);
-          return SizedBox(
-            height: MediaQuery.of(ctx).size.height * 0.8,
-            child: Column(children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(g.label,
-                            style: const TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 2),
-                        Text(
-                            [g.branch, g.grn, g.date]
-                                .where((e) => e.isNotEmpty)
-                                .join(' · '),
-                            style: TextStyle(color: p.mut, fontSize: 13)),
-                      ]),
-                ),
-              ),
-              Expanded(
-                child: tab == 0
-                    ? ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        children: [
-                          Text(
-                              '${g.items.length} ລາຍການ · ລວມ +${fmtNum(g.total)}',
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600)),
-                          const Divider(height: 24),
-                          for (final m in g.items)
-                            InkWell(
-                              onTap: () => _openDetail(m),
-                              child: moveRow(context, m),
-                            ),
-                        ],
-                      )
-                    : PoInfoView(poNo: g.po),
-              ),
-              NavigationBar(
-                selectedIndex: tab,
-                onDestinationSelected: (i) => setS(() => tab = i),
-                destinations: const [
-                  NavigationDestination(
-                      icon: Icon(Icons.list_alt_outlined), label: 'ລາຍການ'),
-                  NavigationDestination(
-                      icon: Icon(Icons.info_outline), label: 'ຂໍ້ມູນ PO'),
-                ],
-              ),
-            ]),
-          );
-        });
-      },
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _PoPage(group: g, onItem: _openDetail),
+      ),
     );
   }
 
@@ -307,4 +248,60 @@ class _PoGroup {
       required this.grn,
       required this.branch,
       required this.date});
+}
+
+class _PoPage extends StatefulWidget {
+  final _PoGroup group;
+  final void Function(Map<String, dynamic>) onItem;
+  const _PoPage({required this.group, required this.onItem});
+  @override
+  State<_PoPage> createState() => _PoPageState();
+}
+
+class _PoPageState extends State<_PoPage> {
+  int _tab = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final g = widget.group;
+    final p = pal(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(g.label,
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+      ),
+      body: _tab == 0
+          ? ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              children: [
+                Text(
+                    [g.branch, g.grn, g.date]
+                        .where((e) => e.isNotEmpty)
+                        .join(' · '),
+                    style: TextStyle(color: p.mut, fontSize: 13)),
+                const SizedBox(height: 4),
+                Text('${g.items.length} ລາຍການ · ລວມ +${fmtNum(g.total)}',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 15)),
+                const Divider(height: 24),
+                for (final m in g.items)
+                  InkWell(
+                    onTap: () => widget.onItem(m),
+                    child: moveRow(context, m),
+                  ),
+              ],
+            )
+          : PoInfoView(poNo: g.po),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tab,
+        onDestinationSelected: (i) => setState(() => _tab = i),
+        destinations: const [
+          NavigationDestination(
+              icon: Icon(Icons.list_alt_outlined), label: 'ລາຍການ'),
+          NavigationDestination(
+              icon: Icon(Icons.info_outline), label: 'ຂໍ້ມູນ PO'),
+        ],
+      ),
+    );
+  }
 }
