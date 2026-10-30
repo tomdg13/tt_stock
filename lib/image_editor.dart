@@ -97,7 +97,12 @@ class _ImageEditorPageState extends State<ImageEditorPage> {
       final r = await job();
       if (r != null && mounted) setState(() => _hist.add(r));
     } catch (e) {
-      if (mounted) _toast('$e');
+      if (mounted) {
+        final m = '$e';
+        _toast(m.contains('optional module') || m.contains('downloaded')
+            ? 'ກຳລັງດາວໂຫຼດໂມເດວ AI ຄັ້ງທຳອິດ ກະລຸນາລໍຖ້າ 1-2 ນາທີ ແລ້ວລອງໃໝ່'
+            : m);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

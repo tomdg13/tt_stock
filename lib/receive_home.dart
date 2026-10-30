@@ -90,17 +90,23 @@ class _ReceiveHomeState extends State<ReceiveHome> {
                 date: _day(m),
               ));
       g.items.add(m);
-      g.total += num0(pick(m, _qtyKeys));
+      final q = num0(pick(m, _qtyKeys));
+      final a = pick(m, ['amount']);
+      g.total += q;
+      g.amount += a.isNotEmpty ? num0(a) : q * num0(pick(m, ['unitCost']));
+      if (g.currency.isEmpty) g.currency = pick(m, ['currency']);
     }
     return map.values.toList();
   }
 
   // ---- item detail: full page with bottom nav bar ----
-  void _openDetail(Map<String, dynamic> m) {
-    Navigator.push(
+  Future<bool?> _openDetail(Map<String, dynamic> m) async {
+    final r = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => _ItemPage(item: m)),
     );
+    if (r == true && mounted) _reload();
+    return r;
   }  // ---- PO detail: full page with its own bottom nav bar ----
   void _openPo(_PoGroup g) {
     Navigator.push(
@@ -134,9 +140,14 @@ class _ReceiveHomeState extends State<ReceiveHome> {
                   style: TextStyle(color: p.mut, fontSize: 12.5)),
             ]),
           ),
-          Text('+${fmtNum(g.total)}',
-              style:
-                  const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('+${fmtNum(g.total)}',
+                style: const TextStyle(
+                    fontWeight: FontWeight.w700, fontSize: 16)),
+            if (g.amount > 0)
+              Text('${_money(g.amount)} ${g.currency}',
+                  style: TextStyle(color: p.mut, fontSize: 12.5)),
+          ]),
           const Icon(Icons.chevron_right),
         ]),
       ),
@@ -205,6 +216,8 @@ class _PoGroup {
   final String label, po, grn, branch, date;
   final List<Map<String, dynamic>> items = [];
   double total = 0;
+  double amount = 0;
+  String currency = '';
   _PoGroup(
       {required this.label,
       required this.po,
@@ -215,7 +228,7 @@ class _PoGroup {
 
 class _PoPage extends StatefulWidget {
   final _PoGroup group;
-  final void Function(Map<String, dynamic>) onItem;
+  final Future<bool?> Function(Map<String, dynamic>) onItem;
   const _PoPage({required this.group, required this.onItem});
   @override
   State<_PoPage> createState() => _PoPageState();
@@ -223,6 +236,39 @@ class _PoPage extends StatefulWidget {
 
 class _PoPageState extends State<_PoPage> {
   int _tab = 0;
+
+  Widget _itemRow(Map<String, dynamic> m) {
+    final p = pal(context);
+    final qty = num0(pick(m, ['qtyChange', 'qty', 'quantity', 'delta']));
+    final cost = num0(pick(m, ['unitCost']));
+    final aStr = pick(m, ['amount']);
+    final amt = aStr.isNotEmpty ? num0(aStr) : qty * cost;
+    final cur = pick(m, ['currency']);
+    final name = pick(m, ['productName', 'name', 'productId']);
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Text(cost > 0 ? '${_money(cost)} × ${fmtNum(qty)}' : 'ຍັງບໍ່ມີລາຄາ',
+                  style: TextStyle(color: p.mut, fontSize: 12.5)),
+            ]),
+          ),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(amt > 0 ? '${_money(amt)} $cur' : '-',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text('+${fmtNum(qty)}',
+                style: TextStyle(color: p.mut, fontSize: 12.5)),
+          ]),
+        ]),
+      ),
+      const Divider(height: 1),
+    ]);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -246,11 +292,21 @@ class _PoPageState extends State<_PoPage> {
                 Text('${g.items.length} ລາຍການ · ລວມ +${fmtNum(g.total)}',
                     style: const TextStyle(
                         fontWeight: FontWeight.w700, fontSize: 15)),
-                const Divider(height: 24),
+                if (g.amount > 0)
+                  Text('ລວມເງິນຊື້: ${_money(g.amount)} ${g.currency}',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 15)),
+                if (pick(g.items.first, ['totalAmount']).isNotEmpty)
+                  Text(
+                      'ມູນຄ່າ Invoice: ${_money(num0(pick(g.items.first, ['totalAmount'])))} ${g.currency}',
+                      style: TextStyle(color: p.mut, fontSize: 13)),                const Divider(height: 24),
                 for (final m in g.items)
                   InkWell(
-                    onTap: () => widget.onItem(m),
-                    child: moveRow(context, m),
+                    onTap: () async {
+                      final r = await widget.onItem(m);
+                      if (r == true && mounted) Navigator.pop(context);
+                    },
+                    child: _itemRow(m),
                   ),
               ],
             )
@@ -335,7 +391,9 @@ class _ItemPageState extends State<_ItemPage> {
       appBar: AppBar(
         title: Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
       ),
-      body: ListView(
+      body: _tab == 2
+          ? _ItemEditForm(item: m)
+          : ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
         children: _tab == 0
             ? [
@@ -381,8 +439,146 @@ class _ItemPageState extends State<_ItemPage> {
               icon: Icon(Icons.info_outline), label: 'ລາຍລະອຽດ'),
           NavigationDestination(
               icon: Icon(Icons.receipt_long_outlined), label: 'ໃບແຈ້ງໜີ້'),
+          NavigationDestination(
+              icon: Icon(Icons.edit_outlined), label: 'ແກ້ໄຂ'),
         ],
       ),
     );
   }
+}
+
+/// Edit tab: one received line + the invoice info of its GRN.
+class _ItemEditForm extends StatefulWidget {
+  final Map<String, dynamic> item;
+  const _ItemEditForm({required this.item});
+  @override
+  State<_ItemEditForm> createState() => _ItemEditFormState();
+}
+
+class _ItemEditFormState extends State<_ItemEditForm> {
+  static const _itemKeys = [
+    'partNo',
+    'description',
+    'origin',
+    'material',
+    'unitCost',
+    'amount'
+  ];
+  static const _headKeys = [
+    'poNo',
+    'invoiceNo',
+    'invoiceDate',
+    'currency',
+    'freightCost',
+    'totalAmount'
+  ];
+  static const _num = {'unitCost', 'amount', 'freightCost', 'totalAmount'};
+  static const _labels = {
+    'partNo': 'P/N',
+    'description': 'ລາຍລະອຽດ',
+    'origin': 'ແຫຼ່ງກຳເນີດ',
+    'material': 'ວັດສະດຸ',
+    'unitCost': 'ລາຄາຕໍ່ໜ່ວຍ',
+    'amount': 'ຈຳນວນເງິນ',
+    'poNo': 'ເລກ PO',
+    'invoiceNo': 'ເລກ Invoice',
+    'invoiceDate': 'ວັນທີ Invoice (YYYY-MM-DD)',
+    'currency': 'ສະກຸນເງິນ',
+    'freightCost': 'ຄ່າຂົນສົ່ງ',
+    'totalAmount': 'ມູນຄ່າລວມ Invoice',
+  };
+
+  late final Map<String, TextEditingController> _c = {
+    for (final k in [..._itemKeys, ..._headKeys])
+      k: TextEditingController(text: _init(k))
+  };
+  bool _busy = false;
+  String? _error;
+
+  String _init(String k) {
+    final v = pick(widget.item, [k]);
+    return k == 'invoiceDate' && v.length >= 10 ? v.substring(0, 10) : v;
+  }
+
+  @override
+  void dispose() {
+    for (final c in _c.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Widget _field(String k) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: TextField(
+          controller: _c[k],
+          keyboardType: _num.contains(k)
+              ? const TextInputType.numberWithOptions(decimal: true)
+              : TextInputType.text,
+          decoration: InputDecoration(labelText: _labels[k]),
+        ),
+      );
+
+  Future<void> _save() async {
+    final itemId = pick(widget.item, ['itemId']);
+    final grnId = pick(widget.item, ['grnId']);
+    if (itemId.isEmpty || grnId.isEmpty) {
+      setState(() => _error = 'ບໍ່ພົບລະຫັດລາຍການ (ຕ້ອງ restart server ກ່ອນ)');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await Api.put('/imports/items/$itemId',
+          {for (final k in _itemKeys) k: _c[k]!.text.trim()});
+      await Api.put('/imports/receipts/$grnId',
+          {for (final k in _headKeys) k: _c[k]!.text.trim()});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('ບັນທຶກແລ້ວ')));
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = pal(context);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      children: [
+        AppCard(
+          title: 'ລາຍການນີ້',
+          child: Column(children: [for (final k in _itemKeys) _field(k)]),
+        ),
+        AppCard(
+          title: 'ໃບແຈ້ງໜີ້ (ມີຜົນກັບທຸກລາຍການໃນ GRN ນີ້)',
+          child: Column(children: [for (final k in _headKeys) _field(k)]),
+        ),
+        if (_error != null)
+          Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(_error!, style: TextStyle(color: p.bad))),
+        const SizedBox(height: 12),
+        saveButton('ບັນທຶກ', _busy, _save),
+      ],
+    );
+  }
+}
+
+String _money(num v) {
+  final parts = v.toStringAsFixed(2).split('.');
+  final neg = parts[0].startsWith('-');
+  final i = neg ? parts[0].substring(1) : parts[0];
+  final b = StringBuffer();
+  for (var k = 0; k < i.length; k++) {
+    if (k > 0 && (i.length - k) % 3 == 0) b.write(',');
+    b.write(i[k]);
+  }
+  return '${neg ? '-' : ''}$b.${parts[1]}';
 }
