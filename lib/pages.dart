@@ -13,6 +13,7 @@ import 'invoice_import.dart';
 class Line {
   final Map<String, dynamic> product;
   int qty;
+  double cost = 0;
   Line(this.product, this.qty);
 }
 
@@ -101,12 +102,34 @@ class _ProductPickerState extends State<_ProductPicker> {
 /// "Items" block with add / +- / remove; the parent owns [lines].
 class LineEditor extends StatefulWidget {
   final List<Line> lines;
-  const LineEditor(this.lines, {super.key});
+  final bool showCost;
+  const LineEditor(this.lines, {super.key, this.showCost = false});
   @override
   State<LineEditor> createState() => _LineEditorState();
 }
 
 class _LineEditorState extends State<LineEditor> {
+  Widget _costRow(Line l) => Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+        child: Row(children: [
+          Expanded(
+            child: TextFormField(
+              key: ValueKey('cost-${identityHashCode(l)}'),
+              initialValue: l.cost > 0 ? '${l.cost}' : '',
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                  labelText: 'ລາຄາຕໍ່ໜ່ວຍ', isDense: true),
+              onChanged: (v) => setState(() {
+                l.cost = double.tryParse(v.replaceAll(',', '')) ?? 0;
+              }),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text('= ${(l.cost * l.qty).toStringAsFixed(2)}',
+              style: const TextStyle(fontWeight: FontWeight.w700)),
+        ]),
+      );
+
   @override
   Widget build(BuildContext context) {
     final p = pal(context);
@@ -135,7 +158,8 @@ class _LineEditorState extends State<LineEditor> {
           margin: const EdgeInsets.only(top: 6),
           color: p.bg,
           radius: 8,
-          child: ListTile(
+          child: Column(children: [
+            ListTile(
             dense: true,
             title: Text(pick(lines[i].product, ['name', 'productName', 'id'])),
             subtitle: Text(pick(lines[i].product, ['brandName', 'typeName']),
@@ -162,6 +186,8 @@ class _LineEditorState extends State<LineEditor> {
                       })),
             ]),
           ),
+            if (widget.showCost) _costRow(lines[i]),
+          ]),
         ),
     ]);
   }
@@ -595,7 +621,10 @@ class StockFormPage extends StatefulWidget {
 class _StockFormPageState extends State<StockFormPage> {
   final _note = TextEditingController();
   final _ref = TextEditingController();
+  final _invNo = TextEditingController();
+  String _currency = 'USD';
   final _lines = <Line>[];
+  double _total() => _lines.fold<double>(0, (a, l) => a + l.cost * l.qty);
   List<Map<String, dynamic>> _branches = [];
   dynamic _branchId;
   List<Map<String, dynamic>> _atms = [];
@@ -647,10 +676,13 @@ class _StockFormPageState extends State<StockFormPage> {
       final body = {
         'branchId': _branchId,
         'items': [
-          for (final l in _lines) {'productId': l.product['id'], 'qty': l.qty}
+          for (final l in _lines) {'productId': l.product['id'], 'qty': l.qty, if (!widget.issue && l.cost > 0) 'unitCost': l.cost}
         ],
         if (_note.text.trim().isNotEmpty) 'note': _note.text.trim(),
         if (_ref.text.trim().isNotEmpty) 'refNo': _ref.text.trim(),
+        if (!widget.issue && _invNo.text.trim().isNotEmpty) 'invoiceNo': _invNo.text.trim(),
+        if (!widget.issue) 'currency': _currency,
+        if (!widget.issue && _total() > 0) 'totalAmount': _total(),
         if (widget.issue) 'reason': _reason,
         if (!widget.issue && _receiptDate != null && !_isToday(_receiptDate!))
           'receiptDate': _ymdOf(_receiptDate!),
@@ -664,6 +696,7 @@ class _StockFormPageState extends State<StockFormPage> {
         _lines.clear();
         _note.clear();
         _ref.clear();
+        _invNo.clear();
         _atmId = widget.atmId;
         _receiptDate = null;
         _recent = Api.get('/stock/movements');
@@ -879,7 +912,37 @@ class _StockFormPageState extends State<StockFormPage> {
             ),
           ),
           const SizedBox(height: 8),
-          LineEditor(_lines),
+          LineEditor(_lines, showCost: !widget.issue),
+          if (!widget.issue) ...[
+            const SizedBox(height: 8),
+            Row(children: [
+              SizedBox(
+                width: 110,
+                child: DropdownButtonFormField<String>(
+                  initialValue: _currency,
+                  decoration: const InputDecoration(labelText: 'ສະກຸນເງິນ'),
+                  items: [
+                    for (final c in const ['USD', 'LAK', 'THB', 'CNY'])
+                      DropdownMenuItem(value: c, child: Text(c))
+                  ],
+                  onChanged: (v) => setState(() => _currency = v ?? 'USD'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                    controller: _invNo,
+                    decoration: const InputDecoration(
+                        labelText: 'ເລກ Invoice (ບໍ່ບັງຄັບ)')),
+              ),
+            ]),
+            if (_lines.any((l) => l.cost > 0))
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text('ລວມເງິນ: ${_total().toStringAsFixed(2)} $_currency',
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+              ),
+          ],
           if (_error != null)
             Padding(
                 padding: const EdgeInsets.only(top: 8),
