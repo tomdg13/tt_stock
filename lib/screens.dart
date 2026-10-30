@@ -1,3 +1,4 @@
+import 'receive_home.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'stock_drill.dart';
 import 'purchase_plan_page.dart';
@@ -158,7 +159,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'stock':
         return const StockScreen();
       case 'recv':
-        return const StockFormPage(issue: false);
+        return const ReceiveHome();
       case 'issue':
         return ListPage(
           title: 'ຕູ້ ATM',
