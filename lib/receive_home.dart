@@ -95,50 +95,13 @@ class _ReceiveHomeState extends State<ReceiveHome> {
     return map.values.toList();
   }
 
-  // ---- item detail (one movement line) ----
+  // ---- item detail: full page with bottom nav bar ----
   void _openDetail(Map<String, dynamic> m) {
-    final p = pal(context);
-    final scalars = m.entries
-        .where((e) => e.value != null && e.value is! Map && e.value is! List)
-        .toList();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (_) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.6,
-        minChildSize: 0.35,
-        maxChildSize: 0.95,
-        builder: (_, sc) => ListView(
-          controller: sc,
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-          children: [
-            Text(pick(m, ['productName', 'name', 'productId']),
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
-            for (final e in scalars)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 5),
-                child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                          width: 120,
-                          child: Text(_labels[e.key] ?? e.key,
-                              style: TextStyle(color: p.mut))),
-                      Expanded(child: Text('${e.value}')),
-                    ]),
-              ),
-          ],
-        ),
-      ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => _ItemPage(item: m)),
     );
-  }
-
-  // ---- PO detail: full page with its own bottom nav bar ----
+  }  // ---- PO detail: full page with its own bottom nav bar ----
   void _openPo(_PoGroup g) {
     Navigator.push(
       context,
@@ -336,6 +299,90 @@ class _PoFormTabState extends State<_PoFormTab> {
         if (s.hasError) return Center(child: Text('${s.error}'));
         return PoFormPage(row: s.data!);
       },
+    );
+  }
+}
+
+/// Item page (one received line): ລາຍລະອຽດ / ໃບແຈ້ງໜີ້ tabs.
+class _ItemPage extends StatefulWidget {
+  final Map<String, dynamic> item;
+  const _ItemPage({required this.item});
+  @override
+  State<_ItemPage> createState() => _ItemPageState();
+}
+
+class _ItemPageState extends State<_ItemPage> {
+  int _tab = 0;
+
+  Widget _row(String k, String v) {
+    final p = pal(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(width: 130, child: Text(k, style: TextStyle(color: p.mut))),
+        Expanded(child: Text(v.isEmpty ? '-' : v)),
+      ]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.item;
+    final name = pick(m, ['productName', 'name', 'productId']);
+    final qty = pick(m, ['qtyChange', 'qty', 'quantity', 'delta']);
+    final d = pick(m, ['movementDate', 'receiptDate', 'createdAt', 'date']);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        children: _tab == 0
+            ? [
+                AppCard(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _row('ສິນຄ້າ', name),
+                        _row('ຈຳນວນ', qty.isEmpty ? '' : '+$qty'),
+                        _row('ສາຂາ', pick(m, ['branchName', 'branchId'])),
+                        _row('PO', pick(m, ['poNo'])),
+                        _row('ເລກ GRN', pick(m, ['refNo', 'grnNo'])),
+                        _row('ປະເພດ', pick(m, ['movementType', 'type'])),
+                        _row('ວັນທີ', d.length >= 10 ? d.substring(0, 10) : d),
+                        _row('ຜູ້ບັນທຶກ', pick(m, ['userName', 'createdBy'])),
+                      ]),
+                ),
+              ]
+            : [
+                AppCard(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _row('ເລກ Invoice', pick(m, ['invoiceNo'])),
+                        _row('ວັນທີ Invoice', pick(m, ['invoiceDate'])),
+                        _row('P/N', pick(m, ['partNo'])),
+                        _row('ລາຍລະອຽດ', pick(m, ['description'])),
+                        _row('ແຫຼ່ງກຳເນີດ', pick(m, ['origin'])),
+                        _row('ວັດສະດຸ', pick(m, ['material'])),
+                        _row('ລາຄາຕໍ່ໜ່ວຍ', pick(m, ['unitCost'])),
+                        _row('ຈຳນວນເງິນ', pick(m, ['amount'])),
+                        _row('ສະກຸນເງິນ', pick(m, ['currency'])),
+                        _row('ຄ່າຂົນສົ່ງ', pick(m, ['freightCost'])),
+                      ]),
+                ),
+              ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tab,
+        onDestinationSelected: (i) => setState(() => _tab = i),
+        destinations: const [
+          NavigationDestination(
+              icon: Icon(Icons.info_outline), label: 'ລາຍລະອຽດ'),
+          NavigationDestination(
+              icon: Icon(Icons.receipt_long_outlined), label: 'ໃບແຈ້ງໜີ້'),
+        ],
+      ),
     );
   }
 }
