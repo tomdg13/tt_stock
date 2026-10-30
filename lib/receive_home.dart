@@ -10,6 +10,7 @@ import 'invoice_import.dart';
 
 // ------------------------------------------------------------- shared bits
 import 'pages.dart';
+import 'po_info.dart';
 
 /// ຮັບເຂົ້າ tab: recent receipts grouped by PO -> tap a PO to see its items.
 class ReceiveHome extends StatefulWidget {
@@ -74,6 +75,7 @@ class _ReceiveHomeState extends State<ReceiveHome> {
                 label: po.isNotEmpty
                     ? 'PO $po'
                     : (grn.isNotEmpty ? 'GRN $grn' : 'ບໍ່ມີ PO'),
+                po: po,
                 grn: grn,
                 branch: pick(m, ['branchName', 'branchId']),
                 date: _day(m),
@@ -156,6 +158,17 @@ class _ReceiveHomeState extends State<ReceiveHome> {
             const SizedBox(height: 4),
             Text('${g.items.length} ລາຍການ · ລວມ +${fmtNum(g.total)}',
                 style: const TextStyle(fontWeight: FontWeight.w600)),
+            if (g.po.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: () => showPoInfo(context, g.po),
+                  icon: const Icon(Icons.info_outline),
+                  label: const Text('ຂໍ້ມູນ PO'),
+                ),
+              ),
+            ],
             const Divider(height: 24),
             for (final m in g.items)
               InkWell(
@@ -259,11 +272,12 @@ class _ReceiveHomeState extends State<ReceiveHome> {
 }
 
 class _PoGroup {
-  final String label, grn, branch, date;
+  final String label, po, grn, branch, date;
   final List<Map<String, dynamic>> items = [];
   double total = 0;
   _PoGroup(
       {required this.label,
+      required this.po,
       required this.grn,
       required this.branch,
       required this.date});
