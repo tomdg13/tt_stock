@@ -1,3 +1,4 @@
+import 'image_search.dart';
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'stock_drill.dart';
@@ -53,8 +54,15 @@ class _ProductPickerState extends State<_ProductPicker> {
               onSubmitted: (_) => setState(() {
                 _f = _load();
               }),
-              decoration: const InputDecoration(
-                  hintText: 'ຄົ້ນຫາສິນຄ້າ', prefixIcon: Icon(Icons.search)),
+              decoration: InputDecoration(
+                  hintText: 'ຄົ້ນຫາສິນຄ້າ',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: SearchTools(onResult: (v) {
+                    _q.text = v;
+                    setState(() {
+                      _f = _load();
+                    });
+                  })),
             ),
           ),
           Expanded(

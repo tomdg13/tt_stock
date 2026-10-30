@@ -272,6 +272,7 @@ class _CrudPageState extends State<CrudPage> {
           tagKeys: sp.tagKeys,
           trailKeys: sp.trailKeys,
           searchable: sp.searchable,
+          productSearch: sp.barcodes,
           extraQuery: sp.extraQuery,
           reloadSignal: _signal,
           onTapItem: (ctx, row) => Navigator.push(

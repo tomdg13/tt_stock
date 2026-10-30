@@ -1,3 +1,4 @@
+import 'image_search.dart';
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'product_images.dart';
@@ -156,6 +157,7 @@ class ListPage extends StatefulWidget {
   final List<String> titleKeys, subKeys, trailKeys, tagKeys;
   final String? Function(Map<String, dynamic>)? detailPath;
   final bool searchable;
+  final bool productSearch;
   final String extraQuery;
   final void Function(BuildContext, Map<String, dynamic>)? onTapItem;
   final ValueNotifier<int>? reloadSignal;
@@ -172,6 +174,7 @@ class ListPage extends StatefulWidget {
     this.tagKeys = const [],
     this.detailPath,
     this.searchable = true,
+    this.productSearch = false,
     this.extraQuery = '',
     this.onTapItem,
     this.reloadSignal,
@@ -229,12 +232,19 @@ class _ListPageState extends State<ListPage> {
             decoration: InputDecoration(
               hintText: 'ຄົ້ນຫາ',
               prefixIcon: const Icon(Icons.search),
-              suffixIcon: IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    _q.clear();
+              suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (widget.productSearch)
+                  SearchTools(onResult: (v) {
+                    _q.text = v;
                     _reload();
                   }),
+                IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _q.clear();
+                      _reload();
+                    }),
+              ]),
             ),
           ),
         ),

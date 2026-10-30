@@ -1,3 +1,4 @@
+import 'image_search.dart';
 import 'receive_home.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'stock_drill.dart';
@@ -672,6 +673,13 @@ class _SearchPageState extends State<SearchPage> {
     if (s != null && s.trim().isNotEmpty) _go(s);
   }
 
+  Future<void> _photo() async {
+    final name = await searchByPhoto(context);
+    if (name == null || name.isEmpty || !mounted) return;
+    _q.text = name;
+    _go(name);
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = pal(context);
@@ -690,6 +698,10 @@ class _SearchPageState extends State<SearchPage> {
                   icon: const Icon(Icons.qr_code_scanner),
                   tooltip: 'ສະແກນ',
                   onPressed: _scan),
+              IconButton(
+                  icon: const Icon(Icons.photo_camera_outlined),
+                  tooltip: 'ຄົ້ນຫາດ້ວຍຮູບ',
+                  onPressed: _photo),
               IconButton(
                   icon: const Icon(Icons.arrow_forward),
                   onPressed: () => _go()),

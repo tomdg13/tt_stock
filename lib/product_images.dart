@@ -1,3 +1,6 @@
+import 'image_editor.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'dart:io';
 // Many images per product.
 // Server routes (already in atm-stock-api, src/products.ts):
 //   GET    /products/:id/images            -> [ { id, url: '/uploads/products/x.jpg', sortNo } ]
@@ -144,6 +147,65 @@ class _ProductImagesEditorState extends State<ProductImagesEditor> {
     if (mounted) setState(() {});
   }
 
+  Future<Uint8List?> _cropBytes(Uint8List bytes) async {
+    final dir = await Directory.systemTemp.createTemp('crop');
+    final f = File('${dir.path}/in.jpg');
+    await f.writeAsBytes(bytes);
+    final out = await ImageCropper().cropImage(
+      sourcePath: f.path,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      compressQuality: 85,
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'ແກ້ໄຂຮູບ',
+          lockAspectRatio: false,
+          initAspectRatio: CropAspectRatioPreset.original,
+        ),
+        IOSUiSettings(title: 'ແກ້ໄຂຮູບ'),
+      ],
+    );
+    final r = out == null ? null : await out.readAsBytes();
+    try {
+      await dir.delete(recursive: true);
+    } catch (_) {}
+    return r;
+  }
+
+  Future<void> _editPending(PendingImage x) async {
+    final b = await editProductImage(context, x.bytes);
+    if (b == null || !mounted) return;
+    final i = widget.controller.pending.indexOf(x);
+    if (i < 0) return;
+    final base = x.name.contains('.')
+        ? x.name.substring(0, x.name.lastIndexOf('.'))
+        : x.name;
+    widget.controller.pending[i] = PendingImage('$base.jpg', b, 'image/jpeg');
+    setState(() {});
+  }
+
+  Future<void> _editSaved(Map<String, dynamic> m) async {
+    final pid = widget.productId;
+    if (pid == null || pid.isEmpty) return;
+    try {
+      final res = await http.get(Uri.parse(_url(m)),
+          headers: Api.token == null
+              ? <String, String>{}
+              : {'Authorization': 'Bearer ${Api.token}'});
+      if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
+      final b = await editProductImage(context, res.bodyBytes);
+      if (b == null || !mounted) return;
+      await uploadProductImages(pid, [
+        PendingImage('edited-${DateTime.now().millisecondsSinceEpoch}.jpg', b,
+            'image/jpeg')
+      ]);
+      await Api.delete('$_base/${Uri.encodeComponent(pick(m, ['id']))}');
+      _reload();
+    } catch (e) {
+      if (mounted) toastMsg(context, '$e');
+    }
+  }
+
   Future<void> _deleteSaved(Map<String, dynamic> m) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -164,11 +226,11 @@ class _ProductImagesEditorState extends State<ProductImagesEditor> {
     }
   }
 
-  Widget _box(Widget child, VoidCallback onRemove) => SizedBox(
+  Widget _box(Widget child, VoidCallback onRemove, [VoidCallback? onTap]) => SizedBox(
         width: 84,
         height: 84,
         child: Stack(fit: StackFit.expand, children: [
-          ClipRRect(borderRadius: BorderRadius.circular(8), child: child),
+          GestureDetector(onTap: onTap, child: ClipRRect(borderRadius: BorderRadius.circular(8), child: child)),
           Positioned(
             top: 2,
             right: 2,
@@ -213,12 +275,13 @@ class _ProductImagesEditorState extends State<ProductImagesEditor> {
                       errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined)),
                     ),
                     () => _deleteSaved(m),
+                    () => _editSaved(m),
                   ),
               ]);
             },
           ),
         for (final x in pending)
-          _box(Image.memory(x.bytes, fit: BoxFit.cover), () => setState(() => pending.remove(x))),
+          _box(Image.memory(x.bytes, fit: BoxFit.cover), () => setState(() => pending.remove(x)), () => _editPending(x)),
         InkWell(
           onTap: _pick,
           borderRadius: BorderRadius.circular(8),

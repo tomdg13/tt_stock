@@ -1,3 +1,5 @@
+import 'package:image_cropper/image_cropper.dart';
+import 'photo_match.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'product_images.dart';
@@ -28,6 +30,102 @@ class _UsageReportPageState extends State<UsageReportPage> {
   String? _branch;
   String _q = '';
   final _qc = TextEditingController();
+  /// Search by photo: take or import a picture, crop it, then pick from the most similar products.
+  Future<void> _imageSearch(List<Map<String, dynamic>> all) async {
+    final src = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('ຖ່າຍຮູບ'),
+              onTap: () => Navigator.pop(c, ImageSource.camera)),
+          ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('ເລືອກຮູບຈາກເຄື່ອງ'),
+              onTap: () => Navigator.pop(c, ImageSource.gallery)),
+        ]),
+      ),
+    );
+    if (src == null || !mounted) return;
+    final shot = await ImagePicker().pickImage(source: src, imageQuality: 90);
+    if (shot == null || !mounted) return;
+
+    // crop: drag the box so only the part is inside
+    final crop = await ImageCropper().cropImage(
+      sourcePath: shot.path,
+      maxWidth: 800,
+      maxHeight: 800,
+      compressQuality: 85,
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'ຕັດຮູບໃຫ້ເຫັນສິນຄ້າ',
+          lockAspectRatio: false,
+          initAspectRatio: CropAspectRatioPreset.original,
+        ),
+        IOSUiSettings(title: 'ຕັດຮູບ'),
+      ],
+    );
+    if (crop == null || !mounted) return;
+    final bytes = await crop.readAsBytes();
+
+    _toast('ກຳລັງຄົ້ນຫາຈາກຮູບ…');
+    final names = {
+      for (final r in all) '${r['productId']}': pick(r, ['productName'])
+    };
+    final res = await matchProductPhoto(bytes, _imgs);
+    if (!mounted) return;
+    final top = res.where((e) => names.containsKey(e.key)).take(3).toList();
+
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (c) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Padding(
+                padding: EdgeInsets.fromLTRB(12, 12, 12, 4),
+                child: Text('ຮູບທີ່ໃຊ້ຄົ້ນຫາ',
+                    style: TextStyle(fontWeight: FontWeight.bold))),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.memory(bytes, height: 160, fit: BoxFit.contain),
+              ),
+            ),
+            const Divider(),
+            const Padding(
+                padding: EdgeInsets.all(8),
+                child: Text('ສິນຄ້າທີ່ຄ້າຍກັນ',
+                    style: TextStyle(fontWeight: FontWeight.bold))),
+            if (top.isEmpty)
+              const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('ບໍ່ພົບສິນຄ້າທີ່ຄ້າຍກັນ')),
+            for (final e in top)
+              ListTile(
+                leading: _thumb(context, _imgs[e.key] ?? ''),
+                title: Text(names[e.key]!),
+                subtitle: Text('${(e.value * 100).round()}%'),
+                onTap: () => Navigator.pop(c, names[e.key]),
+              ),
+            TextButton.icon(
+              icon: const Icon(Icons.refresh),
+              label: const Text('ຄົ້ນຫາໃໝ່'),
+              onPressed: () => Navigator.pop(c, '__again__'),
+            ),
+          ]),
+        ),
+      ),
+    );
+    if (chosen == '__again__') {
+      if (mounted) _imageSearch(all);
+    } else if (chosen != null && chosen.isNotEmpty) {
+      _setQ(chosen);
+    }
+  }
+
 
   /// Take a photo with the camera and upload it to this product.
   Future<void> _uploadPhoto(String productId) async {
@@ -130,7 +228,6 @@ class _UsageReportPageState extends State<UsageReportPage> {
         '/stock/usage?from=${_usD(_range.start)}&to=${_usD(_range.end)}');
     try {
       final pr = await Api.get('/products?limit=200');
-      debugPrint('PRODUCT SAMPLE: ${_usList(pr).isNotEmpty ? _usList(pr).first : pr}');
       _imgs = {
         for (final m in _usList(pr))
           '${pick(m, ['id', 'productId'])}':
@@ -232,8 +329,8 @@ class _UsageReportPageState extends State<UsageReportPage> {
                       onPressed: _scanSearch),
                   IconButton(
                       icon: const Icon(Icons.photo_camera_outlined),
-                      tooltip: 'ຖ່າຍຮູບຊື່ອາໄຫຼ່',
-                      onPressed: () => _photoSearch(all)),
+                      tooltip: 'ຄົ້ນຫາດ້ວຍຮູບ',
+                      onPressed: () => _imageSearch(all)),
                 ]),
               ),
               onChanged: (v) => setState(() => _q = v),
