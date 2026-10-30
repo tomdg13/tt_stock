@@ -26,7 +26,16 @@ class _ReceiveHomeState extends State<ReceiveHome> {
   // key names tried in order (adjust if your API uses other names)
   static const _poKeys = ['poNo', 'poNumber', 'po', 'poCode', 'refNo'];
   static const _grnKeys = ['grnNo', 'grn', 'docNo', 'refNo'];
-  static const _qtyKeys = ['qty', 'quantity'];
+  static const _qtyKeys = [
+    'qty',
+    'quantity',
+    'qtyChange',
+    'delta',
+    'change',
+    'qtyIn',
+    'received',
+    'amount'
+  ];
   static const _dateKeys = ['receiptDate', 'createdAt', 'date'];
 
   void _reload() => setState(() {
@@ -129,55 +138,72 @@ class _ReceiveHomeState extends State<ReceiveHome> {
     );
   }
 
-  // ---- PO detail: list of items inside this PO ----
+  // ---- PO detail: nav-bar style tabs (ລາຍການ / ຂໍ້ມູນ PO) ----
   void _openPo(_PoGroup g) {
-    final p = pal(context);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
-      builder: (_) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.75,
-        minChildSize: 0.4,
-        maxChildSize: 0.95,
-        builder: (_, sc) => ListView(
-          controller: sc,
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          children: [
-            Text(g.label,
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 4),
-            Text(
-                [g.branch, g.grn, g.date]
-                    .where((e) => e.isNotEmpty)
-                    .join(' · '),
-                style: TextStyle(color: p.mut, fontSize: 13)),
-            const SizedBox(height: 4),
-            Text('${g.items.length} ລາຍການ · ລວມ +${fmtNum(g.total)}',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            if (g.po.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  onPressed: () => showPoInfo(context, g.po),
-                  icon: const Icon(Icons.info_outline),
-                  label: const Text('ຂໍ້ມູນ PO'),
+      builder: (sheetCtx) {
+        var tab = 0;
+        return StatefulBuilder(builder: (ctx, setS) {
+          final p = pal(ctx);
+          return SizedBox(
+            height: MediaQuery.of(ctx).size.height * 0.8,
+            child: Column(children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(g.label,
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 2),
+                        Text(
+                            [g.branch, g.grn, g.date]
+                                .where((e) => e.isNotEmpty)
+                                .join(' · '),
+                            style: TextStyle(color: p.mut, fontSize: 13)),
+                      ]),
                 ),
               ),
-            ],
-            const Divider(height: 24),
-            for (final m in g.items)
-              InkWell(
-                onTap: () => _openDetail(m),
-                child: moveRow(context, m),
+              Expanded(
+                child: tab == 0
+                    ? ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        children: [
+                          Text(
+                              '${g.items.length} ລາຍການ · ລວມ +${fmtNum(g.total)}',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600)),
+                          const Divider(height: 24),
+                          for (final m in g.items)
+                            InkWell(
+                              onTap: () => _openDetail(m),
+                              child: moveRow(context, m),
+                            ),
+                        ],
+                      )
+                    : PoInfoView(poNo: g.po),
               ),
-          ],
-        ),
-      ),
+              NavigationBar(
+                selectedIndex: tab,
+                onDestinationSelected: (i) => setS(() => tab = i),
+                destinations: const [
+                  NavigationDestination(
+                      icon: Icon(Icons.list_alt_outlined), label: 'ລາຍການ'),
+                  NavigationDestination(
+                      icon: Icon(Icons.info_outline), label: 'ຂໍ້ມູນ PO'),
+                ],
+              ),
+            ]),
+          );
+        });
+      },
     );
   }
 
