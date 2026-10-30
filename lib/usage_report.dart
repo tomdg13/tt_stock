@@ -29,6 +29,23 @@ class _UsageReportPageState extends State<UsageReportPage> {
   String _q = '';
   final _qc = TextEditingController();
 
+  /// Take a photo with the camera and upload it to this product.
+  Future<void> _uploadPhoto(String productId) async {
+    final shot = await ImagePicker().pickImage(
+        source: ImageSource.camera, maxWidth: 1600, imageQuality: 80);
+    if (shot == null || !mounted) return;
+    _toast('ກຳລັງອັບໂຫຼດຮູບ…');
+    try {
+      final bytes = await shot.readAsBytes();
+      await uploadProductImages(productId, [PendingImage(shot.name, bytes)]);
+      if (!mounted) return;
+      setState(() => _future = _load());
+      _toast('ອັບໂຫຼດຮູບສຳເລັດ');
+    } catch (e) {
+      if (mounted) _toast('ອັບໂຫຼດບໍ່ສຳເລັດ: $e');
+    }
+  }
+
   void _setQ(String v) {
     _qc.text = v;
     setState(() => _q = v);
@@ -257,7 +274,26 @@ class _UsageReportPageState extends State<UsageReportPage> {
                     child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _thumb(context, _imgs['${r['productId']}'] ?? ''),
+                          GestureDetector(
+                            onTap: () => _uploadPhoto('${r['productId']}'),
+                            child: Stack(children: [
+                              _thumb(context, _imgs['${r['productId']}'] ?? ''),
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: const BoxDecoration(
+                                      color: Colors.black54,
+                                      borderRadius: BorderRadius.only(
+                                          topLeft: Radius.circular(8),
+                                          bottomRight: Radius.circular(8))),
+                                  child: const Icon(Icons.photo_camera,
+                                      size: 14, color: Colors.white),
+                                ),
+                              ),
+                            ]),
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
