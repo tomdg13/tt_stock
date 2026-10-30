@@ -11,7 +11,7 @@ import 'invoice_import.dart';
 // ------------------------------------------------------------- shared bits
 import 'pages.dart';
 
-/// ຮັບເຂົ້າ tab: recent receipts list first -> "ເພີ່ມ" opens the existing form.
+/// ຮັບເຂົ້າ tab: recent receipts grouped by PO -> tap a PO to see its items.
 class ReceiveHome extends StatefulWidget {
   const ReceiveHome({super.key});
   @override
@@ -21,6 +21,12 @@ class ReceiveHome extends StatefulWidget {
 class _ReceiveHomeState extends State<ReceiveHome> {
   bool _adding = false;
   late Future<dynamic> _recent = Api.get('/stock/movements');
+
+  // key names tried in order (adjust if your API uses other names)
+  static const _poKeys = ['poNo', 'poNumber', 'po', 'poCode', 'refNo'];
+  static const _grnKeys = ['grnNo', 'grn', 'docNo', 'refNo'];
+  static const _qtyKeys = ['qty', 'quantity'];
+  static const _dateKeys = ['receiptDate', 'createdAt', 'date'];
 
   void _reload() => setState(() {
         _recent = Api.get('/stock/movements');
@@ -49,15 +55,41 @@ class _ReceiveHomeState extends State<ReceiveHome> {
     'userName': 'ຜູ້ບັນທຶກ',
   };
 
+  String _day(Map<String, dynamic> m) {
+    final d = pick(m, _dateKeys);
+    return d.length >= 10 ? d.substring(0, 10) : d;
+  }
+
+  /// Group movements by PO (falls back to GRN when a row has no PO).
+  List<_PoGroup> _group(List<Map<String, dynamic>> rows) {
+    final map = <String, _PoGroup>{};
+    for (final m in rows) {
+      final po = pick(m, _poKeys);
+      final grn = pick(m, _grnKeys);
+      final key =
+          po.isNotEmpty ? 'PO:$po' : (grn.isNotEmpty ? 'GRN:$grn' : 'NONE');
+      final g = map.putIfAbsent(
+          key,
+          () => _PoGroup(
+                label: po.isNotEmpty
+                    ? 'PO $po'
+                    : (grn.isNotEmpty ? 'GRN $grn' : 'ບໍ່ມີ PO'),
+                grn: grn,
+                branch: pick(m, ['branchName', 'branchId']),
+                date: _day(m),
+              ));
+      g.items.add(m);
+      g.total += num0(pick(m, _qtyKeys));
+    }
+    return map.values.toList();
+  }
+
+  // ---- item detail (one movement line) ----
   void _openDetail(Map<String, dynamic> m) {
     final p = pal(context);
     final scalars = m.entries
         .where((e) => e.value != null && e.value is! Map && e.value is! List)
         .toList();
-    final lines = [
-      for (final k in ['lines', 'items'])
-        if (m[k] is List) ...(m[k] as List).whereType<Map>()
-    ];
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -72,8 +104,9 @@ class _ReceiveHomeState extends State<ReceiveHome> {
           controller: sc,
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           children: [
-            const Text('ລາຍລະອຽດການຮັບເຂົ້າ',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            Text(pick(m, ['productName', 'name', 'productId']),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             const SizedBox(height: 12),
             for (final e in scalars)
               Padding(
@@ -88,21 +121,81 @@ class _ReceiveHomeState extends State<ReceiveHome> {
                       Expanded(child: Text('${e.value}')),
                     ]),
               ),
-            if (lines.isNotEmpty) ...[
-              const Divider(height: 28),
-              const Text('ລາຍການສິນຄ້າ',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              for (final l in lines)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(pick(Map<String, dynamic>.from(l),
-                      ['productName', 'name', 'productId'])),
-                  trailing: Text(
-                      'x${pick(Map<String, dynamic>.from(l), ['qty', 'quantity'])}'),
-                ),
-            ],
           ],
         ),
+      ),
+    );
+  }
+
+  // ---- PO detail: list of items inside this PO ----
+  void _openPo(_PoGroup g) {
+    final p = pal(context);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.75,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        builder: (_, sc) => ListView(
+          controller: sc,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          children: [
+            Text(g.label,
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(
+                [g.branch, g.grn, g.date]
+                    .where((e) => e.isNotEmpty)
+                    .join(' · '),
+                style: TextStyle(color: p.mut, fontSize: 13)),
+            const SizedBox(height: 4),
+            Text('${g.items.length} ລາຍການ · ລວມ +${fmtNum(g.total)}',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            const Divider(height: 24),
+            for (final m in g.items)
+              InkWell(
+                onTap: () => _openDetail(m),
+                child: moveRow(context, m),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _poRow(_PoGroup g) {
+    final p = pal(context);
+    return InkWell(
+      onTap: () => _openPo(g),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(children: [
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(g.label,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 15)),
+              const SizedBox(height: 2),
+              Text(
+                  [g.branch, g.grn, g.date]
+                      .where((e) => e.isNotEmpty)
+                      .join(' · '),
+                  style: TextStyle(color: p.mut, fontSize: 12.5)),
+              Text('${g.items.length} ລາຍການ',
+                  style: TextStyle(color: p.mut, fontSize: 12.5)),
+            ]),
+          ),
+          Text('+${fmtNum(g.total)}',
+              style:
+                  const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          const Icon(Icons.chevron_right),
+        ]),
       ),
     );
   }
@@ -111,7 +204,6 @@ class _ReceiveHomeState extends State<ReceiveHome> {
   Widget build(BuildContext context) {
     final p = pal(context);
 
-    // ---- add form (existing page) ----
     if (_adding) {
       return Column(children: [
         Align(
@@ -126,7 +218,6 @@ class _ReceiveHomeState extends State<ReceiveHome> {
       ]);
     }
 
-    // ---- list first ----
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
@@ -140,7 +231,7 @@ class _ReceiveHomeState extends State<ReceiveHome> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
           children: [
             AppCard(
-              title: 'ຮັບເຂົ້າລ່າສຸດ',
+              title: 'ຮັບເຂົ້າລ່າສຸດ (ຕາມ PO)',
               child: futureBlock(_recent, _reload, (d) {
                 final all = asList(d);
                 var rows = all.where((m) {
@@ -149,15 +240,14 @@ class _ReceiveHomeState extends State<ReceiveHome> {
                 }).toList();
                 if (rows.isEmpty) rows = all;
                 if (rows.isEmpty) {
-                  return Text('ຍັງບໍ່ມີລາຍການ',
-                      style: TextStyle(color: p.mut));
+                  return Text('ຍັງບໍ່ມີລາຍການ', style: TextStyle(color: p.mut));
                 }
+                final groups = _group(rows);
                 return Column(children: [
-                  for (final m in rows.take(30))
-                    InkWell(
-                      onTap: () => _openDetail(m),
-                      child: moveRow(context, m),
-                    ),
+                  for (var i = 0; i < groups.length && i < 30; i++) ...[
+                    if (i > 0) const Divider(height: 1),
+                    _poRow(groups[i]),
+                  ],
                 ]);
               }),
             ),
@@ -166,4 +256,15 @@ class _ReceiveHomeState extends State<ReceiveHome> {
       ),
     );
   }
+}
+
+class _PoGroup {
+  final String label, grn, branch, date;
+  final List<Map<String, dynamic>> items = [];
+  double total = 0;
+  _PoGroup(
+      {required this.label,
+      required this.grn,
+      required this.branch,
+      required this.date});
 }
