@@ -1,3 +1,6 @@
+import 'package:image_picker/image_picker.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'product_images.dart';
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'screens.dart' show BarcodeScanPage;
@@ -24,7 +27,76 @@ class _UsageReportPageState extends State<UsageReportPage> {
   late DateTimeRange _range;
   String? _branch;
   String _q = '';
+  final _qc = TextEditingController();
+
+  void _setQ(String v) {
+    _qc.text = v;
+    setState(() => _q = v);
+  }
+
+  void _toast(String m) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+
+  /// Scan a barcode, look the product up, then filter the report by its name.
+  Future<void> _scanSearch() async {
+    final code = await Navigator.push<String>(
+        context, MaterialPageRoute(builder: (_) => const BarcodeScanPage()));
+    if (code == null || code.isEmpty || !mounted) return;
+    try {
+      final d =
+          await Api.get('/products/by-barcode/${Uri.encodeComponent(code)}');
+      final m = d is Map
+          ? Map<String, dynamic>.from(d['data'] is Map ? d['data'] : d)
+          : <String, dynamic>{};
+      final name = pick(m, ['name', 'productName']);
+      if (name.isNotEmpty) {
+        _setQ(name);
+        return;
+      }
+    } catch (_) {}
+    if (mounted) _toast('ບໍ່ພົບສິນຄ້າ: $code');
+  }
+
+  /// Photo of the part label -> read the text -> pick the best matching product.
+  Future<void> _photoSearch(List<Map<String, dynamic>> all) async {
+    final shot = await ImagePicker()
+        .pickImage(source: ImageSource.camera, imageQuality: 90);
+    if (shot == null || !mounted) return;
+    _toast('ກຳລັງອ່ານຂໍ້ຄວາມຈາກຮູບ…');
+    var text = '';
+    final rec = TextRecognizer(script: TextRecognitionScript.latin);
+    try {
+      text = (await rec.processImage(InputImage.fromFilePath(shot.path))).text;
+    } catch (_) {
+    } finally {
+      await rec.close();
+    }
+    if (!mounted) return;
+    final re = RegExp(r'[A-Za-z0-9\-]{3,}');
+    final words =
+        re.allMatches(text.toUpperCase()).map((m) => m.group(0)!).toSet();
+    var best = '';
+    var bestScore = 0;
+    for (final r in all) {
+      final name = pick(r, ['productName']);
+      final score = re
+          .allMatches(name.toUpperCase())
+          .map((m) => m.group(0)!)
+          .where(words.contains)
+          .length;
+      if (score > bestScore) {
+        bestScore = score;
+        best = name;
+      }
+    }
+    if (best.isNotEmpty) {
+      _setQ(best);
+    } else {
+      _toast('ບໍ່ພົບຊື່ສິນຄ້າໃນຮູບ');
+    }
+  }
   late Future<List<Map<String, dynamic>>> _future;
+  Map<String, String> _imgs = {};
 
   @override
   void initState() {
@@ -39,6 +111,17 @@ class _UsageReportPageState extends State<UsageReportPage> {
   Future<List<Map<String, dynamic>>> _load() async {
     final d = await Api.get(
         '/stock/usage?from=${_usD(_range.start)}&to=${_usD(_range.end)}');
+    try {
+      final pr = await Api.get('/products?limit=200');
+      debugPrint('PRODUCT SAMPLE: ${_usList(pr).isNotEmpty ? _usList(pr).first : pr}');
+      _imgs = {
+        for (final m in _usList(pr))
+          '${pick(m, ['id', 'productId'])}':
+              pick(m, ['imageUrl', 'image', 'photo', 'img', 'picture'])
+      };
+    } catch (e) {
+      debugPrint('PRODUCTS ERR: $e');
+    }
     return _usList(d);
   }
 
@@ -117,8 +200,25 @@ class _UsageReportPageState extends State<UsageReportPage> {
             ),
             const SizedBox(height: 8),
             TextField(
-              decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search), labelText: 'ຄົ້ນຫາອາໄຫຼ່'),
+              controller: _qc,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                labelText: 'ຄົ້ນຫາອາໄຫຼ່',
+                suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (_q.isNotEmpty)
+                    IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => _setQ('')),
+                  IconButton(
+                      icon: const Icon(Icons.qr_code_scanner),
+                      tooltip: 'ສະແກນບາໂຄດ',
+                      onPressed: _scanSearch),
+                  IconButton(
+                      icon: const Icon(Icons.photo_camera_outlined),
+                      tooltip: 'ຖ່າຍຮູບຊື່ອາໄຫຼ່',
+                      onPressed: () => _photoSearch(all)),
+                ]),
+              ),
               onChanged: (v) => setState(() => _q = v),
             ),
             const SizedBox(height: 12),
@@ -150,37 +250,72 @@ class _UsageReportPageState extends State<UsageReportPage> {
                             row: r,
                             from: _usD(_range.start),
                             to: _usD(_range.end)))),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                      border: Border(bottom: BorderSide(color: p.bd))),
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(pick(r, ['productName']),
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w600)),
-                        Text(
-                            '${pick(r, ['branchName'])}  ${pick(r, ['unit'])}',
-                            style: TextStyle(color: p.mut, fontSize: 12)),
-                        const SizedBox(height: 4),
-                        Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              _cell('ຍອດຕົ້ນ', _usS(num0(r['opening'])), null),
-                              _cell('ນຳເຂົ້າ', _usS(num0(r['qtyIn'])),
-                                  Colors.green),
-                              _cell('ເອົາອອກ', _usS(num0(r['qtyOut'])),
-                                  Colors.red),
-                              _cell('ຍອດທ້າຍ', _usS(num0(r['closing'])), null),
-                              const Icon(Icons.chevron_right),
-                            ]),
-                      ]),
-                ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(color: p.bd))),
+                    child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _thumb(context, _imgs['${r['productId']}'] ?? ''),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(pick(r, ['productName']),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600)),
+                                  Text(
+                                      '${pick(r, ['branchName'])}  ${pick(r, ['unit'])}',
+                                      style: TextStyle(
+                                          color: p.mut, fontSize: 12)),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        _cell('ຍອດຕົ້ນ',
+                                            _usS(num0(r['opening'])), null),
+                                        _cell('ນຳເຂົ້າ',
+                                            _usS(num0(r['qtyIn'])),
+                                            Colors.green),
+                                        _cell('ເອົາອອກ',
+                                            _usS(num0(r['qtyOut'])),
+                                            Colors.red),
+                                        _cell('ຍອດທ້າຍ',
+                                            _usS(num0(r['closing'])), null),
+                                        const Icon(Icons.chevron_right),
+                                      ]),
+                                ]),
+                          ),
+                        ]),
+                  ),
               ),
           ]);
         },
       ),
+    );
+  }
+
+  Widget _thumb(BuildContext context, String v) {
+    final p = pal(context);
+    final ph = Container(
+      width: 48,
+      height: 48,
+      decoration:
+          BoxDecoration(color: p.bd, borderRadius: BorderRadius.circular(8)),
+      child: Icon(Icons.image_outlined, color: p.mut),
+    );
+    final url = productImageUrl(v);
+    if (url.isEmpty) return ph;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.network(url,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => ph),
     );
   }
 
