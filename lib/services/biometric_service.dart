@@ -13,6 +13,7 @@ class BiometricService {
   static void _log(String m) => debugPrint('BIO: $m');
 
   static Future<bool> isAvailable() async {
+    if (kIsWeb) return false;
     try {
       final supported = await _auth.isDeviceSupported();
       final canCheck = await _auth.canCheckBiometrics;

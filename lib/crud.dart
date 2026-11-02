@@ -1,3 +1,4 @@
+import 'dart:math';
 // ignore_for_file: camel_case_types
 import 'plan_import.dart';
 import 'dart:convert';
@@ -745,20 +746,49 @@ class _CrudFormState extends State<CrudForm> {
       default:
         return TextField(
           controller: _ctl[f.key],
-          obscureText: f.type == FT.pin,
+          obscureText: f.type == FT.pin && !_showPin,
           keyboardType:
               f.type == FT.text ? TextInputType.text : TextInputType.number,
           inputFormatters: f.type == FT.pin
               ? [FilteringTextInputFormatter.digitsOnly]
-              : null,
+              : (f.key == 'phone'
+                  ? [FilteringTextInputFormatter.deny(RegExp(r'\s'))]
+                  : null),
           maxLength: f.type == FT.pin ? 6 : null,
           decoration: InputDecoration(
               labelText: f.type == FT.pin && _editing
                   ? '${f.label} (ເວົ້ນວ່າງ = ບໍ່ປ່ຽນ)'
                   : label,
-              counterText: ''),
+              counterText: '',
+              suffixIcon: f.type == FT.pin
+                  ? Row(mainAxisSize: MainAxisSize.min, children: [
+                      IconButton(
+                        icon: Icon(_showPin
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined),
+                        tooltip: 'ສະແດງ/ເຊື່ອມ PIN',
+                        onPressed: () =>
+                            setState(() => _showPin = !_showPin),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.casino_outlined),
+                        tooltip: 'ສຸ່ມ PIN',
+                        onPressed: () => setState(() {
+                          _ctl[f.key]!.text = _randomPin();
+                          _showPin = true;
+                        }),
+                      ),
+                    ])
+                  : null),
         );
     }
+  }
+
+  bool _showPin = false;
+
+  String _randomPin() {
+    final r = Random.secure();
+    return List.generate(6, (_) => r.nextInt(10)).join();
   }
 
   /// Page x (View / Edit / Delete) table, backed by the API's permission codes.
