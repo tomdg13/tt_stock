@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'services/biometric_service.dart';
 import 'image_search.dart';
 import 'receive_home.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -37,6 +39,48 @@ class _LoginScreenState extends State<LoginScreen> {
   final _pin = TextEditingController();
   bool _busy = false;
   String? _error;
+  bool _bioReady = false;
+  bool _bioAvail = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initBio();
+  }
+
+  Future<void> _initBio() async {
+    final avail = await BiometricService.isAvailable();
+    final ready = avail && await BiometricService.isEnabled();
+    if (!mounted) return;
+    setState(() {
+      _bioAvail = avail;
+      _bioReady = ready;
+    });
+    if (ready) _bioLogin();
+  }
+
+  void _onBioTap() {
+    if (_bioReady) {
+      _bioLogin();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('ເຂົ້າດ້ວຍ PIN ກ່ອນ ແລ້ວເປີດລາຍນິ້ວມື')));
+    }
+  }
+
+  Future<void> _bioLogin() async {
+    final cred = await BiometricService.authenticateAndGetCredentials();
+    debugPrint('BIO: cred=${cred == null ? "NULL" : "phone=${cred.phone}"}');
+    if (cred == null) return;
+    if (mounted) setState(() { _busy = true; _error = null; });
+    try {
+      await Api.login(cred.phone, cred.pin);
+    } catch (e) {
+      if (mounted) setState(() { _error = '$e'; });
+    } finally {
+      if (mounted) setState(() { _busy = false; });
+    }
+  }
 
   Future<void> _submit() async {
     if (_phone.text.trim().isEmpty || _pin.text.isEmpty) {
@@ -50,7 +94,29 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      await Api.login(_phone.text.trim(), _pin.text);
+      final ph = _phone.text.trim();
+      final pn = _pin.text;
+      bool saveBio = await BiometricService.isEnabled();
+      if (!saveBio && await BiometricService.isAvailable() && mounted) {
+        saveBio = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('ເປີດໃຊ້ລາຍນິ້ວມື?'),
+                content: const Text('ໃຊ້ລາຍນິ້ວມືເຂົ້າສູ່ລະບົບຄັ້ງຕໍ່ໄປ'),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('ບໍ່')),
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('ເປີດໃຊ້')),
+                ],
+              ),
+            ) ??
+            false;
+      }
+      await Api.login(ph, pn);
+      if (saveBio) await BiometricService.enable(ph, pn);
     } catch (e) {
       if (mounted)
         setState(() {
@@ -116,6 +182,34 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     const SizedBox(height: 16),
                     saveButton('ເຂົ້າສູ່ລະບົບ', _busy, _submit),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Column(children: [
+                        if (_bioAvail)
+                          IconButton(
+                            iconSize: 48,
+                            icon: const Icon(Icons.fingerprint),
+                            color: _bioReady
+                                ? const Color(0xFF0B6E66)
+                                : Colors.grey,
+                            onPressed: _busy ? null : _onBioTap,
+                          ),
+                        Text(
+                          !_bioAvail
+                              ? 'ເຄື່ອງນີ້ບໍ່ມີລາຍນິ້ວມື'
+                              : (_bioReady
+                                  ? 'ລາຍນິ້ວມື: ເປີດ'
+                                  : 'ລາຍນິ້ວມື: ປິດ'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: _bioReady
+                                ? const Color(0xFF0B6E66)
+                                : Colors.grey,
+                          ),
+                        ),
+                      ]),
+                    ),
                   ]),
             ),
           ),
@@ -329,6 +423,49 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _toggleBio() async {
+    Navigator.pop(context);
+    final messenger = ScaffoldMessenger.of(context);
+    if (await BiometricService.isEnabled()) {
+      await BiometricService.disable();
+      messenger.showSnackBar(const SnackBar(content: Text('ປິດລາຍນິ້ວມືແລ້ວ')));
+      return;
+    }
+    if (!await BiometricService.isAvailable()) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('ເຄື່ອງນີ້ຍັງບໍ່ໄດ້ຕັ້ງລາຍນິ້ວມື')));
+      return;
+    }
+    if (!mounted) return;
+    final ctrl = TextEditingController();
+    final pin = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('ໃສ່ PIN ເພື່ອເປີດລາຍນິ້ວມື'),
+        content: TextField(
+          controller: ctrl,
+          obscureText: true,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          maxLength: 6,
+          decoration: const InputDecoration(labelText: 'PIN', counterText: ''),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('ຍົກເລີກ')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text),
+              child: const Text('ຕົກລົງ')),
+        ],
+      ),
+    );
+    if (pin == null || pin.isEmpty) return;
+    await BiometricService.enable(pick(Api.user ?? {}, ['phone']), pin);
+    messenger.showSnackBar(const SnackBar(content: Text('ເປີດລາຍນິ້ວມືແລ້ວ')));
+  }
+
   Widget _drawer() {
     final p = pal(context);
     final u = Api.user ?? {};
@@ -365,6 +502,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 ]),
           ),
           Divider(height: 1, color: p.bd),
+          FutureBuilder<bool>(
+            future: BiometricService.isEnabled(),
+            builder: (ctx, snap) => ListTile(
+              dense: true,
+              leading: const Icon(Icons.fingerprint),
+              title: const Text('ລາຍນິ້ວມື'),
+              trailing: Text(
+                snap.data == true ? 'ເປີດ' : 'ປິດ',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: snap.data == true
+                      ? const Color(0xFF0B6E66)
+                      : Colors.grey,
+                ),
+              ),
+              onTap: _toggleBio,
+            ),
+          ),
           ListTile(
             dense: true,
             leading: const Icon(Icons.settings_outlined),
