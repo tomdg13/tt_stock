@@ -58,3 +58,4 @@ patch_*.py
 node_modules/
 dist/
 uploads/
+*.bak*
