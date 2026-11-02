@@ -1,11 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import 'api.dart';
-import 'crud.dart';
-import 'specs.dart';
-import 'terminal_history.dart';
 import 'theme.dart';
-import 'type_image.dart';
 import 'widgets.dart';
 
 class PriceReportPage extends StatefulWidget {
@@ -62,7 +57,8 @@ class _PriceReportPageState extends State<PriceReportPage> {
       body: ListView(padding: const EdgeInsets.all(16), children: [
         DropdownButtonFormField<dynamic>(
           key: ValueKey('rb-${_branches.length}-$_branchId'),
-          initialValue: _branches.any((b) => b['id'] == _branchId) ? _branchId : null,
+          initialValue:
+              _branches.any((b) => b['id'] == _branchId) ? _branchId : null,
           isExpanded: true,
           decoration: const InputDecoration(labelText: 'ສາຂາ'),
           items: [
@@ -100,41 +96,50 @@ class _PriceReportPageState extends State<PriceReportPage> {
               return Padding(
                   padding: const EdgeInsets.all(32),
                   child: Center(
-                      child: Text('ບໍ່ມີຂໍ້ມູນ', style: TextStyle(color: p.mut))));
+                      child:
+                          Text('ບໍ່ມີຂໍ້ມູນ', style: TextStyle(color: p.mut))));
             }
-            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              for (final r in rows)
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                      border: Border(bottom: BorderSide(color: p.bd))),
-                  child: Row(children: [
-                    Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(pick(r, ['productName'])),
-                            Text(
-                                pick(r, ['poNo']).isEmpty
-                                    ? '${pick(r, ['qty'])} ຊິ້ນ · ບໍ່ມີ PO'
-                                    : 'PO ${pick(r, ['poNo'])} · ${pick(r, ['qty'])} × ${_n(r['unitCost'])} ${pick(r, ['currency'])}',
-                                style: TextStyle(color: p.mut, fontSize: 12)),
-                          ]),
+            return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final r in rows)
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                          border: Border(bottom: BorderSide(color: p.bd))),
+                      child: Row(children: [
+                        Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(pick(r, ['productName'])),
+                                Text(
+                                    pick(r, ['poNo']).isEmpty
+                                        ? '${pick(r, ['qty'])} ຊິ້ນ · ບໍ່ມີ PO'
+                                        : 'PO ${pick(r, ['poNo'])} · ${pick(r, [
+                                                'qty'
+                                              ])} × ${_n(r['unitCost'])} ${pick(r, [
+                                                'currency'
+                                              ])}',
+                                    style:
+                                        TextStyle(color: p.mut, fontSize: 12)),
+                              ]),
+                        ),
+                        Text(
+                            pick(r, ['poNo']).isEmpty
+                                ? '-'
+                                : '${_n(r['amount'])} ${pick(r, ['currency'])}',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
+                      ]),
                     ),
-                    Text(
-                        pick(r, ['poNo']).isEmpty
-                            ? '-'
-                            : '${_n(r['amount'])} ${pick(r, ['currency'])}',
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ]),
-                ),
-              const SizedBox(height: 12),
-              for (final e in tot.entries)
-                Text('ລວມ ${_n(e.value)} ${e.key}',
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 16)),
-            ]);
+                  const SizedBox(height: 12),
+                  for (final e in tot.entries)
+                    Text('ລວມ ${_n(e.value)} ${e.key}',
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16)),
+                ]);
           },
         ),
       ]),

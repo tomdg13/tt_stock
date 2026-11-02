@@ -22,6 +22,7 @@ import 'theme.dart';
 import 'widgets.dart';
 import 'transfer_report.dart';
 import 'usage_report.dart';
+import 'price_report.dart';
 import 'stock_count.dart';
 
 // ---------------------------------------------------------------- Login
@@ -1327,8 +1328,8 @@ class ReportsScreen extends StatelessWidget {
       margin: EdgeInsets.zero,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => Navigator.push(
-            context, MaterialPageRoute(builder: (_) => page)),
+        onTap: () =>
+            Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
@@ -1413,6 +1414,15 @@ class ReportsScreen extends StatelessWidget {
               'Receive / issue / closing balance',
               ['Opening', 'Receive', 'Issue', 'Closing'],
               const UsageReportPage()),
+          const SizedBox(height: 12),
+          _card(
+              context,
+              Icons.payments_outlined,
+              Colors.teal,
+              '5 · ລາຍງານລາຄາອາໄຫຼ່',
+              'Spare part price report',
+              ['Branch', 'Date range', 'By part'],
+              const PriceReportPage()),
         ],
       ),
     );
@@ -1470,7 +1480,9 @@ class _ReportStockViewState extends State<ReportStockView> {
   String _fmt(dynamic v) {
     if (v == null) return '';
     if (v is double) {
-      return v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
+      return v == v.roundToDouble()
+          ? v.toInt().toString()
+          : v.toStringAsFixed(2);
     }
     return v.toString();
   }
@@ -1521,8 +1533,8 @@ class _ReportStockViewState extends State<ReportStockView> {
           var data = ql.isEmpty
               ? all
               : all
-                  .where((r) => cols
-                      .any((c) => _fmt(r[c]).toLowerCase().contains(ql)))
+                  .where((r) =>
+                      cols.any((c) => _fmt(r[c]).toLowerCase().contains(ql)))
                   .toList();
           var showCols = cols;
           var numShow = numCols;
