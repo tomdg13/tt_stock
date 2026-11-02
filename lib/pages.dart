@@ -1,3 +1,4 @@
+import 'product_images.dart';
 import 'image_search.dart';
 import 'package:flutter/material.dart';
 import 'api.dart';
@@ -32,6 +33,27 @@ class _ProductPicker extends StatefulWidget {
 }
 
 class _ProductPickerState extends State<_ProductPicker> {
+  Widget _pickThumb(BuildContext context, String v) {
+    final p = pal(context);
+    final ph = Container(
+      width: 48,
+      height: 48,
+      decoration:
+          BoxDecoration(color: p.bd, borderRadius: BorderRadius.circular(8)),
+      child: Icon(Icons.image_outlined, color: p.mut),
+    );
+    final url = productImageUrl(v);
+    if (url.isEmpty) return ph;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.network(url,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => ph),
+    );
+  }
+
   final _q = TextEditingController();
   late Future<dynamic> _f = _load();
   Future<dynamic> _load() => Api.get(
@@ -83,6 +105,7 @@ class _ProductPickerState extends State<_ProductPicker> {
                 return ListView.builder(
                   itemCount: items.length,
                   itemBuilder: (_, i) => ListTile(
+                    leading: _pickThumb(context, pick(items[i], ['imageUrl', 'image', 'photo'])),
                     title: Text(pick(items[i], ['name', 'productName', 'id'])),
                     subtitle: Text(
                         pick(items[i], ['brandName', 'typeName', 'code']),

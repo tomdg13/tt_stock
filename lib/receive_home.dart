@@ -1,3 +1,4 @@
+import 'product_images.dart';
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'stock_drill.dart';
@@ -38,9 +39,28 @@ class _ReceiveHomeState extends State<ReceiveHome> {
   ];
   static const _dateKeys = ['receiptDate', 'createdAt', 'date'];
 
-  void _reload() => setState(() {
-        _recent = Api.get('/stock/movements');
-      });
+  Map<String, dynamic> _actual = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadActual();
+  }
+
+  Future<void> _loadActual() async {
+    try {
+      final d = await Api.get('/po-payments/actual');
+      if (!mounted) return;
+      setState(() => _actual = d is Map ? Map<String, dynamic>.from(d) : {});
+    } catch (_) {}
+  }
+
+  void _reload() {
+    setState(() {
+      _recent = Api.get('/stock/movements');
+    });
+    _loadActual();
+  }
 
   void _backToList() {
     setState(() => _adding = false);
@@ -114,7 +134,7 @@ class _ReceiveHomeState extends State<ReceiveHome> {
       MaterialPageRoute(
         builder: (_) => _PoPage(group: g, onItem: _openDetail),
       ),
-    );
+    ).then((_) => _loadActual());
   }
 
   Widget _poRow(_PoGroup g) {
@@ -147,6 +167,13 @@ class _ReceiveHomeState extends State<ReceiveHome> {
             if (g.amount > 0)
               Text('${_money(g.amount)} ${g.currency}',
                   style: TextStyle(color: p.mut, fontSize: 12.5)),
+            if (g.po.isNotEmpty && _actual[g.po] is List)
+              for (final a in (_actual[g.po] as List))
+                Text('ຈ່າຍຕົວຈິງ ${_money(num0(a['total']))} ${a['currency']}',
+                    style: TextStyle(
+                        color: p.ok,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600)),
           ]),
           const Icon(Icons.chevron_right),
         ]),
@@ -236,6 +263,146 @@ class _PoPage extends StatefulWidget {
 
 class _PoPageState extends State<_PoPage> {
   int _tab = 0;
+  Map<String, String> _imgById = {};
+  Map<String, String> _imgByName = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadImgs();
+  }
+
+  Future<void> _loadImgs() async {
+    try {
+      final d = await Api.get('/products?limit=200');
+      final byId = <String, String>{};
+      final byName = <String, String>{};
+      for (final m in asList(d)) {
+        final img = pick(m, ['imageUrl', 'image', 'photo']);
+        if (img.isEmpty) continue;
+        final id = pick(m, ['id', 'productId']);
+        if (id.isNotEmpty) byId[id] = img;
+        final nm = pick(m, ['name', 'productName']).toLowerCase();
+        if (nm.isNotEmpty) byName[nm] = img;
+      }
+      debugPrint('[PO] product images loaded: ${byId.length}');
+      if (mounted) {
+        setState(() {
+          _imgById = byId;
+          _imgByName = byName;
+        });
+      }
+    } catch (e) {
+      debugPrint('[PO] load product images failed: $e');
+    }
+  }
+
+  Widget _thumb(Map<String, dynamic> m, String name) {
+    final p = pal(context);
+    final v = _imgById[pick(m, ['productId'])] ??
+        _imgByName[name.toLowerCase()] ??
+        '';
+    final ph = Container(
+      width: 48,
+      height: 48,
+      decoration:
+          BoxDecoration(color: p.bd, borderRadius: BorderRadius.circular(8)),
+      child: Icon(Icons.image_outlined, color: p.mut),
+    );
+    final url = productImageUrl(v);
+    if (url.isEmpty) return ph;
+    return GestureDetector(
+      onTap: () => showDialog(
+        context: context,
+        builder: (c) => Dialog(
+          child: InteractiveViewer(
+            child: Image.network(url,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Icon(Icons.broken_image_outlined))),
+          ),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(url,
+            width: 48,
+            height: 48,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => ph),
+      ),
+    );
+  }
+
+  Future<void> _editFreight() async {
+    final g = widget.group;
+    final first = g.items.first;
+    final grnId = pick(first, ['grnId']);
+    void toast(String t) => ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(t)));
+    if (grnId.isEmpty) {
+      toast('ບໍ່ພົບລະຫັດ GRN');
+      return;
+    }
+    final ctl = TextEditingController(text: pick(first, ['freightCost']));
+    final text = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('ແກ້ໄຂຄ່າຂົນສົ່ງ'),
+        content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('ລວມລາຍການ: ${_money(g.amount)} ${g.currency}'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: ctl,
+                autofocus: true,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration:
+                    InputDecoration(labelText: 'ຄ່າຂົນສົ່ງ (${g.currency})'),
+              ),
+            ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c),
+              child: const Text('ຍົກເລີກ')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, ctl.text),
+              child: const Text('ບັນທຶກ')),
+        ],
+      ),
+    );
+    if (text == null || !mounted) return;
+    final fr = double.tryParse(text.replaceAll(',', '').trim());
+    if (fr == null || fr < 0) {
+      toast('ຕົວເລກບໍ່ຖືກຕ້ອງ');
+      return;
+    }
+    final total = g.amount + fr;
+    try {
+      final inv = pick(first, ['invoiceDate']);
+      await Api.put('/imports/receipts/$grnId', {
+        'poNo': pick(first, ['poNo']),
+        'invoiceNo': pick(first, ['invoiceNo']),
+        'invoiceDate': inv.length >= 10 ? inv.substring(0, 10) : inv,
+        'currency': pick(first, ['currency']),
+        'freightCost': fr.toString(),
+        'totalAmount': total.toStringAsFixed(2),
+      });
+      for (final it in g.items) {
+        it['freightCost'] = fr;
+        it['totalAmount'] = total;
+      }
+      if (mounted) setState(() {});
+      toast('ບັນທຶກແລ້ວ');
+    } catch (e) {
+      debugPrint('[PO] edit freight failed: $e');
+      toast('ບັນທຶກບໍ່ສຳເລັດ: $e');
+    }
+  }
 
   Widget _itemRow(Map<String, dynamic> m) {
     final p = pal(context);
@@ -249,6 +416,8 @@ class _PoPageState extends State<_PoPage> {
       Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _thumb(m, name),
+          const SizedBox(width: 12),
           Expanded(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -296,10 +465,21 @@ class _PoPageState extends State<_PoPage> {
                   Text('ລວມເງິນຊື້: ${_money(g.amount)} ${g.currency}',
                       style: const TextStyle(
                           fontWeight: FontWeight.w700, fontSize: 15)),
-                if (pick(g.items.first, ['totalAmount']).isNotEmpty)
-                  Text(
-                      'ມູນຄ່າ Invoice: ${_money(num0(pick(g.items.first, ['totalAmount'])))} ${g.currency}',
-                      style: TextStyle(color: p.mut, fontSize: 13)),                const Divider(height: 24),
+                Row(children: [
+                    Expanded(
+                        child: Text(
+                            'ຄ່າຂົນສົ່ງ: ${_money(num0(pick(g.items.first, ['freightCost'])))} ${g.currency}',
+                            style: TextStyle(color: p.mut, fontSize: 13))),
+                    IconButton(
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        tooltip: 'ແກ້ໄຂຄ່າຂົນສົ່ງ',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _editFreight),
+                  ]),
+                  if (pick(g.items.first, ['totalAmount']).isNotEmpty)
+                    Text(
+                        'ມູນຄ່າ Invoice: ${_money(num0(pick(g.items.first, ['totalAmount'])))} ${g.currency}',
+                        style: TextStyle(color: p.mut, fontSize: 13)),                const Divider(height: 24),
                 for (final m in g.items)
                   InkWell(
                     onTap: () async {
@@ -600,6 +780,58 @@ class _PoPayTab extends StatefulWidget {
 }
 
 class _PoPayTabState extends State<_PoPayTab> {
+  Map<String, dynamic> _fx = {};
+  String _fxDate = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFx();
+  }
+
+  Future<void> _loadFx() async {
+    try {
+      final d = await Api.get('/po-payments/fx');
+      if (!mounted || d is! Map) return;
+      setState(() {
+        _fx = d['rates'] is Map
+            ? Map<String, dynamic>.from(d['rates'] as Map)
+            : {};
+        _fxDate = '${d['rateDate'] ?? ''}';
+      });
+    } catch (_) {}
+  }
+
+  // 1 [poCur] = ? [pc] from the latest BOL table (sell side of poCur, buy side of pc)
+  double _fxRate(String poCur, String pc) {
+    double lak(String c, String side) {
+      if (c == 'LAK') return 1;
+      final m = _fx[c];
+      return m is Map ? num0(m[side]).toDouble() : 0;
+    }
+
+    final a = lak(poCur, 'sell');
+    final b = lak(pc, 'buy');
+    return (a > 0 && b > 0) ? a / b : 0;
+  }
+
+  Widget _fxHint(String poCur, String pc, void Function(String) use) {
+    final r = _fxRate(poCur, pc);
+    if (r <= 0 || poCur == pc) return const SizedBox.shrink();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        TextButton(
+          onPressed: () => use(r.toStringAsFixed(2)),
+          child: Text(
+              'ອັດຕາ BOL $_fxDate: 1 $poCur = ${_money(r)} $pc (ແຕະເພື່ອໃຊ້)'),
+        ),
+        Text('ແຫຼ່ງ: Bank of the Lao PDR · allratestoday.com',
+            style: TextStyle(color: pal(context).mut, fontSize: 11)),
+      ]),
+    );
+  }
+
   late Future<dynamic> _f = _load();
 
   Future<dynamic> _load() {
@@ -622,6 +854,8 @@ class _PoPayTabState extends State<_PoPayTab> {
     var cur = pick(s, ['currency']);
     if (cur.isEmpty) cur = widget.currency.isEmpty ? 'USD' : widget.currency;
     String? err;
+    final poCur = cur;
+    final fx = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
       builder: (d) => StatefulBuilder(
@@ -629,11 +863,45 @@ class _PoPayTabState extends State<_PoPayTab> {
           title: const Text('ເພີ່ມການຊຳລະ'),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
+              SegmentedButton<String>(
+                showSelectedIcon: false,
+                segments: [
+                  for (final c in <String>{'USD', 'THB', 'LAK', cur})
+                    ButtonSegment(value: c, label: Text(c)),
+                ],
+                selected: {cur},
+                onSelectionChanged: (x) => setS(() => cur = x.first),
+              ),
+              if (cur != poCur) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: fx,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (_) => setS(() {}),
+                  decoration: InputDecoration(labelText: '1 $poCur = ? $cur'),
+                ),
+                _fxHint(poCur, cur, (v) => setS(() => fx.text = v)),
+                Builder(builder: (_) {
+                  final a =
+                      double.tryParse(amt.text.replaceAll(',', '').trim()) ?? 0;
+                  final r =
+                      double.tryParse(fx.text.replaceAll(',', '').trim()) ?? 0;
+                  if (a <= 0 || r <= 0) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text('≈ ${_money(a / r)} $poCur',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                  );
+                }),
+              ],
+              const SizedBox(height: 12),
               TextField(
                 controller: amt,
                 autofocus: true,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) => setS(() {}),
                 decoration: InputDecoration(labelText: 'ຈຳນວນເງິນ ($cur)'),
               ),
               const SizedBox(height: 12),
@@ -672,6 +940,13 @@ class _PoPayTabState extends State<_PoPayTab> {
                   setS(() => err = 'ໃສ່ຈຳນວນເງິນໃຫ້ຖືກ');
                   return;
                 }
+                if (cur != poCur &&
+                    !((double.tryParse(fx.text.replaceAll(',', '').trim()) ??
+                            0) >
+                        0)) {
+                  setS(() => err = 'ໃສ່ອັດຕາແລກປ່ຽນ');
+                  return;
+                }
                 Navigator.pop(d, true);
               },
               child: const Text('ບັນທຶກ'),
@@ -681,12 +956,40 @@ class _PoPayTabState extends State<_PoPayTab> {
       ),
     );
     if (ok != true) return;
+    final amtV = double.parse(amt.text.replaceAll(',', '').trim());
+    final fxV = double.tryParse(fx.text.replaceAll(',', '').trim()) ?? 0;
+    final poAmt = cur == poCur ? amtV : amtV / fxV;
+    final rem = num0(s['remaining']).toDouble();
+    var allowOver = false;
+    if (poAmt > rem + 0.005) {
+      if (!mounted) return;
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (d) => AlertDialog(
+          title: const Text('ຈຳນວນເກີນຍອດຄ້າງຈ່າຍ'),
+          content: Text(
+              'ຄ້າງຈ່າຍ ${_money(rem)} $poCur\nຈະຊຳລະ ${_money(poAmt)} $poCur\n\nຢືນຢັນການຈ່າຍເກີນບໍ?'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(d, false),
+                child: const Text('ຍົກເລີກ')),
+            FilledButton(
+                onPressed: () => Navigator.pop(d, true),
+                child: const Text('ຢືນຢັນ')),
+          ],
+        ),
+      );
+      if (go != true) return;
+      allowOver = true;
+    }
     try {
       await Api.post('/po-payments', {
         'poNo': widget.poNo,
         'payDate': _ymd2(date),
-        'amount': double.parse(amt.text.replaceAll(',', '').trim()),
+        'amount': amtV,
         'currency': cur,
+        if (cur != poCur) 'fxRate': fxV,
+        if (allowOver) 'allowOver': true,
         'note': note.text.trim(),
       });
       if (!mounted) return;
@@ -724,6 +1027,846 @@ class _PoPayTabState extends State<_PoPayTab> {
     }
   }
 
+  String _pctTxt(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
+
+  Future<void> _addExtra(Map<String, dynamic> s) async {
+    final p = pal(context);
+    final base = num0(s['baseTotal']).toDouble();
+    var cur = pick(s, ['currency']);
+    if (cur.isEmpty) cur = widget.currency.isEmpty ? 'USD' : widget.currency;
+    final label = TextEditingController(text: 'ພາສີ');
+    final val = TextEditingController();
+    final fx = TextEditingController();
+    var isPct = true;
+    var xcur = cur;
+    var isDisc = false;
+    String? err;
+    final presets = <List<Object>>[
+      ['ພາສີ (VAT)', true, false],
+      ['ຄ່າຂົນສົ່ງ', false, false],
+      ['ຄ່າທຳນຽມ', false, false],
+      ['ສ່ວນຫຼຸດ', true, true],
+      ['ອື່ນໆ', false, false],
+    ];
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => StatefulBuilder(
+        builder: (ctx, setS) {
+          final v = double.tryParse(val.text.replaceAll(',', '').trim()) ?? 0;
+          final diff = !isPct && xcur != cur;
+          final rate =
+              double.tryParse(fx.text.replaceAll(',', '').trim()) ?? 0;
+          final raw = isPct
+              ? base * v / 100
+              : (diff ? (rate > 0 ? v / rate : 0.0) : v);
+          final delta = ((isDisc ? -raw : raw) * 100).round() / 100;
+          return AlertDialog(
+            title: const Text('ເພີ່ມຄ່າໃຊ້ຈ່າຍອື່ນ'),
+            content: SingleChildScrollView(
+              child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(spacing: 6, children: [
+                      for (final pr in presets)
+                        ActionChip(
+                          label: Text(pr[0] as String),
+                          onPressed: () => setS(() {
+                            label.text = pr[0] as String;
+                            isPct = pr[1] as bool;
+                            isDisc = pr[2] as bool;
+                          }),
+                        ),
+                    ]),
+                    const SizedBox(height: 8),
+                    TextField(
+                        controller: label,
+                        decoration:
+                            const InputDecoration(labelText: 'ຊື່ລາຍການ')),
+                    const SizedBox(height: 12),
+                    SegmentedButton<bool>(
+                      segments: [
+                        const ButtonSegment(value: true, label: Text('%')),
+                        const ButtonSegment(value: false, label: Text('ຈຳນວນເງິນ')),
+                      ],
+                      selected: {isPct},
+                      onSelectionChanged: (x) => setS(() => isPct = x.first),
+                    ),
+                    if (!isPct) ...[
+                      const SizedBox(height: 8),
+                      SegmentedButton<String>(
+                        showSelectedIcon: false,
+                        segments: [
+                          for (final c in <String>{'USD', 'THB', 'LAK', cur})
+                            ButtonSegment(value: c, label: Text(c)),
+                        ],
+                        selected: {xcur},
+                        onSelectionChanged: (x) => setS(() => xcur = x.first),
+                      ),
+                      if (xcur != cur) ...[
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: fx,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          onChanged: (_) => setS(() {}),
+                          decoration:
+                              InputDecoration(labelText: '1 $cur = ? $xcur'),
+                        ),
+                      ],
+                    ],
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: val,
+                      autofocus: true,
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true),
+                      onChanged: (_) => setS(() {}),
+                      decoration: InputDecoration(
+                          labelText: isPct ? 'ອັດຕາ (%)' : 'ຈຳນວນເງິນ ($xcur)'),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: const Text('ເປັນສ່ວນຫຼຸດ (ຫັກອອກ)'),
+                      value: isDisc,
+                      onChanged: (x) => setS(() => isDisc = x),
+                    ),
+                    if (base > 0 && v > 0)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                            color: p.soft,
+                            borderRadius: BorderRadius.circular(8)),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('ລາຄາ PO: ${_money(base)} $cur'),
+                              Text(
+                                  '${delta < 0 ? '-' : '+'}${_money(delta.abs())} $cur'),
+                              Text('ຕົ້ນທຶນລວມຕົວຈິງ: ${_money(base + delta)} $cur',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700)),
+                            ]),
+                      ),
+                    if (err != null)
+                      Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(err!,
+                              style: const TextStyle(color: Colors.red))),
+                  ]),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(d, false),
+                  child: const Text('ຍົກເລີກ')),
+              FilledButton(
+                onPressed: () {
+                  final x =
+                      double.tryParse(val.text.replaceAll(',', '').trim());
+                  if (label.text.trim().isEmpty) {
+                    setS(() => err = 'ໃສ່ຊື່ລາຍການ');
+                    return;
+                  }
+                  if (x == null || x <= 0) {
+                    setS(() => err = 'ໃສ່ຈຳນວນໃຫ້ຖືກ');
+                    return;
+                  }
+                  if (!isPct &&
+                      xcur != cur &&
+                      !((double.tryParse(fx.text.replaceAll(',', '').trim()) ??
+                              0) >
+                          0)) {
+                    setS(() => err = 'ໃສ່ອັດຕາແລກປ່ຽນ');
+                    return;
+                  }
+                  if (isPct && x > 100) {
+                    setS(() => err = 'ເປີເຊັນຕ້ອງບໍ່ເກີນ 100');
+                    return;
+                  }
+                  Navigator.pop(d, true);
+                },
+                child: const Text('ບັນທຶກ'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await Api.post('/po-payments/extras', {
+        'poNo': widget.poNo,
+        'label': label.text.trim(),
+        'isPercent': isPct,
+        'value': double.parse(val.text.replaceAll(',', '').trim()),
+        'isDiscount': isDisc,
+        'currency': isPct ? cur : xcur,
+        if (!isPct && xcur != cur)
+          'fxRate': double.parse(fx.text.replaceAll(',', '').trim()),
+      });
+      if (!mounted) return;
+      _snack('ເພີ່ມຄ່າໃຊ້ຈ່າຍແລ້ວ');
+      _reload();
+    } catch (e) {
+      if (mounted) _snack('$e');
+    }
+  }
+
+  Future<void> _deleteExtra(Map<String, dynamic> m) async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('ລຶບລາຍການນີ້?'),
+        content: Text(pick(m, ['label'])),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(d, false),
+              child: const Text('ຍົກເລີກ')),
+          FilledButton(
+              onPressed: () => Navigator.pop(d, true),
+              child: const Text('ລຶບ')),
+        ],
+      ),
+    );
+    if (go != true) return;
+    try {
+      await Api.delete('/po-payments/extras/${pick(m, ['id'])}');
+      if (!mounted) return;
+      _reload();
+    } catch (e) {
+      if (mounted) _snack('$e');
+    }
+  }
+
+  Widget _extraRow(Map<String, dynamic> x, String cur) {
+    final p = pal(context);
+    final a = num0(x['amount']).toDouble();
+    final isPct = x['isPercent'] == true;
+    final name = pick(x, ['label']) +
+        (isPct
+            ? ' (${_pctTxt(num0(x['value']).toDouble())}%)'
+            : (pick(x, ['currency']).isNotEmpty && pick(x, ['currency']) != cur
+                ? ' (${_money(num0(x['value']))} ${pick(x, ['currency'])})'
+                : ''));
+    return Row(children: [
+      Expanded(child: Text(name, style: const TextStyle(fontSize: 13))),
+      Text('${a < 0 ? '-' : '+'}${_money(a.abs())} $cur',
+          style: TextStyle(fontSize: 13, color: a < 0 ? p.ok : null)),
+      InkWell(
+          onTap: () => _deleteExtra(x),
+          child: const Padding(
+              padding: EdgeInsets.all(6),
+              child: Icon(Icons.close, size: 16))),
+    ]);
+  }
+
+  Future<void> _setRate(Map<String, dynamic> m, String poCur) async {
+    final c = pick(m, ['currency']);
+    final a = num0(m['amount']).toDouble();
+    final fx = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => StatefulBuilder(
+        builder: (ctx, setS) {
+          final r = double.tryParse(fx.text.replaceAll(',', '').trim()) ?? 0;
+          return AlertDialog(
+            title: const Text('ໃສ່ອັດຕາແລກປ່ຽນ'),
+            content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${_money(a)} $c · ${pick(m, ['payDate'])}'),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: fx,
+                    autofocus: true,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) => setS(() {}),
+                    decoration: InputDecoration(labelText: '1 $poCur = ? $c'),
+                  ),
+                  if (r > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text('≈ ${_money(a / r)} $poCur',
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                ]),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(d, false),
+                  child: const Text('ຍົກເລີກ')),
+              FilledButton(
+                  onPressed: r > 0 ? () => Navigator.pop(d, true) : null,
+                  child: const Text('ບັນທຶກ')),
+            ],
+          );
+        },
+      ),
+    );
+    if (ok != true) return;
+    final r = double.tryParse(fx.text.replaceAll(',', '').trim()) ?? 0;
+    if (r <= 0) return;
+    try {
+      await Api.put('/po-payments/${pick(m, ['id'])}/rate', {'fxRate': r});
+      if (!mounted) return;
+      _snack('ບັນທຶກອັດຕາແລ້ວ');
+      _reload();
+    } catch (e) {
+      if (mounted) _snack('$e');
+    }
+  }
+
+  Widget _paySummary(List<dynamic> pays, String cur, num paid) {
+    final p = pal(context);
+    final byCur = <String, double>{};
+    var unconv = 0;
+    for (final x in pays) {
+      final c = pick(x, ['currency']);
+      byCur[c] = (byCur[c] ?? 0) + num0(x['amount']).toDouble();
+      if (cur.isNotEmpty &&
+          c.isNotEmpty &&
+          c != cur &&
+          !(num0(x['poAmount']) > 0)) {
+        unconv++;
+      }
+    }
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+          color: p.soft, borderRadius: BorderRadius.circular(8)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('ລວມທີ່ຈ່າຍທັງໝົດ',
+            style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 4),
+        for (final e in byCur.entries) Text('${_money(e.value)} ${e.key}'),
+        const Divider(height: 14),
+        Text('≈ ${_money(paid)} $cur (ລວມໃນຍອດ)',
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        if (unconv > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text('$unconv ລາຍການຍັງບໍ່ມີອັດຕາ - ແຕະລາຍການເພື່ອໃສ່',
+                style: TextStyle(color: p.warn, fontSize: 12)),
+          ),
+      ]),
+    );
+  }
+
+  Widget _actualCard(List<dynamic> pays, List<dynamic> extras, String poCur) {
+    final p = pal(context);
+    final paidBy = <String, double>{};
+    for (final x in pays) {
+      final c = pick(x, ['currency']);
+      if (c.isEmpty) continue;
+      paidBy[c] = (paidBy[c] ?? 0) + num0(x['amount']).toDouble();
+    }
+    if (paidBy.isEmpty) return const SizedBox.shrink();
+
+    Widget line(String l, String r, {bool bold = false, Color? col}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(children: [
+            Expanded(
+                child: Text(l,
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: col,
+                        fontWeight: bold ? FontWeight.w700 : null))),
+            Text(r,
+                style: TextStyle(
+                    fontSize: bold ? 15 : 13,
+                    color: col,
+                    fontWeight: bold ? FontWeight.w700 : null)),
+          ]),
+        );
+    String sg(double v, String c) =>
+        '${v < 0 ? '-' : '+'}${_money(v.abs())} $c';
+
+    final shown = <dynamic>{};
+    final blocks = <Widget>[];
+    paidBy.forEach((c, paid) {
+      var total = paid;
+      final rows = <Widget>[];
+      for (final x in extras) {
+        final isPct = x['isPercent'] == true;
+        final v = num0(x['value']).toDouble();
+        var xc = pick(x, ['currency']);
+        if (xc.isEmpty) xc = poCur;
+        if (!isPct && xc != c) continue;
+        var a = isPct ? paid * v / 100 : v;
+        if (x['isDiscount'] == true) a = -a;
+        a = (a * 100).roundToDouble() / 100;
+        total += a;
+        if (!isPct) shown.add(x['id']);
+        final nm = pick(x, ['label']) + (isPct ? ' (${_pctTxt(v)}%)' : '');
+        rows.add(line(nm, sg(a, c)));
+      }
+      blocks.add(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        line('ຈ່າຍແລ້ວ', '${_money(paid)} $c'),
+        ...rows,
+        const Divider(height: 12),
+        line('ລວມຈ່າຍຕົວຈິງ', '${_money(total)} $c', bold: true),
+      ]));
+      blocks.add(const SizedBox(height: 8));
+    });
+
+    final others = <Widget>[];
+    for (final x in extras) {
+      if (x['isPercent'] == true || shown.contains(x['id'])) continue;
+      var xc = pick(x, ['currency']);
+      if (xc.isEmpty) xc = poCur;
+      var v = num0(x['value']).toDouble();
+      if (x['isDiscount'] == true) v = -v;
+      others.add(line(pick(x, ['label']), sg(v, xc)));
+    }
+    if (others.isNotEmpty) {
+      blocks.add(Text('ຄ່າໃຊ້ຈ່າຍສະກຸນອື່ນ',
+          style: TextStyle(color: p.mut, fontSize: 12)));
+      blocks.addAll(others);
+    }
+    blocks.add(Text('ເປີເຊັນຄິດຈາກຍອດທີ່ຈ່າຍຕົວຈິງຂອງແຕ່ລະສະກຸນ',
+        style: TextStyle(color: p.mut, fontSize: 11.5)));
+
+    return AppCard(
+      title: 'ຈ່າຍຕົວຈິງ',
+      child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start, children: blocks),
+    );
+  }
+
+  Future<void> _makePlan(Map<String, dynamic> s) async {
+    var cur = pick(s, ['currency']);
+    if (cur.isEmpty) cur = widget.currency.isEmpty ? 'USD' : widget.currency;
+    final rem = num0(s['remaining']).toDouble();
+    final base = rem > 0 ? rem : num0(s['total']).toDouble();
+    final tot = TextEditingController(text: base.toStringAsFixed(2));
+    final cnt = TextEditingController(text: '3');
+    DateTime? first;
+    String? err;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => StatefulBuilder(
+        builder: (ctx, setS) {
+          final t = double.tryParse(tot.text.replaceAll(',', '').trim()) ?? 0;
+          final n = int.tryParse(cnt.text.trim()) ?? 0;
+          final cents = (t * 100).round();
+          final eachC = n > 0 ? cents ~/ n : 0;
+          final lastC = n > 0 ? cents - eachC * (n - 1) : 0;
+          return AlertDialog(
+            title: const Text('ສ້າງແຜນຈ່າຍເປັນງວດ'),
+            content: SingleChildScrollView(
+              child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: tot,
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true),
+                      onChanged: (_) => setS(() {}),
+                      decoration: InputDecoration(
+                          labelText: 'ຍອດທີ່ຈະແບ່ງຈ່າຍ ($cur)'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: cnt,
+                      keyboardType: TextInputType.number,
+                      onChanged: (_) => setS(() {}),
+                      decoration:
+                          const InputDecoration(labelText: 'ຈຳນວນງວດ'),
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: () async {
+                        final x = await showDatePicker(
+                            context: ctx,
+                            initialDate: first ?? DateTime.now(),
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2100));
+                        if (x != null) setS(() => first = x);
+                      },
+                      child: InputDecorator(
+                          decoration: const InputDecoration(
+                              labelText: 'ວັນທີງວດທຳອິດ (ບໍ່ບັງຄັບ)'),
+                          child: Text(first == null ? '-' : _ymd2(first!))),
+                    ),
+                    if (n > 0 && t > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Text(
+                            lastC != eachC
+                                ? '$n ງວດ: ${_money(eachC / 100)} × ${n - 1} + ${_money(lastC / 100)} $cur'
+                                : '$n ງວດ × ${_money(eachC / 100)} $cur',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    if (err != null)
+                      Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(err!,
+                              style: const TextStyle(color: Colors.red))),
+                  ]),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(d, false),
+                  child: const Text('ຍົກເລີກ')),
+              FilledButton(
+                onPressed: () {
+                  if (t <= 0) {
+                    setS(() => err = 'ໃສ່ຍອດເງິນໃຫ້ຖືກ');
+                    return;
+                  }
+                  if (n < 1 || n > 60) {
+                    setS(() => err = 'ຈຳນວນງວດ 1-60');
+                    return;
+                  }
+                  Navigator.pop(d, true);
+                },
+                child: const Text('ສ້າງແຜນ'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (ok != true) return;
+    final t = double.parse(tot.text.replaceAll(',', '').trim());
+    final n = int.parse(cnt.text.trim());
+    try {
+      await Api.post('/po-payments/plan', {
+        'poNo': widget.poNo,
+        'total': t,
+        'count': n,
+        if (first != null) 'firstDate': _ymd2(first!),
+      });
+      if (!mounted) return;
+      _snack('ສ້າງແຜນແລ້ວ');
+      _reload();
+    } catch (e) {
+      if (mounted) _snack('$e');
+    }
+  }
+
+  Future<void> _payInst(
+      Map<String, dynamic> x, String poCur, double rem) async {
+    final instAmt = num0(x['amount']).toDouble();
+    final amt = TextEditingController();
+    final note = TextEditingController();
+    var date = DateTime.now();
+    var pc = 'LAK';
+    final est = TextEditingController();
+    String? err;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => StatefulBuilder(
+        builder: (ctx, setS) {
+          final a = double.tryParse(amt.text.replaceAll(',', '').trim()) ?? 0;
+          final diff = pc != poCur;
+          final er =
+              double.tryParse(est.text.replaceAll(',', '').trim()) ?? 0;
+          final expect = er > 0 ? instAmt * er : 0.0;
+          return AlertDialog(
+            title: Text('ຈ່າຍງວດທີ ${pick(x, ['seqNo'])}'),
+            content: SingleChildScrollView(
+              child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('ຍອດງວດ: ${_money(instAmt)} $poCur',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 10),
+                    SegmentedButton<String>(
+                      showSelectedIcon: false,
+                      segments: [
+                        for (final c in <String>{'LAK', 'THB', 'USD', poCur})
+                          ButtonSegment(value: c, label: Text(c)),
+                      ],
+                      selected: {pc},
+                      onSelectionChanged: (v) => setS(() => pc = v.first),
+                    ),
+                    if (diff) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                            border: Border.all(color: pal(ctx).bd),
+                            borderRadius: BorderRadius.circular(8)),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('ຄຳນວນຍອດທີ່ຕ້ອງຈ່າຍ',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w700)),
+                              const SizedBox(height: 6),
+                              TextField(
+                                controller: est,
+                                autofocus: true,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                        decimal: true),
+                                onChanged: (_) => setS(() {}),
+                                decoration: InputDecoration(
+                                    labelText:
+                                        'ອັດຕາແລກປ່ຽນ: 1 $poCur = ? $pc'),
+                              ),
+                              _fxHint(poCur, pc, (v) => setS(() => est.text = v)),
+                              if (er > 0) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                    '${_money(instAmt)} $poCur × ${_money(er)} = ${_money(expect)} $pc',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700)),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    onPressed: () => setS(() =>
+                                        amt.text = expect.toStringAsFixed(2)),
+                                    child: const Text('ໃຊ້ຍອດນີ້'),
+                                  ),
+                                ),
+                              ],
+                            ]),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                          border: Border.all(color: pal(ctx).bd),
+                          borderRadius: BorderRadius.circular(8)),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('ຈ່າຍຕົວຈິງ',
+                                style:
+                                    TextStyle(fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: amt,
+                              autofocus: !diff,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                      decimal: true),
+                              onChanged: (_) => setS(() {}),
+                              decoration: InputDecoration(
+                                  labelText: 'ຈຳນວນເງິນທີ່ຈ່າຍ ($pc)'),
+                            ),
+                            if (diff && a > 0 && instAmt > 0) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                  'ອັດຕາຕົວຈິງ: 1 $poCur = ${_money(a / instAmt)} $pc',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700)),
+                              if (expect > 0)
+                                Text(
+                                    'ຕ່າງຈາກຄຳນວນ: ${a - expect < 0 ? '-' : '+'}${_money((a - expect).abs())} $pc',
+                                    style: TextStyle(
+                                        color: pal(ctx).mut, fontSize: 12.5)),
+                            ],
+                          ]),
+                    ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: () async {
+                        final v = await showDatePicker(
+                            context: ctx,
+                            initialDate: date,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2100));
+                        if (v != null) setS(() => date = v);
+                      },
+                      child: InputDecorator(
+                          decoration:
+                              const InputDecoration(labelText: 'ວັນທີຊຳລະ'),
+                          child: Text(_ymd2(date))),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                        controller: note,
+                        decoration: const InputDecoration(
+                            labelText: 'ໝາຍເຫດ (ບໍ່ບັງຄັບ)')),
+                    if (err != null)
+                      Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(err!,
+                              style: const TextStyle(color: Colors.red))),
+                  ]),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(d, false),
+                  child: const Text('ຍົກເລີກ')),
+              FilledButton(
+                onPressed: () {
+                  if (a <= 0) {
+                    setS(() => err = 'ໃສ່ຈຳນວນເງິນໃຫ້ຖືກ');
+                    return;
+                  }
+                  Navigator.pop(d, true);
+                },
+                child: const Text('ບັນທຶກ'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (ok != true) return;
+    final a = double.parse(amt.text.replaceAll(',', '').trim());
+    final poAmt = pc == poCur ? a : instAmt;
+    var allowOver = false;
+    if (poAmt > rem + 0.005) {
+      if (!mounted) return;
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (d) => AlertDialog(
+          title: const Text('ຈຳນວນເກີນຍອດຄ້າງຈ່າຍ'),
+          content: Text(
+              'ຄ້າງຈ່າຍ ${_money(rem)} $poCur\nຈະຊຳລະ ${_money(poAmt)} $poCur\n\nຢືນຢັນການຈ່າຍເກີນບໍ?'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(d, false),
+                child: const Text('ຍົກເລີກ')),
+            FilledButton(
+                onPressed: () => Navigator.pop(d, true),
+                child: const Text('ຢືນຢັນ')),
+          ],
+        ),
+      );
+      if (go != true) return;
+      allowOver = true;
+    }
+    try {
+      await Api.post('/po-payments/installments/${pick(x, ['id'])}/pay', {
+        'amount': a,
+        'currency': pc,
+        'payDate': _ymd2(date),
+        'note': note.text.trim(),
+        if (allowOver) 'allowOver': true,
+      });
+      if (!mounted) return;
+      _snack('ບັນທຶກການຈ່າຍງວດແລ້ວ');
+      _reload();
+    } catch (e) {
+      if (mounted) _snack('$e');
+    }
+  }
+
+  Future<void> _clearPlan() async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('ລຶບແຜນທີ່ຍັງບໍ່ຈ່າຍ?'),
+        content: const Text('ງວດທີ່ຈ່າຍແລ້ວຈະບໍ່ຖືກລຶບ'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(d, false),
+              child: const Text('ຍົກເລີກ')),
+          FilledButton(
+              onPressed: () => Navigator.pop(d, true),
+              child: const Text('ລຶບ')),
+        ],
+      ),
+    );
+    if (go != true) return;
+    try {
+      await Api.delete(
+          '/po-payments/plan?poNo=${Uri.encodeQueryComponent(widget.poNo)}');
+      if (!mounted) return;
+      _reload();
+    } catch (e) {
+      if (mounted) _snack('$e');
+    }
+  }
+
+  Widget _planCard(Map<String, dynamic> s, String cur) {
+    final p = pal(context);
+    final plan = asList(s['plan']);
+    final rem = num0(s['remaining']).toDouble();
+    if (plan.isEmpty) {
+      return AppCard(
+        title: 'ແຜນຈ່າຍເປັນງວດ',
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('ຍັງບໍ່ມີແຜນ', style: TextStyle(color: p.mut)),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => _makePlan(s),
+            icon: const Icon(Icons.event_note_outlined),
+            label: const Text('ສ້າງແຜນຈ່າຍເປັນງວດ'),
+          ),
+        ]),
+      );
+    }
+    final paidN = plan.where((x) => x['paid'] == true).length;
+    final paidBy = <String, double>{};
+    for (final x in plan) {
+      if (x['paid'] != true) continue;
+      final c = pick(x, ['paidCurrency']);
+      paidBy[c] = (paidBy[c] ?? 0) + num0(x['paidAmount']).toDouble();
+    }
+    return AppCard(
+      title: 'ແຜນຈ່າຍເປັນງວດ ($paidN/${plan.length})',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        for (final x in plan)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            leading: CircleAvatar(
+              radius: 14,
+              backgroundColor: x['paid'] == true ? p.okbg : null,
+              child: x['paid'] == true
+                  ? Icon(Icons.check, size: 16, color: p.ok)
+                  : Text('${pick(x, ['seqNo'])}'),
+            ),
+            title: Text('ງວດ ${pick(x, ['seqNo'])} · ${_money(num0(x['amount']))} $cur',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text(
+                (x['paid'] == true
+                        ? [
+                            '${_money(num0(x['paidAmount']))} ${pick(x, ['paidCurrency'])}',
+                            if (num0(x['fxRate']) > 0)
+                              '1 $cur = ${_money(num0(x['fxRate']))} ${pick(x, ['paidCurrency'])}',
+                            pick(x, ['payDate']),
+                          ]
+                        : [
+                            if (pick(x, ['dueDate']).isNotEmpty)
+                              'ກຳນົດ ${pick(x, ['dueDate'])}',
+                            'ຍັງບໍ່ຈ່າຍ',
+                          ])
+                    .where((e) => e.isNotEmpty)
+                    .join(' · '),
+                style: TextStyle(color: p.mut, fontSize: 12)),
+            trailing: x['paid'] == true
+                ? null
+                : FilledButton.tonal(
+                    onPressed: () => _payInst(x, cur, rem),
+                    child: const Text('ຈ່າຍ')),
+          ),
+        if (paidBy.isNotEmpty) ...[
+          const Divider(height: 14),
+          for (final e in paidBy.entries)
+            Text('ຈ່າຍແລ້ວລວມ ${_money(e.value)} ${e.key}',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+        ],
+        const SizedBox(height: 4),
+        Row(children: [
+          TextButton(
+              onPressed: () => _makePlan(s), child: const Text('ແຜນໃໝ່')),
+          TextButton(
+              onPressed: _clearPlan, child: const Text('ລຶບແຜນທີ່ຍັງບໍ່ຈ່າຍ')),
+        ]),
+      ]),
+    );
+  }
+
   Widget _kv(String k, String v, Color? c) => Column(
           crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(k, style: TextStyle(color: pal(context).mut, fontSize: 12.5)),
@@ -755,6 +1898,8 @@ class _PoPayTabState extends State<_PoPayTab> {
         final paid = num0(s['paid']);
         final remaining = num0(s['remaining']);
         final pays = asList(s['payments']);
+        final extras = asList(s['extras']);
+        final baseTotal = num0(s['baseTotal']).toDouble();
         final frac = total > 0 ? (paid / total).clamp(0.0, 1.0) : 0.0;
         final done = total > 0 && remaining <= 0.004;
         return ListView(
@@ -783,7 +1928,10 @@ class _PoPayTabState extends State<_PoPayTab> {
                     if (done)
                       Padding(
                           padding: const EdgeInsets.only(top: 8),
-                          child: Text('ຊຳລະຄົບແລ້ວ',
+                          child: Text(
+                              remaining < -0.004
+                                  ? 'ຈ່າຍເກີນ ${_money(-remaining)} $cur'
+                                  : 'ຊຳລະຄົບແລ້ວ',
                               style: TextStyle(
                                   color: p.ok, fontWeight: FontWeight.w700))),
                   ]),
@@ -798,18 +1946,61 @@ class _PoPayTabState extends State<_PoPayTab> {
                 label: const Text('ເພີ່ມການຊຳລະ'),
               ),
             ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton.icon(
+                onPressed: () => _addExtra(s),
+                icon: const Icon(Icons.add_circle_outline),
+                label: const Text('ເພີ່ມຄ່າໃຊ້ຈ່າຍອື່ນ (ພາສີ, ຄ່າຂົນສົ່ງ...)'),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+            _planCard(s, cur),
+            if (extras.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              AppCard(
+                title: 'ຄ່າໃຊ້ຈ່າຍອື່ນ (ຕົວຈິງ)',
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final x in extras) _extraRow(x, cur),
+                      const Divider(height: 18),
+                      Row(children: [
+                        const Expanded(
+                            child: Text('ລວມຄ່າໃຊ້ຈ່າຍອື່ນ',
+                                style: TextStyle(fontWeight: FontWeight.w700))),
+                        Text(
+                            '${_money(num0(s['extraTotal']).toDouble())} $cur',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
+                        const SizedBox(width: 28),
+                      ]),
+                    ]),
+              ),
+            ],
+            const SizedBox(height: 12),
+            _actualCard(pays, extras, cur),
             const SizedBox(height: 12),
             AppCard(
               title: 'ປະຫວັດການຊຳລະ (${pays.length} ຄັ້ງ)',
               child: pays.isEmpty
                   ? Text('ຍັງບໍ່ມີການຊຳລະ', style: TextStyle(color: p.mut))
                   : Column(children: [
+                      _paySummary(pays, cur, paid),
                       for (var i = 0; i < pays.length; i++)
                         ListTile(
                           contentPadding: EdgeInsets.zero,
                           dense: true,
                           leading: CircleAvatar(
                               radius: 14, child: Text('${i + 1}')),
+                          onTap: (cur.isNotEmpty &&
+                                  pick(pays[i], ['currency']).isNotEmpty &&
+                                  pick(pays[i], ['currency']) != cur)
+                              ? () => _setRate(pays[i], cur)
+                              : null,
                           title: Text(
                               '${_money(num0(pays[i]['amount']))} ${pick(pays[i], ['currency'])}',
                               style: const TextStyle(
@@ -822,7 +2013,9 @@ class _PoPayTabState extends State<_PoPayTab> {
                                 if (cur.isNotEmpty &&
                                     pick(pays[i], ['currency']).isNotEmpty &&
                                     pick(pays[i], ['currency']) != cur)
-                                  'ບໍ່ລວມໃນຍອດ',
+                                  (num0(pays[i]['poAmount']) > 0
+                                      ? '≈ ${_money(num0(pays[i]['poAmount']))} $cur'
+                                      : 'ບໍ່ລວມໃນຍອດ · ແຕະເພື່ອໃສ່ອັດຕາ'),
                               ].where((e) => e.isNotEmpty).join(' · '),
                               style: TextStyle(color: p.mut, fontSize: 12)),
                           trailing: IconButton(

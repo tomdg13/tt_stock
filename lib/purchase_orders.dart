@@ -229,6 +229,15 @@ class _PendingDoc {
 }
 
 /// Create / edit a PO and manage its documents (one PO, many documents).
+double _poNum(dynamic v) =>
+    v is num ? v.toDouble() : (double.tryParse('${v ?? ''}') ?? 0);
+
+String _poMoney(double v) {
+  final s = v.abs().toStringAsFixed(2).split('.');
+  final i = s[0].replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
+  return '${v < 0 ? '-' : ''}$i.${s[1]}';
+}
+
 class PoFormPage extends StatefulWidget {
   final Map<String, dynamic>? row;
   const PoFormPage({super.key, this.row});
@@ -258,6 +267,7 @@ class _PoFormPageState extends State<PoFormPage> {
       _vendor.text = pick(r, ['vendor']);
       _note.text = pick(r, ['note']);
       _loadDocs();
+      _loadPrice();
     }
   }
 
@@ -384,6 +394,34 @@ class _PoFormPageState extends State<PoFormPage> {
     });
   }
 
+  Map<String, dynamic>? _price;
+
+  Future<void> _loadPrice() async {
+    final no = _no.text.trim();
+    if (no.isEmpty) return;
+    try {
+      final d =
+          await Api.get('/po-payments?poNo=${Uri.encodeQueryComponent(no)}');
+      if (!mounted || d is! Map) return;
+      setState(() => _price = Map<String, dynamic>.from(d));
+    } catch (_) {}
+  }
+
+  Widget _priceRow(String l, double v, String cur, {bool bold = false}) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(children: [
+          Expanded(
+              child: Text(l,
+                  style: TextStyle(
+                      fontWeight: bold ? FontWeight.w700 : FontWeight.normal))),
+          Text('${_poMoney(v)} $cur',
+              style: TextStyle(
+                  fontSize: bold ? 16 : 14,
+                  fontWeight: bold ? FontWeight.w700 : FontWeight.normal)),
+        ]),
+      );
+
   @override
   Widget build(BuildContext context) {
     final p = pal(context);
@@ -410,6 +448,31 @@ class _PoFormPageState extends State<PoFormPage> {
                     const InputDecoration(labelText: 'ໝາຍເຫດ (ບໍ່ບັງຄັບ)')),
           ]),
         ),
+        if (_price != null && _poNum(_price!['baseTotal']) > 0)
+          AppCard(
+            title: 'ລາຄາ',
+            child: Column(children: [
+              _priceRow('ລາຄາສິນຄ້າ', _poNum(_price!['goodsTotal']),
+                  '${_price!['currency'] ?? ''}'),
+              if (_poNum(_price!['otherCost']).abs() > 0.004)
+                _priceRow('ຄ່າຂົນສົ່ງ / ອື່ນໆ', _poNum(_price!['otherCost']),
+                    '${_price!['currency'] ?? ''}'),
+              const Divider(height: 18),
+              _priceRow('ລາຄາທີ່ຕ້ອງຈ່າຍ', _poNum(_price!['total']),
+                  '${_price!['currency'] ?? ''}',
+                  bold: true),
+              if (_price!['actual'] is List &&
+                  (_price!['actual'] as List).isNotEmpty) ...[
+                const Divider(height: 18),
+                for (final a in (_price!['actual'] as List)) ...[
+                  _priceRow('ຈ່າຍແລ້ວ', _poNum(a['paid']), '${a['currency']}'),
+                  _priceRow('ຈ່າຍຕົວຈິງ (ລວມພາສີ ແລະ ຄ່າໃຊ້ຈ່າຍ)',
+                      _poNum(a['total']), '${a['currency']}',
+                      bold: true),
+                ],
+              ],
+            ]),
+          ),
         AppCard(
           title: 'ເອກະສານ (1 PO ມີໄດ້ຫຼາຍໄຟລ໌)',
           child:

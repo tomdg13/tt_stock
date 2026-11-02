@@ -511,6 +511,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
   final _note = TextEditingController();
   final _parts = <String, Map<String, dynamic>>{}; // productId -> product row
   final _qty = <String, int>{};
+  final _cost = <String, Map<String, dynamic>>{};
   List<Map<String, dynamic>> _branches = [];
   dynamic _branchId = Api.user?['branchId'];
   bool _reinstall = false, _busy = false;
@@ -549,6 +550,45 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
     super.dispose();
   }
 
+  /// FIFO PO cost preview (server: GET /repair/cost)
+  Future<void> _loadCost(String id) async {
+    final q = _qty[id] ?? 1;
+    try {
+      final r = await Api.get(
+          '/repair/cost?productId=${Uri.encodeQueryComponent(id)}&qty=$q');
+      if (r is Map && mounted) {
+        setState(() => _cost[id] = Map<String, dynamic>.from(r));
+      }
+    } catch (_) {}
+  }
+
+  List<Widget> _costLines(String id, dynamic p) {
+    final c = _cost[id];
+    if (c == null) return const [];
+    final lines = c['lines'] is List ? c['lines'] as List : const [];
+    final out = <Widget>[];
+    for (final l in lines) {
+      if (l is! Map) continue;
+      final po = '${l['poNo'] ?? ''}';
+      final cur = '${l['currency'] ?? ''}';
+      final txt = po.isEmpty
+          ? '${l['qty']} ຊິ້ນ · ບໍ່ມີ PO'
+          : 'PO $po · ${l['qty']} × ${l['unitCost']} $cur';
+      out.add(Text(txt, style: TextStyle(color: p.mut, fontSize: 12)));
+    }
+    final tot = c['total'];
+    if (tot is Map && tot.isNotEmpty) {
+      out.add(Text(
+          'ລວມ ' +
+              tot.entries
+                  .map((e) =>
+                      '${e.value is num ? (e.value as num).toStringAsFixed(2) : e.value} ${e.key}')
+                  .join(' + '),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)));
+    }
+    return out;
+  }
+
   Future<void> _addPart() async {
     await _atmLoad;
     if (!mounted) return;
@@ -567,6 +607,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
       _parts[id] = row;
       _qty[id] = (_qty[id] ?? 0) + 1;
     });
+    _loadCost(id);
   }
 
   /// Scan product barcodes: +1 per scan, only for parts that fit this terminal + ATM model
@@ -611,6 +652,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
           _parts[id] = Map<String, dynamic>.from(fit.first);
           _qty[id] = next;
         });
+        _loadCost(id);
         toastMsg(context, '+1 $name');
       } catch (e) {
         if (mounted) setState(() => _error = '$e');
@@ -763,16 +805,25 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
                   if (stock.isNotEmpty) 'ສະຕັອກ $stock'
                 ].where((e) => e.isNotEmpty).join('  ·  '),
                 style: TextStyle(color: p.mut, fontSize: 12)),
+            ..._costLines(id, p),
           ]),
         ),
         IconButton(
           icon: const Icon(Icons.remove_circle_outline),
-          onPressed: q > 1 ? () => setState(() => _qty[id] = q - 1) : null,
+          onPressed: q > 1
+              ? () {
+                  setState(() => _qty[id] = q - 1);
+                  _loadCost(id);
+                }
+              : null,
         ),
         Text('$q', style: const TextStyle(fontWeight: FontWeight.bold)),
         IconButton(
           icon: const Icon(Icons.add_circle_outline),
-          onPressed: () => setState(() => _qty[id] = q + 1),
+          onPressed: () {
+            setState(() => _qty[id] = q + 1);
+            _loadCost(id);
+          },
         ),
         IconButton(
           icon: Icon(Icons.delete_outline, color: p.bad),
