@@ -18,16 +18,20 @@ class BranchPriceRow {
   });
 }
 
-/// One item line inside a PO.
+/// One item line inside a PO (thumbnail, name, price x qty, amount, +qty).
 class BranchLineItem {
   final String name;
   final String sub;
   final String amount;
+  final String qty;
+  final String imageUrl;
 
   const BranchLineItem({
     required this.name,
     required this.sub,
     required this.amount,
+    this.qty = '',
+    this.imageUrl = '',
   });
 }
 
@@ -86,6 +90,41 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
     });
   }
 
+  Widget _thumb(ThemeData theme, String url) {
+    final ph = Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8)),
+      child: Icon(Icons.image_outlined,
+          size: 20, color: theme.colorScheme.onSurfaceVariant),
+    );
+    if (url.isEmpty) return ph;
+    return GestureDetector(
+      onTap: () => showDialog(
+        context: context,
+        builder: (c) => Dialog(
+          child: InteractiveViewer(
+            child: Image.network(url,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Icon(Icons.broken_image_outlined))),
+          ),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(url,
+            width: 44,
+            height: 44,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => ph),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -136,6 +175,37 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
       return InkWell(onTap: onTap, child: content);
     }
 
+    Widget lineItem(BranchLineItem l) => Padding(
+          padding: const EdgeInsets.only(left: 36, right: 22, top: 6, bottom: 6),
+          child: Row(
+            children: [
+              _thumb(theme, l.imageUrl),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(l.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: cellStyle),
+                    if (l.sub.isNotEmpty) Text(l.sub, style: subStyle),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(l.amount,
+                      style: cellStyle?.copyWith(fontWeight: FontWeight.w600)),
+                  if (l.qty.isNotEmpty) Text(l.qty, style: subStyle),
+                ],
+              ),
+            ],
+          ),
+        );
+
     Widget child(BranchPoItem it) {
       final hasLines = it.lines.isNotEmpty;
       final k = '${it.id}|${it.po}';
@@ -169,25 +239,7 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
         children: [
           hasLines ? InkWell(onTap: () => _togglePo(k), child: head) : head,
           if (hasLines && isOpen)
-            for (final l in it.lines)
-              Padding(
-                padding:
-                    const EdgeInsets.only(left: 52, right: 22, top: 4, bottom: 4),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(l.name, style: cellStyle),
-                          if (l.sub.isNotEmpty) Text(l.sub, style: subStyle),
-                        ],
-                      ),
-                    ),
-                    Text(l.amount, style: cellStyle),
-                  ],
-                ),
-              ),
+            for (final l in it.lines) lineItem(l),
         ],
       );
     }

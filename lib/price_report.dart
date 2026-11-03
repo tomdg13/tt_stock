@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'api.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'product_images.dart';
 import 'branch_price_table.dart';
 
 class PriceReportPage extends StatefulWidget {
@@ -15,6 +16,8 @@ class _PriceReportPageState extends State<PriceReportPage> {
   dynamic _branchId;
   List<dynamic> _pos = [];
   List<dynamic> _items = [];
+  Map<String, String> _imgById = {};
+  Map<String, String> _imgByName = {};
   DateTimeRange _range = DateTimeRange(
       start: DateTime(DateTime.now().year, DateTime.now().month, 1),
       end: DateTime.now());
@@ -32,7 +35,30 @@ class _PriceReportPageState extends State<PriceReportPage> {
     loadBranches().then((b) {
       if (mounted) setState(() => _branches = b);
     }).catchError((_) {});
+    _loadImgs();
     _load();
+  }
+
+  Future<void> _loadImgs() async {
+    try {
+      final d = await Api.get('/products?limit=200');
+      final byId = <String, String>{};
+      final byName = <String, String>{};
+      for (final m in asList(d)) {
+        final img = pick(m, ['imageUrl', 'image', 'photo']);
+        if (img.isEmpty) continue;
+        final id = pick(m, ['id', 'productId']);
+        if (id.isNotEmpty) byId[id] = img;
+        final nm = pick(m, ['name', 'productName']).toLowerCase();
+        if (nm.isNotEmpty) byName[nm] = img;
+      }
+      if (mounted) {
+        setState(() {
+          _imgById = byId;
+          _imgByName = byName;
+        });
+      }
+    } catch (_) {}
   }
 
   String _url() =>
@@ -106,6 +132,13 @@ class _PriceReportPageState extends State<PriceReportPage> {
     _load();
   }
 
+  String _imgFor(dynamic e) {
+    final v = _imgById[pick(e, ['productId'])] ??
+        _imgByName[pick(e, ['name']).toLowerCase()] ??
+        '';
+    return productImageUrl(v);
+  }
+
   List<BranchPoItem> _posFor(BranchPriceRow r) {
     final list = _pos
         .where((x) =>
@@ -125,11 +158,11 @@ class _PriceReportPageState extends State<PriceReportPage> {
             lines: [
               for (final e in _items.where((e) => '${e['grnId']}' == '${x['id']}'))
                 BranchLineItem(
-                    name: pick(e, ['partNo']).isEmpty
-                        ? pick(e, ['name'])
-                        : '${pick(e, ['partNo'])} · ${pick(e, ['name'])}',
-                    sub: '${pick(e, ['qty'])} × ${_n(e['unitCost'])}',
-                    amount: _n(e['amount'])),
+                    name: pick(e, ['name']),
+                    sub: '${_n(e['unitCost'])} × ${pick(e, ['qty'])}',
+                    amount: '${_n(e['amount'])} ${pick(x, ['currency'])}',
+                    qty: '+${pick(e, ['qty'])}',
+                    imageUrl: _imgFor(e)),
             ]),
     ];
   }
