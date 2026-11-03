@@ -18,22 +18,56 @@ class BranchPriceRow {
   });
 }
 
-class BranchPriceTable extends StatelessWidget {
+class BranchPoItem {
+  final String po;
+  final String sub;
+  final String amount;
+
+  const BranchPoItem({
+    required this.po,
+    required this.sub,
+    required this.amount,
+  });
+}
+
+class BranchPriceTable extends StatefulWidget {
   final List<BranchPriceRow> rows;
-  final void Function(BranchPriceRow row)? onTap;
+  final List<BranchPoItem> Function(BranchPriceRow row)? children;
 
-  const BranchPriceTable({super.key, required this.rows, this.onTap});
+  const BranchPriceTable({super.key, required this.rows, this.children});
 
+  @override
+  State<BranchPriceTable> createState() => _BranchPriceTableState();
+}
+
+class _BranchPriceTableState extends State<BranchPriceTable> {
+  final Set<String> _open = {};
+
+  String _key(BranchPriceRow r) => '${r.branchId}|${r.currency}';
   String _fmt(double v) => v.toStringAsFixed(2);
+
+  void _toggle(BranchPriceRow r) {
+    final k = _key(r);
+    setState(() {
+      if (_open.contains(k)) {
+        _open.remove(k);
+      } else {
+        _open.add(k);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final rows = widget.rows;
     final headStyle = theme.textTheme.labelMedium?.copyWith(
       fontWeight: FontWeight.w700,
       color: theme.colorScheme.onSurfaceVariant,
     );
     final cellStyle = theme.textTheme.bodyMedium;
+    final subStyle = theme.textTheme.bodySmall
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
 
     final currencies = rows
         .map((r) => r.currency)
@@ -43,7 +77,10 @@ class BranchPriceTable extends StatelessWidget {
     final multi = currencies.length > 1;
 
     Widget line(String a, String b, String c, String d,
-        {TextStyle? style, bool bold = false, VoidCallback? onTap}) {
+        {TextStyle? style,
+        bool bold = false,
+        VoidCallback? onTap,
+        bool open = false}) {
       final st = bold ? style?.copyWith(fontWeight: FontWeight.w700) : style;
       final content = Padding(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
@@ -60,7 +97,7 @@ class BranchPriceTable extends StatelessWidget {
                 flex: 2,
                 child: Text(d, style: st, textAlign: TextAlign.right)),
             if (onTap != null)
-              const Icon(Icons.chevron_right, size: 18)
+              Icon(open ? Icons.expand_more : Icons.chevron_right, size: 18)
             else
               const SizedBox(width: 18),
           ],
@@ -70,7 +107,31 @@ class BranchPriceTable extends StatelessWidget {
       return InkWell(onTap: onTap, child: content);
     }
 
+    Widget child(BranchPoItem it) => Padding(
+          padding: const EdgeInsets.only(left: 20, right: 4, top: 6, bottom: 6),
+          child: Row(
+            children: [
+              Icon(Icons.subdirectory_arrow_right,
+                  size: 16, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(it.po, style: cellStyle),
+                    if (it.sub.isNotEmpty) Text(it.sub, style: subStyle),
+                  ],
+                ),
+              ),
+              Text(it.amount,
+                  style: cellStyle?.copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(width: 18),
+            ],
+          ),
+        );
+
     final groups = currencies.isEmpty ? [''] : currencies;
+    final cb = widget.children;
 
     return Column(
       children: [
@@ -85,7 +146,24 @@ class BranchPriceTable extends StatelessWidget {
               _fmt(r.priceSale),
               _fmt(r.total),
               style: cellStyle,
-              onTap: onTap == null ? null : () => onTap!(r)),
+              onTap: cb == null ? null : () => _toggle(r),
+              open: _open.contains(_key(r))),
+          if (cb != null && _open.contains(_key(r)))
+            Container(
+              color: theme.colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.35),
+              child: Column(
+                children: () {
+                  final items = cb(r);
+                  if (items.isEmpty) {
+                    return [
+                      child(const BranchPoItem(po: '-', sub: '', amount: ''))
+                    ];
+                  }
+                  return [for (final it in items) child(it)];
+                }(),
+              ),
+            ),
           const Divider(height: 1),
         ],
         for (final g in groups)

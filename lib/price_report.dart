@@ -104,79 +104,22 @@ class _PriceReportPageState extends State<PriceReportPage> {
     _load();
   }
 
-  void _showPos(BranchPriceRow r) {
-    final p = pal(context);
+  List<BranchPoItem> _posFor(BranchPriceRow r) {
     final list = _pos
         .where((x) =>
             '${x['branchId']}' == r.branchId &&
             (r.currency.isEmpty || pick(x, ['currency']) == r.currency))
         .toList();
-    final sum = list.fold<double>(0, (s, x) => s + _v(x['total']));
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.7),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(r.branch,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 16)),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Text('${_d(_range.start)}  →  ${_d(_range.end)}',
-                    style: TextStyle(color: p.mut, fontSize: 12)),
-              ),
-              const Divider(height: 1),
-              if (list.isEmpty)
-                Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Center(
-                        child: Text('ບໍ່ມີຂໍ້ມູນ',
-                            style: TextStyle(color: p.mut))))
-              else
-                Flexible(
-                  child: ListView(shrinkWrap: true, children: [
-                    for (final x in list)
-                      ListTile(
-                        title: Text(pick(x, ['poNo']).isEmpty
-                            ? 'ບໍ່ມີ PO'
-                            : 'PO ${pick(x, ['poNo'])}'),
-                        subtitle: Text(
-                            '${pick(x, ['grnNo'])} · ${pick(x, ['receiptDate']).split('T').first}',
-                            style: TextStyle(color: p.mut, fontSize: 12)),
-                        trailing: Text(
-                            '${_n(x['total'])} ${pick(x, ['currency'])}',
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                  ]),
-                ),
-              if (list.isNotEmpty) ...[
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                        'ລວມ ${sum.toStringAsFixed(2)} ${r.currency}',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16)),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
+    return [
+      for (final x in list)
+        BranchPoItem(
+            po: pick(x, ['poNo']).isEmpty
+                ? 'ບໍ່ມີ PO'
+                : 'PO ${pick(x, ['poNo'])}',
+            sub:
+                '${pick(x, ['grnNo'])} · ${pick(x, ['receiptDate']).split('T').first}',
+            amount: '${_n(x['total'])} ${pick(x, ['currency'])}'),
+    ];
   }
 
   @override
@@ -227,7 +170,10 @@ class _PriceReportPageState extends State<PriceReportPage> {
                       child:
                           Text('ບໍ່ມີຂໍ້ມູນ', style: TextStyle(color: p.mut))));
             }
-            return BranchPriceTable(rows: rows, onTap: _showPos);
+            return BranchPriceTable(
+                key: ValueKey('t-${_range.start}-${_range.end}-$_branchId'),
+                rows: rows,
+                children: _posFor);
           },
         ),
       ]),
