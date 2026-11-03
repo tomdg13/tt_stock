@@ -18,7 +18,7 @@ class BranchPriceRow {
   });
 }
 
-/// One item line inside a PO (thumbnail, name, price x qty, amount, +qty).
+/// One item line (thumbnail, name, sub text, amount, qty).
 class BranchLineItem {
   final String name;
   final String sub;
@@ -55,8 +55,14 @@ class BranchPoItem {
 class BranchPriceTable extends StatefulWidget {
   final List<BranchPriceRow> rows;
   final List<BranchPoItem> Function(BranchPriceRow row)? children;
+  final List<BranchLineItem> Function(BranchPriceRow row)? used;
 
-  const BranchPriceTable({super.key, required this.rows, this.children});
+  const BranchPriceTable({
+    super.key,
+    required this.rows,
+    this.children,
+    this.used,
+  });
 
   @override
   State<BranchPriceTable> createState() => _BranchPriceTableState();
@@ -175,6 +181,20 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
       return InkWell(onTap: onTap, child: content);
     }
 
+    Widget section(String label, String amount, IconData icon) => Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 4, 4),
+          child: Row(
+            children: [
+              Icon(icon, size: 16, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Expanded(child: Text(label, style: headStyle)),
+              Text(amount,
+                  style: cellStyle?.copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(width: 18),
+            ],
+          ),
+        );
+
     Widget lineItem(BranchLineItem l) => Padding(
           padding: const EdgeInsets.only(left: 36, right: 22, top: 6, bottom: 6),
           child: Row(
@@ -246,6 +266,7 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
 
     final groups = currencies.isEmpty ? [''] : currencies;
     final cb = widget.children;
+    final ub = widget.used;
 
     return Column(
       children: [
@@ -269,12 +290,33 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
               child: Column(
                 children: () {
                   final items = cb(r);
+                  final us = ub == null ? <BranchLineItem>[] : ub(r);
+                  final w = <Widget>[];
+                  w.add(section('ຊື້ເຂົ້າ (PO)',
+                      '${_fmt(r.priceBuy)} ${r.currency}',
+                      Icons.download_outlined));
                   if (items.isEmpty) {
-                    return [
-                      child(const BranchPoItem(po: '-', sub: '', amount: ''))
-                    ];
+                    w.add(child(const BranchPoItem(po: '-', sub: '', amount: '')));
+                  } else {
+                    for (final it in items) {
+                      w.add(child(it));
+                    }
                   }
-                  return [for (final it in items) child(it)];
+                  if (ub != null) {
+                    w.add(section('ນຳໃຊ້ (ສ້ອມ)',
+                        '${_fmt(r.priceSale)} ${r.currency}',
+                        Icons.build_outlined));
+                    if (us.isEmpty) {
+                      w.add(const Padding(
+                          padding: EdgeInsets.fromLTRB(36, 6, 4, 10),
+                          child: Text('-')));
+                    } else {
+                      for (final l in us) {
+                        w.add(lineItem(l));
+                      }
+                    }
+                  }
+                  return w;
                 }(),
               ),
             ),

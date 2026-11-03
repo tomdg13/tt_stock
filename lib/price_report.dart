@@ -16,6 +16,7 @@ class _PriceReportPageState extends State<PriceReportPage> {
   dynamic _branchId;
   List<dynamic> _pos = [];
   List<dynamic> _items = [];
+  List<dynamic> _used = [];
   Map<String, String> _imgById = {};
   Map<String, String> _imgByName = {};
   String _mode = 'month';
@@ -30,6 +31,8 @@ class _PriceReportPageState extends State<PriceReportPage> {
 
   double _v(dynamic v) => double.tryParse('$v') ?? 0;
   String _n(dynamic v) => _v(v).toStringAsFixed(2);
+  String _po(dynamic x) =>
+      pick(x, ['poNo']).isEmpty ? 'ບໍ່ມີ PO' : pick(x, ['poNo']);
 
   String get _label => _mode == 'year'
       ? '${_anchor.year}'
@@ -120,6 +123,7 @@ class _PriceReportPageState extends State<PriceReportPage> {
     final usd = asList(m['used']);
     _pos = asList(m['pos']);
     _items = asList(m['items']);
+    _used = asList(m['usedItems']);
     final list = _branchId == null
         ? bl
         : bl.where((b) => '${b['id']}' == '$_branchId').toList();
@@ -180,9 +184,9 @@ class _PriceReportPageState extends State<PriceReportPage> {
     _load();
   }
 
-  String _imgFor(dynamic e) {
+  String _imgFor(dynamic e, [String nameKey = 'name']) {
     final v = _imgById[pick(e, ['productId'])] ??
-        _imgByName[pick(e, ['name']).toLowerCase()] ??
+        _imgByName[pick(e, [nameKey]).toLowerCase()] ??
         '';
     return productImageUrl(v);
   }
@@ -212,6 +216,24 @@ class _PriceReportPageState extends State<PriceReportPage> {
                     qty: '+${pick(e, ['qty'])}',
                     imageUrl: _imgFor(e)),
             ]),
+    ];
+  }
+
+  List<BranchLineItem> _usedFor(BranchPriceRow r) {
+    final list = _used
+        .where((x) =>
+            '${x['branchId']}' == r.branchId &&
+            (r.currency.isEmpty || pick(x, ['currency']) == r.currency))
+        .toList();
+    return [
+      for (final x in list)
+        BranchLineItem(
+            name: pick(x, ['productName']),
+            sub:
+                '${pick(x, ['createdAt']).split('T').first} · ${_po(x)} · ${_n(x['unitCost'])} × ${pick(x, ['qty'])}',
+            amount: '${_n(x['amount'])} ${pick(x, ['currency'])}',
+            qty: '-${pick(x, ['qty'])}',
+            imageUrl: _imgFor(x, 'productName')),
     ];
   }
 
@@ -306,7 +328,8 @@ class _PriceReportPageState extends State<PriceReportPage> {
             return BranchPriceTable(
                 key: ValueKey('t-${_range.start}-${_range.end}-$_branchId'),
                 rows: rows,
-                children: _posFor);
+                children: _posFor,
+                used: _usedFor);
           },
         ),
       ]),
