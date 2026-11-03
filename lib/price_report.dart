@@ -18,9 +18,11 @@ class _PriceReportPageState extends State<PriceReportPage> {
   List<dynamic> _items = [];
   Map<String, String> _imgById = {};
   Map<String, String> _imgByName = {};
+  String _mode = 'month';
+  DateTime _anchor = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTimeRange _range = DateTimeRange(
       start: DateTime(DateTime.now().year, DateTime.now().month, 1),
-      end: DateTime.now());
+      end: DateTime(DateTime.now().year, DateTime.now().month + 1, 0));
   Future<List<BranchPriceRow>>? _f;
 
   String _d(DateTime d) =>
@@ -28,6 +30,10 @@ class _PriceReportPageState extends State<PriceReportPage> {
 
   double _v(dynamic v) => double.tryParse('$v') ?? 0;
   String _n(dynamic v) => _v(v).toStringAsFixed(2);
+
+  String get _label => _mode == 'year'
+      ? '${_anchor.year}'
+      : '${_anchor.year}-${_anchor.month.toString().padLeft(2, '0')}';
 
   @override
   void initState() {
@@ -59,6 +65,48 @@ class _PriceReportPageState extends State<PriceReportPage> {
         });
       }
     } catch (_) {}
+  }
+
+  void _apply() {
+    if (_mode == 'month') {
+      _range = DateTimeRange(
+          start: DateTime(_anchor.year, _anchor.month, 1),
+          end: DateTime(_anchor.year, _anchor.month + 1, 0));
+    } else if (_mode == 'year') {
+      _range = DateTimeRange(
+          start: DateTime(_anchor.year, 1, 1),
+          end: DateTime(_anchor.year, 12, 31));
+    }
+  }
+
+  void _setMode(String m) {
+    _mode = m;
+    _apply();
+    _load();
+  }
+
+  void _shift(int dir) {
+    if (_mode == 'year') {
+      _anchor = DateTime(_anchor.year + dir, 1, 1);
+    } else {
+      _anchor = DateTime(_anchor.year, _anchor.month + dir, 1);
+    }
+    _apply();
+    _load();
+  }
+
+  Future<void> _jump() async {
+    final r = await showDatePicker(
+        context: context,
+        initialDate: _anchor,
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2100),
+        initialDatePickerMode:
+            _mode == 'year' ? DatePickerMode.year : DatePickerMode.day);
+    if (r == null) return;
+    _anchor = DateTime(r.year, r.month, 1);
+    _apply();
+    _load();
   }
 
   String _url() =>
@@ -192,11 +240,51 @@ class _PriceReportPageState extends State<PriceReportPage> {
           },
         ),
         const SizedBox(height: 8),
-        OutlinedButton.icon(
-          icon: const Icon(Icons.date_range),
-          label: Text('${_d(_range.start)}  →  ${_d(_range.end)}'),
-          onPressed: _pickRange,
-        ),
+        Wrap(spacing: 8, children: [
+          ChoiceChip(
+              label: const Text('ເດືອນ'),
+              selected: _mode == 'month',
+              onSelected: (_) => _setMode('month')),
+          ChoiceChip(
+              label: const Text('ປີ'),
+              selected: _mode == 'year',
+              onSelected: (_) => _setMode('year')),
+          ChoiceChip(
+              label: const Text('ກຳນົດເອງ'),
+              selected: _mode == 'custom',
+              onSelected: (_) => _setMode('custom')),
+        ]),
+        const SizedBox(height: 8),
+        if (_mode == 'custom')
+          OutlinedButton.icon(
+            icon: const Icon(Icons.date_range),
+            label: Text('${_d(_range.start)}  →  ${_d(_range.end)}'),
+            onPressed: _pickRange,
+          )
+        else ...[
+          Row(children: [
+            IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: () => _shift(-1)),
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.calendar_month),
+                label: Text(_label),
+                onPressed: _jump,
+              ),
+            ),
+            IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: () => _shift(1)),
+          ]),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Center(
+              child: Text('${_d(_range.start)}  →  ${_d(_range.end)}',
+                  style: TextStyle(color: p.mut, fontSize: 12)),
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         FutureBuilder<List<BranchPriceRow>>(
           future: _f,
