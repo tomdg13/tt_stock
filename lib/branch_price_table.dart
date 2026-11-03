@@ -18,15 +18,33 @@ class BranchPriceRow {
   });
 }
 
-class BranchPoItem {
-  final String po;
+/// One item line inside a PO.
+class BranchLineItem {
+  final String name;
   final String sub;
   final String amount;
 
+  const BranchLineItem({
+    required this.name,
+    required this.sub,
+    required this.amount,
+  });
+}
+
+/// One PO under a branch.
+class BranchPoItem {
+  final String id;
+  final String po;
+  final String sub;
+  final String amount;
+  final List<BranchLineItem> lines;
+
   const BranchPoItem({
+    this.id = '',
     required this.po,
     required this.sub,
     required this.amount,
+    this.lines = const [],
   });
 }
 
@@ -42,6 +60,7 @@ class BranchPriceTable extends StatefulWidget {
 
 class _BranchPriceTableState extends State<BranchPriceTable> {
   final Set<String> _open = {};
+  final Set<String> _openPo = {};
 
   String _key(BranchPriceRow r) => '${r.branchId}|${r.currency}';
   String _fmt(double v) => v.toStringAsFixed(2);
@@ -53,6 +72,16 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
         _open.remove(k);
       } else {
         _open.add(k);
+      }
+    });
+  }
+
+  void _togglePo(String k) {
+    setState(() {
+      if (_openPo.contains(k)) {
+        _openPo.remove(k);
+      } else {
+        _openPo.add(k);
       }
     });
   }
@@ -107,28 +136,61 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
       return InkWell(onTap: onTap, child: content);
     }
 
-    Widget child(BranchPoItem it) => Padding(
-          padding: const EdgeInsets.only(left: 20, right: 4, top: 6, bottom: 6),
-          child: Row(
-            children: [
-              Icon(Icons.subdirectory_arrow_right,
-                  size: 16, color: theme.colorScheme.onSurfaceVariant),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    Widget child(BranchPoItem it) {
+      final hasLines = it.lines.isNotEmpty;
+      final k = '${it.id}|${it.po}';
+      final isOpen = _openPo.contains(k);
+      final head = Padding(
+        padding: const EdgeInsets.only(left: 20, right: 4, top: 6, bottom: 6),
+        child: Row(
+          children: [
+            Icon(Icons.subdirectory_arrow_right,
+                size: 16, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(it.po, style: cellStyle),
+                  if (it.sub.isNotEmpty) Text(it.sub, style: subStyle),
+                ],
+              ),
+            ),
+            Text(it.amount,
+                style: cellStyle?.copyWith(fontWeight: FontWeight.w600)),
+            if (hasLines)
+              Icon(isOpen ? Icons.expand_more : Icons.chevron_right, size: 18)
+            else
+              const SizedBox(width: 18),
+          ],
+        ),
+      );
+      return Column(
+        children: [
+          hasLines ? InkWell(onTap: () => _togglePo(k), child: head) : head,
+          if (hasLines && isOpen)
+            for (final l in it.lines)
+              Padding(
+                padding:
+                    const EdgeInsets.only(left: 52, right: 22, top: 4, bottom: 4),
+                child: Row(
                   children: [
-                    Text(it.po, style: cellStyle),
-                    if (it.sub.isNotEmpty) Text(it.sub, style: subStyle),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(l.name, style: cellStyle),
+                          if (l.sub.isNotEmpty) Text(l.sub, style: subStyle),
+                        ],
+                      ),
+                    ),
+                    Text(l.amount, style: cellStyle),
                   ],
                 ),
               ),
-              Text(it.amount,
-                  style: cellStyle?.copyWith(fontWeight: FontWeight.w600)),
-              const SizedBox(width: 18),
-            ],
-          ),
-        );
+        ],
+      );
+    }
 
     final groups = currencies.isEmpty ? [''] : currencies;
     final cb = widget.children;

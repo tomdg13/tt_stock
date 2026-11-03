@@ -14,6 +14,7 @@ class _PriceReportPageState extends State<PriceReportPage> {
   List<Map<String, dynamic>> _branches = [];
   dynamic _branchId;
   List<dynamic> _pos = [];
+  List<dynamic> _items = [];
   DateTimeRange _range = DateTimeRange(
       start: DateTime(DateTime.now().year, DateTime.now().month, 1),
       end: DateTime.now());
@@ -44,6 +45,7 @@ class _PriceReportPageState extends State<PriceReportPage> {
     final pur = asList(m['purchases']);
     final usd = asList(m['used']);
     _pos = asList(m['pos']);
+    _items = asList(m['items']);
     final list = _branchId == null
         ? bl
         : bl.where((b) => '${b['id']}' == '$_branchId').toList();
@@ -113,12 +115,22 @@ class _PriceReportPageState extends State<PriceReportPage> {
     return [
       for (final x in list)
         BranchPoItem(
+            id: '${x['id']}',
             po: pick(x, ['poNo']).isEmpty
                 ? 'ບໍ່ມີ PO'
                 : 'PO ${pick(x, ['poNo'])}',
             sub:
                 '${pick(x, ['grnNo'])} · ${pick(x, ['receiptDate']).split('T').first}',
-            amount: '${_n(x['total'])} ${pick(x, ['currency'])}'),
+            amount: '${_n(x['total'])} ${pick(x, ['currency'])}',
+            lines: [
+              for (final e in _items.where((e) => '${e['grnId']}' == '${x['id']}'))
+                BranchLineItem(
+                    name: pick(e, ['partNo']).isEmpty
+                        ? pick(e, ['name'])
+                        : '${pick(e, ['partNo'])} · ${pick(e, ['name'])}',
+                    sub: '${pick(e, ['qty'])} × ${_n(e['unitCost'])}',
+                    amount: _n(e['amount'])),
+            ]),
     ];
   }
 
