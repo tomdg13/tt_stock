@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'api.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'branch_price_table.dart';
 
 class PriceReportPage extends StatefulWidget {
   const PriceReportPage({super.key});
@@ -11,14 +12,16 @@ class PriceReportPage extends StatefulWidget {
 
 class _PriceReportPageState extends State<PriceReportPage> {
   List<Map<String, dynamic>> _branches = [];
-  dynamic _branchId = Api.user?['branchId'];
+  dynamic _branchId;
   DateTimeRange _range = DateTimeRange(
       start: DateTime(DateTime.now().year, DateTime.now().month, 1),
       end: DateTime.now());
-  Future<dynamic>? _f;
+  Future<List<BranchPriceRow>>? _f;
 
   String _d(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  double _v(dynamic v) => double.tryParse('$v') ?? 0;
 
   @override
   void initState() {
@@ -29,10 +32,60 @@ class _PriceReportPageState extends State<PriceReportPage> {
     _load();
   }
 
+  String _url(dynamic branchId) =>
+      '/repair/price-report?from=${_d(_range.start)}&to=${_d(_range.end)}${branchId == null ? '' : '&branchId=$branchId'}';
+
+  Future<List<BranchPriceRow>> _fetchBranch(String name, dynamic id) async {
+    final d = await Api.get(_url(id));
+    final m = d is Map ? d : {};
+    final rows = asList(m['rows']);
+    final Map<String, List<double>> byCur = {};
+    for (final r in rows) {
+      final cur = pick(r, ['currency']);
+      final qty = _v(r['qty']);
+      final buy = _v(r['amount']);
+      final sale = r['saleAmount'] != null
+          ? _v(r['saleAmount'])
+          : _v(pick(r, ['salePrice', 'priceSale', 'sellPrice'])) * qty;
+      final acc = byCur.putIfAbsent(cur, () => [0, 0]);
+      acc[0] += buy;
+      acc[1] += sale;
+    }
+    if (byCur.isEmpty) {
+      return [
+        BranchPriceRow(
+            branch: name, currency: '', priceBuy: 0, priceSale: 0, total: 0)
+      ];
+    }
+    return [
+      for (final e in byCur.entries)
+        BranchPriceRow(
+            branch: name,
+            currency: e.key,
+            priceBuy: e.value[0],
+            priceSale: e.value[1],
+            total: e.value[1] > 0 ? e.value[1] : e.value[0]),
+    ];
+  }
+
+  Future<List<BranchPriceRow>> _loadAll() async {
+    if (_branchId != null) {
+      final b = _branches.where((x) => x['id'] == _branchId).toList();
+      final name =
+          b.isEmpty ? '$_branchId' : pick(b.first, ['name', 'branchName', 'id']);
+      return _fetchBranch(name, _branchId);
+    }
+    final bl = _branches.isEmpty ? await loadBranches() : _branches;
+    final res = await Future.wait([
+      for (final b in bl)
+        _fetchBranch(pick(b, ['name', 'branchName', 'id']), b['id'])
+    ]);
+    return [for (final l in res) ...l];
+  }
+
   void _load() {
     setState(() {
-      _f = Api.get(
-          '/repair/price-report?from=${_d(_range.start)}&to=${_d(_range.end)}${_branchId != null ? '&branchId=$_branchId' : ''}');
+      _f = _loadAll();
     });
   }
 
@@ -46,8 +99,6 @@ class _PriceReportPageState extends State<PriceReportPage> {
     _range = r;
     _load();
   }
-
-  String _n(dynamic v) => (num.tryParse('$v') ?? 0).toStringAsFixed(2);
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +131,7 @@ class _PriceReportPageState extends State<PriceReportPage> {
           onPressed: _pickRange,
         ),
         const SizedBox(height: 8),
-        FutureBuilder(
+        FutureBuilder<List<BranchPriceRow>>(
           future: _f,
           builder: (c, s) {
             if (s.connectionState != ConnectionState.done) {
@@ -88,10 +139,8 @@ class _PriceReportPageState extends State<PriceReportPage> {
                   padding: EdgeInsets.all(32),
                   child: Center(child: CircularProgressIndicator()));
             }
-            if (s.hasError) return ErrorView(s.error!, _load);
-            final d = s.data is Map ? s.data as Map : {};
-            final rows = asList(d['rows']);
-            final tot = d['totals'] is Map ? d['totals'] as Map : {};
+            if (s.hasError) return ErrorView(s.error as Object, _load);
+            final rows = s.data ?? <BranchPriceRow>[];
             if (rows.isEmpty) {
               return Padding(
                   padding: const EdgeInsets.all(32),
@@ -99,47 +148,7 @@ class _PriceReportPageState extends State<PriceReportPage> {
                       child:
                           Text('ບໍ່ມີຂໍ້ມູນ', style: TextStyle(color: p.mut))));
             }
-            return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final r in rows)
-                    Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                          border: Border(bottom: BorderSide(color: p.bd))),
-                      child: Row(children: [
-                        Expanded(
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(pick(r, ['productName'])),
-                                Text(
-                                    pick(r, ['poNo']).isEmpty
-                                        ? '${pick(r, ['qty'])} ຊິ້ນ · ບໍ່ມີ PO'
-                                        : 'PO ${pick(r, ['poNo'])} · ${pick(r, [
-                                                'qty'
-                                              ])} × ${_n(r['unitCost'])} ${pick(r, [
-                                                'currency'
-                                              ])}',
-                                    style:
-                                        TextStyle(color: p.mut, fontSize: 12)),
-                              ]),
-                        ),
-                        Text(
-                            pick(r, ['poNo']).isEmpty
-                                ? '-'
-                                : '${_n(r['amount'])} ${pick(r, ['currency'])}',
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                      ]),
-                    ),
-                  const SizedBox(height: 12),
-                  for (final e in tot.entries)
-                    Text('ລວມ ${_n(e.value)} ${e.key}',
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16)),
-                ]);
+            return BranchPriceTable(rows: rows);
           },
         ),
       ]),

@@ -93,6 +93,7 @@ class _ReceiveHomeState extends State<ReceiveHome> {
   /// Group movements by PO (falls back to GRN when a row has no PO).
   List<_PoGroup> _group(List<Map<String, dynamic>> rows) {
     final map = <String, _PoGroup>{};
+    final inv = <String, Map<String, double>>{};
     for (final m in rows) {
       final po = pick(m, _poKeys);
       final grn = pick(m, _grnKeys);
@@ -110,12 +111,21 @@ class _ReceiveHomeState extends State<ReceiveHome> {
                 date: _day(m),
               ));
       g.items.add(m);
+      final invTot = num0(pick(m, ['totalAmount'])).toDouble();
+      final invGrn = pick(m, ['grnId']);
+      if (invTot > 0 && invGrn.isNotEmpty) {
+        (inv[key] ??= <String, double>{})[invGrn] = invTot;
+      }
       final q = num0(pick(m, _qtyKeys));
       final a = pick(m, ['amount']);
       g.total += q;
       g.amount += a.isNotEmpty ? num0(a) : q * num0(pick(m, ['unitCost']));
       if (g.currency.isEmpty) g.currency = pick(m, ['currency']);
     }
+    inv.forEach((k, v) {
+      final s = v.values.fold<double>(0, (a, b) => a + b);
+      if (s > 0 && map[k] != null) map[k]!.amount = s;
+    });
     return map.values.toList();
   }
 
