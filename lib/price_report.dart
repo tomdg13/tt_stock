@@ -13,6 +13,7 @@ class PriceReportPage extends StatefulWidget {
 class _PriceReportPageState extends State<PriceReportPage> {
   List<Map<String, dynamic>> _branches = [];
   dynamic _branchId;
+  List<dynamic> _pos = [];
   DateTimeRange _range = DateTimeRange(
       start: DateTime(DateTime.now().year, DateTime.now().month, 1),
       end: DateTime.now());
@@ -22,6 +23,7 @@ class _PriceReportPageState extends State<PriceReportPage> {
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   double _v(dynamic v) => double.tryParse('$v') ?? 0;
+  String _n(dynamic v) => _v(v).toStringAsFixed(2);
 
   @override
   void initState() {
@@ -32,55 +34,57 @@ class _PriceReportPageState extends State<PriceReportPage> {
     _load();
   }
 
-  String _url(dynamic branchId) =>
-      '/repair/price-report?from=${_d(_range.start)}&to=${_d(_range.end)}${branchId == null ? '' : '&branchId=$branchId'}';
-
-  Future<List<BranchPriceRow>> _fetchBranch(String name, dynamic id) async {
-    final d = await Api.get(_url(id));
-    final m = d is Map ? d : {};
-    final rows = asList(m['rows']);
-    final Map<String, List<double>> byCur = {};
-    for (final r in rows) {
-      final cur = pick(r, ['currency']);
-      final qty = _v(r['qty']);
-      final buy = _v(r['amount']);
-      final sale = r['saleAmount'] != null
-          ? _v(r['saleAmount'])
-          : _v(pick(r, ['salePrice', 'priceSale', 'sellPrice'])) * qty;
-      final acc = byCur.putIfAbsent(cur, () => [0, 0]);
-      acc[0] += buy;
-      acc[1] += sale;
-    }
-    if (byCur.isEmpty) {
-      return [
-        BranchPriceRow(
-            branch: name, currency: '', priceBuy: 0, priceSale: 0, total: 0)
-      ];
-    }
-    return [
-      for (final e in byCur.entries)
-        BranchPriceRow(
-            branch: name,
-            currency: e.key,
-            priceBuy: e.value[0],
-            priceSale: e.value[1],
-            total: e.value[1] > 0 ? e.value[1] : e.value[0]),
-    ];
-  }
+  String _url() =>
+      '/repair/price-report-branch?from=${_d(_range.start)}&to=${_d(_range.end)}${_branchId == null ? '' : '&branchId=$_branchId'}';
 
   Future<List<BranchPriceRow>> _loadAll() async {
-    if (_branchId != null) {
-      final b = _branches.where((x) => x['id'] == _branchId).toList();
-      final name =
-          b.isEmpty ? '$_branchId' : pick(b.first, ['name', 'branchName', 'id']);
-      return _fetchBranch(name, _branchId);
-    }
     final bl = _branches.isEmpty ? await loadBranches() : _branches;
-    final res = await Future.wait([
-      for (final b in bl)
-        _fetchBranch(pick(b, ['name', 'branchName', 'id']), b['id'])
-    ]);
-    return [for (final l in res) ...l];
+    final d = await Api.get(_url());
+    final m = d is Map ? d : {};
+    final pur = asList(m['purchases']);
+    final usd = asList(m['used']);
+    _pos = asList(m['pos']);
+    final list = _branchId == null
+        ? bl
+        : bl.where((b) => '${b['id']}' == '$_branchId').toList();
+    final out = <BranchPriceRow>[];
+    for (final b in list) {
+      final id = '${b['id']}';
+      final name = pick(b, ['name', 'branchName', 'id']);
+      final cur = <String, List<double>>{};
+      for (final r in pur) {
+        if ('${r['branchId']}' == id) {
+          final a = cur.putIfAbsent(pick(r, ['currency']), () => [0.0, 0.0]);
+          a[0] += _v(r['total']);
+        }
+      }
+      for (final r in usd) {
+        if ('${r['branchId']}' == id) {
+          final a = cur.putIfAbsent(pick(r, ['currency']), () => [0.0, 0.0]);
+          a[1] += _v(r['used']);
+        }
+      }
+      if (cur.isEmpty) {
+        out.add(BranchPriceRow(
+            branchId: id,
+            branch: name,
+            currency: '',
+            priceBuy: 0,
+            priceSale: 0,
+            total: 0));
+      } else {
+        for (final e in cur.entries) {
+          out.add(BranchPriceRow(
+              branchId: id,
+              branch: name,
+              currency: e.key,
+              priceBuy: e.value[0],
+              priceSale: e.value[1],
+              total: e.value[0] - e.value[1]));
+        }
+      }
+    }
+    return out;
   }
 
   void _load() {
@@ -98,6 +102,81 @@ class _PriceReportPageState extends State<PriceReportPage> {
     if (r == null) return;
     _range = r;
     _load();
+  }
+
+  void _showPos(BranchPriceRow r) {
+    final p = pal(context);
+    final list = _pos
+        .where((x) =>
+            '${x['branchId']}' == r.branchId &&
+            (r.currency.isEmpty || pick(x, ['currency']) == r.currency))
+        .toList();
+    final sum = list.fold<double>(0, (s, x) => s + _v(x['total']));
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.7),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text(r.branch,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text('${_d(_range.start)}  →  ${_d(_range.end)}',
+                    style: TextStyle(color: p.mut, fontSize: 12)),
+              ),
+              const Divider(height: 1),
+              if (list.isEmpty)
+                Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Center(
+                        child: Text('ບໍ່ມີຂໍ້ມູນ',
+                            style: TextStyle(color: p.mut))))
+              else
+                Flexible(
+                  child: ListView(shrinkWrap: true, children: [
+                    for (final x in list)
+                      ListTile(
+                        title: Text(pick(x, ['poNo']).isEmpty
+                            ? 'ບໍ່ມີ PO'
+                            : 'PO ${pick(x, ['poNo'])}'),
+                        subtitle: Text(
+                            '${pick(x, ['grnNo'])} · ${pick(x, ['receiptDate']).split('T').first}',
+                            style: TextStyle(color: p.mut, fontSize: 12)),
+                        trailing: Text(
+                            '${_n(x['total'])} ${pick(x, ['currency'])}',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                  ]),
+                ),
+              if (list.isNotEmpty) ...[
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                        'ລວມ ${sum.toStringAsFixed(2)} ${r.currency}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16)),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -148,7 +227,7 @@ class _PriceReportPageState extends State<PriceReportPage> {
                       child:
                           Text('ບໍ່ມີຂໍ້ມູນ', style: TextStyle(color: p.mut))));
             }
-            return BranchPriceTable(rows: rows);
+            return BranchPriceTable(rows: rows, onTap: _showPos);
           },
         ),
       ]),

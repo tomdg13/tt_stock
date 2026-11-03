@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 class BranchPriceRow {
+  final String branchId;
   final String branch;
   final String currency;
   final double priceBuy;
@@ -8,6 +9,7 @@ class BranchPriceRow {
   final double total;
 
   const BranchPriceRow({
+    this.branchId = '',
     required this.branch,
     required this.currency,
     required this.priceBuy,
@@ -18,8 +20,9 @@ class BranchPriceRow {
 
 class BranchPriceTable extends StatelessWidget {
   final List<BranchPriceRow> rows;
+  final void Function(BranchPriceRow row)? onTap;
 
-  const BranchPriceTable({super.key, required this.rows});
+  const BranchPriceTable({super.key, required this.rows, this.onTap});
 
   String _fmt(double v) => v.toStringAsFixed(2);
 
@@ -40,9 +43,9 @@ class BranchPriceTable extends StatelessWidget {
     final multi = currencies.length > 1;
 
     Widget line(String a, String b, String c, String d,
-        {TextStyle? style, bool bold = false}) {
+        {TextStyle? style, bool bold = false, VoidCallback? onTap}) {
       final st = bold ? style?.copyWith(fontWeight: FontWeight.w700) : style;
-      return Padding(
+      final content = Padding(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
         child: Row(
           children: [
@@ -56,16 +59,22 @@ class BranchPriceTable extends StatelessWidget {
             Expanded(
                 flex: 2,
                 child: Text(d, style: st, textAlign: TextAlign.right)),
+            if (onTap != null)
+              const Icon(Icons.chevron_right, size: 18)
+            else
+              const SizedBox(width: 18),
           ],
         ),
       );
+      if (onTap == null) return content;
+      return InkWell(onTap: onTap, child: content);
     }
 
     final groups = currencies.isEmpty ? [''] : currencies;
 
     return Column(
       children: [
-        line('Branch', 'Price buy', 'Price Sale', 'Total', style: headStyle),
+        line('Branch', 'Price buy', 'Used', 'Total', style: headStyle),
         const Divider(height: 1),
         for (final r in rows) ...[
           line(
@@ -75,7 +84,8 @@ class BranchPriceTable extends StatelessWidget {
               _fmt(r.priceBuy),
               _fmt(r.priceSale),
               _fmt(r.total),
-              style: cellStyle),
+              style: cellStyle,
+              onTap: onTap == null ? null : () => onTap!(r)),
           const Divider(height: 1),
         ],
         for (final g in groups)
@@ -94,7 +104,7 @@ class BranchPriceTable extends StatelessWidget {
               bold: true),
         if (currencies.length == 1)
           Padding(
-            padding: const EdgeInsets.only(top: 4, right: 4),
+            padding: const EdgeInsets.only(top: 4, right: 22),
             child: Align(
               alignment: Alignment.centerRight,
               child: Text(currencies.first, style: headStyle),
