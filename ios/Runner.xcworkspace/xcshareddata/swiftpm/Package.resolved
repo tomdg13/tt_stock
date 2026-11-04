@@ -1,4 +1,5 @@
 {
+  "originHash" : "9e56c2deda2cc3ac7b52ea78e82dac7f7539790e044ec7e846da39b0915693fd",
   "pins" : [
     {
       "identity" : "tocropviewcontroller",
@@ -10,5 +11,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }
