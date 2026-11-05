@@ -23,6 +23,9 @@ dependencies:
   google_mlkit_subject_segmentation: ^0.2.1
   local_auth: ^3.0.2
   flutter_secure_storage: ^11.2.0
+  archive: ^4.6.0
+  path_provider: ^2.1.6
+  share_plus: ^13.3.1
 
 dev_dependencies:
   flutter_test:

@@ -1,3 +1,4 @@
+import "po_excel.dart";
 import 'product_images.dart';
 import 'package:flutter/material.dart';
 import 'api.dart';
@@ -505,14 +506,14 @@ class _PoPageState extends State<_PoPage> {
               : _PoPayTab(poNo: g.po, currency: g.currency),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
+        onDestinationSelected: (i) { if (i == 3) { _exportPoExcel(context, widget.group); return; } setState(() => _tab = i); },
         destinations: const [
           NavigationDestination(
               icon: Icon(Icons.list_alt_outlined), label: 'ລາຍການ'),
           NavigationDestination(
               icon: Icon(Icons.info_outline), label: 'ຂໍ້ມູນ PO'),
           NavigationDestination(
-              icon: Icon(Icons.payments_outlined), label: 'ຊຳລະເງິນ'),
+              icon: Icon(Icons.payments_outlined), label: 'ຊຳລະເງິນ'), NavigationDestination(icon: Icon(Icons.download_outlined), label: "Excel"),
         ],
       ),
     );
@@ -2038,5 +2039,85 @@ class _PoPayTabState extends State<_PoPayTab> {
         );
       },
     );
+  }
+}
+
+Future<void> _exportPoExcel(BuildContext context, _PoGroup g) async {
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    final first = g.items.first;
+    final cur = g.currency.isEmpty ? pick(first, ['currency']) : g.currency;
+    double rate = cur == 'LAK' ? 1.0 : 0.0;
+    String rateDate = '';
+    if (rate == 0) {
+      try {
+        final d = await Api.get('/po-payments/fx');
+        if (d is Map) {
+          rateDate = '${d['rateDate'] ?? ''}';
+          final rs = d['rates'];
+          if (rs is Map) {
+            final m = rs[cur];
+            if (m is Map) rate = num0(m['sell']).toDouble();
+          }
+        }
+      } catch (_) {}
+    }
+    var date = g.date;
+    if (date.isEmpty) {
+      date = pick(first,
+          ['receiptDate', 'movementDate', 'createdAt', 'invoiceDate']);
+      if (date.length >= 10) date = date.substring(0, 10);
+    }
+    final freight = num0(pick(first, ['freightCost'])).toDouble();
+    final invoice = num0(pick(first, ['totalAmount'])).toDouble();
+    final rows = <List<Object>>[
+      <Object>['PO', g.po],
+      <Object>['GRN', g.grn],
+      <Object>['Branch', g.branch],
+      <Object>['Date', date],
+      <Object>['ຄ່າຂົນສົ່ງ', freight],
+      <Object>['ມູນຄ່າ Invoice', invoice],
+      <Object>['Currency', cur],
+      <Object>[
+        rate > 0 ? '1 $cur = LAK' : 'ບໍ່ພົບອັດຕາ LAK',
+        rate > 0 ? rate : '',
+        rateDate.isEmpty ? '' : 'BOL $rateDate'
+      ],
+      <Object>[
+        'ມູນຄ່າ Invoice (LAK)',
+        rate > 0 ? (invoice * rate).roundToDouble() : ''
+      ],
+      <Object>[],
+      <Object>['ລຳດັບ', 'ລາຍການ', 'ຈຳນວນ', 'ລາຄາ', 'ລວມ', 'ມູນຄ່ານຳໃຊ້ (LAK)'],
+    ];
+    final bold = <int>{rows.length - 1};
+    var n = 0;
+    double sum = 0;
+    double sumLak = 0;
+    for (final m in g.items) {
+      n++;
+      final qty = num0(pick(m, ['qtyChange', 'qty', 'quantity', 'delta']));
+      final cost = num0(pick(m, ['unitCost']));
+      final aStr = pick(m, ['amount']);
+      final amt = aStr.isNotEmpty ? num0(aStr) : qty * cost;
+      final name = pick(m, ['productName', 'name', 'productId']);
+      final lak = rate > 0 ? (amt * rate).roundToDouble() : 0.0;
+      sum += amt.toDouble();
+      sumLak += lak;
+      final Object q = qty == qty.roundToDouble() ? qty.toInt() : qty;
+      rows.add(<Object>[n, name, q, cost, amt, rate > 0 ? lak : '']);
+    }
+    rows.add(<Object>['', 'ລວມ', '', '', sum, rate > 0 ? sumLak : '']);
+    bold.add(rows.length - 1);
+    final safe = g.po.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    await sharePoXlsx(
+      fileName: 'PO_$safe.xlsx',
+      rows: rows,
+      boldRows: bold,
+      widths: [22, 46, 10, 14, 14, 22],
+    );
+  } catch (e) {
+    debugPrint('[PO] export excel failed: $e');
+    messenger.showSnackBar(SnackBar(content: Text('ດາວໂຫຼດບໍ່ສຳເລັດ: $e')));
   }
 }
