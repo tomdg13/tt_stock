@@ -1,4 +1,3 @@
-import 'po_export.dart';
 import 'product_images.dart';
 import 'package:flutter/material.dart';
 import 'api.dart';
@@ -455,7 +454,7 @@ class _PoPageState extends State<_PoPage> {
     final g = widget.group;
     final p = pal(context);
     return Scaffold(
-      appBar: _tab == 1 ? null : AppBar(actions: [IconButton(icon: const Icon(Icons.file_download_outlined), tooltip: 'Export Excel', onPressed: () => exportPoExcel(context, g.po, g.grn, g.branch, g.date, g.currency, g.items))],
+      appBar: _tab == 1 ? null : AppBar(
         title: Text(g.label,
             style: const TextStyle(fontWeight: FontWeight.w700)),
       ),
