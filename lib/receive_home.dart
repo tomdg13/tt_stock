@@ -1,3 +1,4 @@
+import "po_actual_ui.dart";
 import "po_excel.dart";
 import 'product_images.dart';
 import 'package:flutter/material.dart';
@@ -506,14 +507,14 @@ class _PoPageState extends State<_PoPage> {
               : _PoPayTab(poNo: g.po, currency: g.currency),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
-        onDestinationSelected: (i) { if (i == 3) { _exportPoExcel(context, widget.group); return; } setState(() => _tab = i); },
+        onDestinationSelected: (i) { if (i == 4) { poActualMenu(context, widget.group.po); return; } if (i == 3) { _exportPoExcel(context, widget.group); return; } setState(() => _tab = i); },
         destinations: const [
           NavigationDestination(
               icon: Icon(Icons.list_alt_outlined), label: 'ລາຍການ'),
           NavigationDestination(
               icon: Icon(Icons.info_outline), label: 'ຂໍ້ມູນ PO'),
           NavigationDestination(
-              icon: Icon(Icons.payments_outlined), label: 'ຊຳລະເງິນ'), NavigationDestination(icon: Icon(Icons.download_outlined), label: "Excel"),
+              icon: Icon(Icons.payments_outlined), label: 'ຊຳລະເງິນ'), NavigationDestination(icon: Icon(Icons.download_outlined), label: "Excel"), NavigationDestination(icon: Icon(Icons.upload_file_outlined), label: "Upload"),
         ],
       ),
     );
@@ -2046,6 +2047,11 @@ Future<void> _exportPoExcel(BuildContext context, _PoGroup g) async {
   final messenger = ScaffoldMessenger.of(context);
   try {
     final first = g.items.first;
+    if (pick(first, ['itemId']).isEmpty) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('ບໍ່ພົບ itemId ຂອງລາຍການ')));
+      return;
+    }
     final cur = g.currency.isEmpty ? pick(first, ['currency']) : g.currency;
     double rate = cur == 'LAK' ? 1.0 : 0.0;
     String rateDate = '';
@@ -2087,8 +2093,18 @@ Future<void> _exportPoExcel(BuildContext context, _PoGroup g) async {
         'ມູນຄ່າ Invoice (LAK)',
         rate > 0 ? (invoice * rate).roundToDouble() : ''
       ],
+      <Object>['ວິທີໃຊ້', 'ແກ້ສະເພາະຖັນ F ແລ້ວອັບໂຫຼດກັບ · ຫ້າມແກ້ຖັນ G (ID)'],
       <Object>[],
-      <Object>['ລຳດັບ', 'ລາຍການ', 'ຈຳນວນ', 'ລາຄາ', 'ລວມ', 'ມູນຄ່ານຳໃຊ້ (LAK)'],
+      <Object>[
+        'ລຳດັບ',
+        'ລາຍການ',
+        'ຈຳນວນ',
+        'ລາຄາ',
+        'ລວມ',
+        'ມູນຄ່ານຳໃຊ້ (LAK)',
+        'ID (ຫ້າມແກ້)',
+        'ໝາຍເຫດ'
+      ],
     ];
     final bold = <int>{rows.length - 1};
     var n = 0;
@@ -2101,11 +2117,12 @@ Future<void> _exportPoExcel(BuildContext context, _PoGroup g) async {
       final aStr = pick(m, ['amount']);
       final amt = aStr.isNotEmpty ? num0(aStr) : qty * cost;
       final name = pick(m, ['productName', 'name', 'productId']);
+      final iid = num0(pick(m, ['itemId'])).toInt();
       final lak = rate > 0 ? (amt * rate).roundToDouble() : 0.0;
       sum += amt.toDouble();
       sumLak += lak;
       final Object q = qty == qty.roundToDouble() ? qty.toInt() : qty;
-      rows.add(<Object>[n, name, q, cost, amt, rate > 0 ? lak : '']);
+      rows.add(<Object>[n, name, q, cost, amt, rate > 0 ? lak : '', iid, '']);
     }
     rows.add(<Object>['', 'ລວມ', '', '', sum, rate > 0 ? sumLak : '']);
     bold.add(rows.length - 1);
@@ -2114,7 +2131,7 @@ Future<void> _exportPoExcel(BuildContext context, _PoGroup g) async {
       fileName: 'PO_$safe.xlsx',
       rows: rows,
       boldRows: bold,
-      widths: [22, 46, 10, 14, 14, 22],
+      widths: [22, 46, 10, 14, 14, 22, 14, 30],
     );
   } catch (e) {
     debugPrint('[PO] export excel failed: $e');
