@@ -4,6 +4,7 @@ import 'api.dart';
 import 'crud.dart';
 import 'product_images.dart';
 import 'widgets.dart';
+import 'stock_request.dart';
 
 String _id(Row_ r) => pick(r, ['id']);
 
@@ -19,23 +20,28 @@ const _planStatuses = [
 Future<void> _branchAccess(BuildContext c, Row_ row) async {
   try {
     final id = row['id'];
-    final cur = await Api.get('/branches/$id/access');
-    final dynamic list = cur is List
-        ? cur
-        : (cur is Map
-            ? (cur['seeIds'] ?? cur['items'] ?? cur['data'] ?? [])
-            : []);
-    final ids = [
-      for (final x in (list as List))
-        x is Map ? (x['seeBranchId'] ?? x['id']) : x
+    if ('${row['isHq']}' == '1') {
+      toastMsg(c, 'Head Office ເບິ່ງ ແລະ ຂໍອາໄຫຼ່ໄດ້ທຸກສາຂາ ບໍ່ຕ້ອງຕິກ');
+      return;
+    }
+    final cur = await Api.get('/branches/$id/branch-perms');
+    final see = cur is Map && cur['seeIds'] is List ? cur['seeIds'] as List : [];
+    final req = cur is Map && cur['reqIds'] is List ? cur['reqIds'] as List : [];
+    final list = asList(await Api.get('/branches'));
+    final all = <MapEntry<dynamic, String>>[
+      for (final b in list)
+        if (('${b['id']}' == '$id') == false) MapEntry(b['id'], pick(b, ['name']))
     ];
-    final all = (await loadOptions('/branches', 'id', ['name']))
-        .where((o) => '${o.key}' != '$id')
-        .toList();
-    if (!c.mounted) return;
-    final res = await pickMulti(c, 'ສາຂາທີ່ເບິ່ງຂໍ້ມູນໄດ້', all, ids);
+    final hq = <String>{
+      for (final b in list)
+        if ('${b['isHq']}' == '1') '${b['id']}'
+    };
+    if (c.mounted == false) return;
+    final res =
+        await pickBranchPerms(c, pick(row, ['name', 'code']), all, hq, see, req);
     if (res == null) return;
-    await Api.put('/branches/$id/access', {'seeIds': res});
+    await Api.put('/branches/$id/branch-perms',
+        {'seeIds': res.seeIds, 'reqIds': res.reqIds});
     if (c.mounted) toastMsg(c, 'ບັນທຶກແລ້ວ');
   } catch (e) {
     if (c.mounted) toastMsg(c, '$e');

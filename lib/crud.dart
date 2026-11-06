@@ -1,6 +1,6 @@
 import 'dart:math';
 // ignore_for_file: camel_case_types
-import 'plan_import.dart';
+import 'plan_import.dart'; import 'stock_request.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -264,7 +264,7 @@ class _CrudPageState extends State<CrudPage> {
             ),
           ]),
         ),
-      Expanded(
+      if (sp.path == '/branches') const BranchRequestsBar(), Expanded(
         child: ListPage(
           title: sp.title,
           path: sp.listPath ?? sp.path,
@@ -413,6 +413,7 @@ class _CrudDetailState extends State<CrudDetail> {
                     title: 'ຮູບພາບ',
                     child:
                         ProductImageStrip(asList((s.data as Map)['images']))),
+              if (sp.path == '/branches') BranchRequestInfo(widget.row['id']),
               AppCard(child: DataView(s.data)),
             ]),
           );
@@ -508,8 +509,9 @@ class _CrudFormState extends State<CrudForm> {
 
   void _normalize(FieldSpec f) {
     final o = _opts[f.key] ?? [];
-    if (f.type == FT.select && _v[f.key] != null)
+    if (f.type == FT.select && _v[f.key] != null) {
       _v[f.key] = _match(o, _v[f.key]);
+    }
     if (f.type == FT.select &&
         _v[f.key] == null &&
         f.nameKey != null &&
@@ -524,8 +526,9 @@ class _CrudFormState extends State<CrudForm> {
         }
       }
     }
-    if (f.type == FT.multi)
+    if (f.type == FT.multi) {
       _v[f.key] = [for (final x in _v[f.key] as List) _match(o, x)];
+    }
   }
 
   /// Returns the request body, or sets _error and returns null.
@@ -677,15 +680,17 @@ class _CrudFormState extends State<CrudForm> {
               : 'ບັນທຶກສິນຄ້າແລ້ວ ແຕ່ບາງຢ່າງບໍ່ສຳເລັດ: $imgErr');
       Navigator.pop(context, true);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = '$e';
         });
+      }
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _busy = false;
         });
+      }
     }
   }
 
