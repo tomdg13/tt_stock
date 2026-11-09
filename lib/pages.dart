@@ -1285,7 +1285,8 @@ class _TransferScreenState extends State<TransferScreen> {
     if (ok == true) _reload();
   }
 
-    Future<void> _detailAdd(Map<String, dynamic> t) async {
+    // _trfNavTap marker
+  Future<void> _detailAdd(Map<String, dynamic> t) async {
     final ok = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
@@ -1321,18 +1322,28 @@ class _TransferScreenState extends State<TransferScreen> {
       MaterialPageRoute(
         builder: (_) => Scaffold(
           appBar: AppBar(title: Text(pick(t, ['transferNo', 'id']))),
-          bottomNavigationBar: st == 'in_transit' && Api.can('TRANSFER_SEND')
-              ? SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: FilledButton.icon(
-                      onPressed: () => _detailAdd(t),
-                      icon: const Icon(Icons.add),
-                      label: const Text('ເພີ່ມສິນຄ້າ'),
-                    ),
-                  ),
-                )
-              : null,
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: 0,
+            indicatorColor: Colors.transparent,
+            onDestinationSelected: (i) {
+              if (i == 0) {
+                _detailAdd(t);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('ກຳລັງພັດທະນາ')));
+              }
+            },
+            destinations: [
+              NavigationDestination(
+                  enabled: st == 'in_transit' && Api.can('TRANSFER_SEND'),
+                  icon: const Icon(Icons.add_box_outlined),
+                  label: 'ເພີ່ມສິນຄ້າ'),
+              const NavigationDestination(
+                  icon: Icon(Icons.picture_as_pdf_outlined), label: 'PDF'),
+              const NavigationDestination(
+                  icon: Icon(Icons.upload_file_outlined), label: 'Upload'),
+            ],
+          ),
           body: ListView(padding: const EdgeInsets.all(16), children: [
             Row(children: [
               Expanded(
