@@ -1089,6 +1089,46 @@ class TransferScreen extends StatefulWidget {
 }
 
 class _TransferScreenState extends State<TransferScreen> {
+  final Map<String, Future<String>> _trfImgs = {};
+
+  Future<String> _trfImageUrl(String id) async {
+    try {
+      final d = await Api.get('/products/${Uri.encodeComponent(id)}/images');
+      final rows = d is List ? asList(d) : <Map<String, dynamic>>[];
+      if (rows.isEmpty) return '';
+      return productImageUrl(pick(rows.first, ['url', 'path', 'imageUrl']));
+    } catch (_) {
+      return '';
+    }
+  }
+
+  Widget _trfThumb(String id) {
+    final p = pal(context);
+    final ph = Container(
+      width: 40,
+      height: 40,
+      decoration:
+          BoxDecoration(color: p.bd, borderRadius: BorderRadius.circular(8)),
+      child: Icon(Icons.image_outlined, color: p.mut),
+    );
+    final f = _trfImgs.putIfAbsent(id, () => _trfImageUrl(id));
+    return FutureBuilder<String>(
+      future: f,
+      builder: (c, snap) {
+        final u = snap.data ?? '';
+        if (u.isEmpty) return ph;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(u,
+              width: 40,
+              height: 40,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => ph),
+        );
+      },
+    );
+  }
+
   final _lines = <Line>[];
   List<Map<String, dynamic>> _branches = [];
   dynamic _from, _to;

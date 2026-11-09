@@ -217,7 +217,27 @@ class _TerminalInfoPageState extends State<TerminalInfoPage> {
           final canManage = Api.can('ATM_MANAGE');
           final inUse =
               state.toLowerCase() == kInUse.toLowerCase() && atm.isNotEmpty;
-          return RefreshIndicator(
+          Widget act(IconData icon, String label, VoidCallback? onTap) => Expanded(
+                child: InkWell(
+                  onTap: onTap,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Opacity(
+                      opacity: onTap == null ? 0.35 : 1,
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(icon),
+                        const SizedBox(height: 2),
+                        Text(label,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 11)),
+                      ]),
+                    ),
+                  ),
+                ),
+              );
+          return Column(children: [
+            Expanded(
+              child: RefreshIndicator(
             onRefresh: () async => _reload(),
             child: ListView(padding: const EdgeInsets.all(16), children: [
               AppCard(
@@ -259,89 +279,42 @@ class _TerminalInfoPageState extends State<TerminalInfoPage> {
                       _kv(c, 'ສະຖານທີ່', pick(m, ['atmLocation', 'location'])),
                     ]),
               ),
-              AppCard(
-                title: 'ຂໍ້ມູນ Terminal',
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.memory),
-                        label: const Text('ຂໍ້ມູນອາໄຫຼ່ (SP)'),
-                        onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => TerminalPartsPage(_barcode))),
-                      ),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.history),
-                        label: const Text('ປະຫວັດ Terminal'),
-                        onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => HistoryPage(barcode: _barcode))),
-                      ),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.build_circle_outlined),
-                        label: const Text('ລາຍການທີ່ສ້ອມ / ປ່ຽນ'),
-                        onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => HistoryPage(
-                                    barcode: _barcode, initialFilter: 'status'))),
-                      ),
-                    ]),
-              ),
-              if (canManage)
-                AppCard(
-                  title: 'ຈັດການ Terminal',
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        FilledButton.icon(
-                          icon: const Icon(Icons.build_outlined),
-                          label: const Text('ສ້ອມ Terminal (Fix)'),
-                          onPressed: _busy
-                              ? null
-                              : () async {
-                                  await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (_) =>
-                                              FixTerminalPage(m, onChanged: () {
-                                                widget.onChanged?.call();
-                                                _reload();
-                                              })));
-                                },
-                        ),
-                        const SizedBox(height: 8),
-                        OutlinedButton.icon(
-                          icon: _busy
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2))
-                              : const Icon(Icons.swap_horiz),
-                          label: const Text('ປ່ຽນ Terminal (Change)'),
-                          onPressed:
-                              (_busy || !inUse) ? null : () => _change(m),
-                        ),
-                        if (!inUse)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                                'ປ່ຽນໄດ້ສະເພາະ Terminal ທີ່ In Use ຢູ່ໃນຕູ້',
-                                style: TextStyle(
-                                    color: pal(context).mut, fontSize: 12)),
-                          ),
-                      ]),
-                ),
               const SizedBox(height: 12),
               AppCard(title: 'ລາຍລະອຽດທັງໝົດ', child: DataView(m)),
             ]),
-          );
+              ),
+            ),
+            Material(
+              elevation: 8,
+              color: Theme.of(context).colorScheme.surface,
+              child: SafeArea(
+                child: Row(children: [
+                  act(Icons.memory, 'ອາໄຫຼ່',
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => TerminalPartsPage(_barcode)))),
+                  act(Icons.history, 'ປະຫວັດ',
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryPage(barcode: _barcode)))),
+                  act(Icons.build_circle_outlined, 'ສ້ອມ/ປ່ຽນ',
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryPage(barcode: _barcode, initialFilter: 'status')))),
+                  if (canManage) ...[
+                    act(Icons.build_outlined, 'ສ້ອມ',
+                        _busy
+                            ? null
+                            : () async {
+                                await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) => FixTerminalPage(m, onChanged: () {
+                                              widget.onChanged?.call();
+                                              _reload();
+                                            })));
+                              }),
+                    act(Icons.swap_horiz, 'ປ່ຽນ',
+                        (_busy || inUse == false) ? null : () => _change(m)),
+                  ],
+                ]),
+              ),
+            ),
+          ]);
         },
       ),
     );
@@ -541,7 +514,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
   final _cost = <String, Map<String, dynamic>>{};
   List<Map<String, dynamic>> _branches = [];
   dynamic _branchId = Api.user?['branchId'];
-  bool _reinstall = false, _busy = false;
+  bool _reinstall = true, _busy = false;
   String? _error;
   Map<String, dynamic> _atmInfo = {};
   Future<void>? _atmLoad;

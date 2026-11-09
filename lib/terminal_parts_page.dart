@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'api.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'product_images.dart' show productImageUrl;
 
 class TerminalPartsPage extends StatefulWidget {
   final String barcode;
@@ -12,6 +13,8 @@ class TerminalPartsPage extends StatefulWidget {
 
 class _TerminalPartsPageState extends State<TerminalPartsPage> {
   late Future<List<List<Map<String, dynamic>>>> _f = _load();
+  final Map<String, String> _imgById = {};
+  final Map<String, String> _imgByName = {};
 
   void _reload() => setState(() {
         _f = _load();
@@ -28,6 +31,17 @@ class _TerminalPartsPageState extends State<TerminalPartsPage> {
     final used = logs
         .where((l) => pick(l, ['action']).toUpperCase().startsWith('MA PART'))
         .toList();
+    try {
+      final pr = asList(await Api.get('/products?limit=500'));
+      _imgById.clear();
+      _imgByName.clear();
+      for (final x in pr) {
+        final u = pick(x, ['imageUrl']);
+        if (u.isEmpty) continue;
+        _imgById[pick(x, ['id'])] = u;
+        _imgByName[pick(x, ['name']).trim()] = u;
+      }
+    } catch (_) {}
     return [parts, used];
   }
 
@@ -42,6 +56,27 @@ class _TerminalPartsPageState extends State<TerminalPartsPage> {
   String _qty(String action) {
     final m = RegExp(r'X(\d+)$').firstMatch(action.toUpperCase());
     return m == null ? '' : ' × ${m.group(1)}';
+  }
+
+  Widget _thumb(String id, String name) {
+    final p = pal(context);
+    final ph = Container(
+      width: 44,
+      height: 44,
+      decoration:
+          BoxDecoration(color: p.bd, borderRadius: BorderRadius.circular(8)),
+      child: Icon(Icons.image_outlined, color: p.mut),
+    );
+    final u = productImageUrl(_imgById[id] ?? _imgByName[name.trim()] ?? '');
+    if (u.isEmpty) return ph;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.network(u,
+          width: 44,
+          height: 44,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => ph),
+    );
   }
 
   Widget _head(String text) => Padding(
@@ -80,7 +115,7 @@ class _TerminalPartsPageState extends State<TerminalPartsPage> {
                   c,
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
-                    leading: const Icon(Icons.memory),
+                    leading: _thumb(pick(e, ['productId']), pick(e, ['productName'])),
                     title: Text(pick(e, ['productName', 'productId']),
                         style: const TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text(
@@ -100,7 +135,7 @@ class _TerminalPartsPageState extends State<TerminalPartsPage> {
                   c,
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
-                    leading: const Icon(Icons.build_outlined),
+                    leading: _thumb('', pick(e, ['productName'])),
                     title: Text(
                         '${pick(e, ['productName']).isEmpty ? pick(e, ['action']) : pick(e, ['productName'])}${_qty(pick(e, ['action']))}',
                         style: const TextStyle(fontWeight: FontWeight.w600)),
