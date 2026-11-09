@@ -385,59 +385,9 @@ class _PoPageState extends State<_PoPage> {
           .showSnackBar(const SnackBar(content: Text('ບໍ່ພົບລະຫັດ GRN')));
       return;
     }
-    final prod = await pickProduct(context);
-    if (prod == null || !mounted) return;
-    final qty = TextEditingController(text: '1');
-    final cost = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (d) => AlertDialog(
-        title: Text(pick(prod, ['name', 'productName', 'id'])),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-            controller: qty,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'ຈຳນວນ'),
-          ),
-          TextField(
-            controller: cost,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'ລາຄາຕໍ່ໜ່ວຍ'),
-          ),
-        ]),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(d, false),
-              child: const Text('ຍົກເລີກ')),
-          FilledButton(
-              onPressed: () => Navigator.pop(d, true),
-              child: const Text('ບັນທຶກ')),
-        ],
-      ),
-    );
-    final q = double.tryParse(qty.text.replaceAll(',', '')) ?? 0;
-    final c = double.tryParse(cost.text.replaceAll(',', '')) ?? 0;
-    qty.dispose();
-    cost.dispose();
-    if (ok != true || !mounted) return;
-    if (q <= 0) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('ຈຳນວນຕ້ອງຫຼາຍກວ່າ 0')));
-      return;
-    }
-    try {
-      await Api.post('/imports/receipts/$grnId/items',
-          {'productId': prod['id'], 'qty': q, 'unitCost': c});
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('ບັນທຶກແລ້ວ')));
-      Navigator.pop(context, true);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
-      }
-    }
+    final ok = await Navigator.push<bool>(context,
+        MaterialPageRoute(builder: (_) => _AddLinesPage(grnId: grnId)));
+    if (ok == true && mounted) Navigator.pop(context, true);
   }
 
   Future<void> _editFreight() async {
@@ -2322,4 +2272,66 @@ String _lakFmt(Object? v) {
     b.write(s[i]);
   }
   return (n < 0 ? '-' : '') + b.toString();
+}
+
+
+/// Add products to an existing receipt, using the same LineEditor as the receive form.
+class _AddLinesPage extends StatefulWidget {
+  final String grnId;
+  const _AddLinesPage({required this.grnId});
+  @override
+  State<_AddLinesPage> createState() => _AddLinesPageState();
+}
+
+class _AddLinesPageState extends State<_AddLinesPage> {
+  final List<Line> _lines = [];
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _save() async {
+    if (_lines.isEmpty) {
+      setState(() => _error = 'ເພີ່ມສິນຄ້າຢ່າງນ້ອຍ 1 ລາຍການ');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      while (_lines.isNotEmpty) {
+        final l = _lines.first;
+        await Api.post('/imports/receipts/${widget.grnId}/items',
+            {'productId': l.product['id'], 'qty': l.qty, 'unitCost': l.cost});
+        _lines.removeAt(0);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('ບັນທຶກແລ້ວ')));
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = pal(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('ເພີ່ມສິນຄ້າ')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          LineEditor(_lines, showCost: true),
+          if (_error != null)
+            Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_error!, style: TextStyle(color: p.bad))),
+          const SizedBox(height: 12),
+          saveButton('ບັນທຶກ', _busy, _save),
+        ],
+      ),
+    );
+  }
 }
