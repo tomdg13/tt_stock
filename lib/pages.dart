@@ -1,3 +1,8 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' show MediaType;
+import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'price_report_export.dart' show shareTransferPdf;
 import 'terminal_actions.dart' show PickProductPage;
 import 'product_images.dart';
@@ -1353,8 +1358,12 @@ class _TransferScreenState extends State<TransferScreen> {
                   }
                 });
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('ກຳລັງພັດທະນາ')));
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => TransferDocsPage(
+                            trfId: pick(t, ['id']),
+                            ref: pick(t, ['transferNo', 'id']))));
               }
             },
             destinations: [
@@ -1527,6 +1536,175 @@ class _TrfAddPageState extends State<_TrfAddPage> {
         const SizedBox(height: 12),
         saveButton('ບັນທຶກ', _busy, _save),
       ]),
+    );
+  }
+}
+
+
+/// Documents (PDF / images / Office files) of one transfer. Upload as many times as needed.
+class TransferDocsPage extends StatefulWidget {
+  final String trfId, ref;
+  const TransferDocsPage({super.key, required this.trfId, required this.ref});
+  @override
+  State<TransferDocsPage> createState() => _TransferDocsPageState();
+}
+
+class _TransferDocsPageState extends State<TransferDocsPage> {
+  List<Map<String, dynamic>> _docs = [];
+  bool _loading = true, _busy = false;
+  String? _error;
+
+  static const _ext = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx', 'xls', 'xlsx'];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final d = await Api.get('/stock/transfers/${widget.trfId}/docs');
+      if (mounted) setState(() => _docs = asList(d));
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  MediaType _mt(String name) {
+    final e = name.toLowerCase().split('.').last;
+    switch (e) {
+      case 'pdf': return MediaType('application', 'pdf');
+      case 'jpg':
+      case 'jpeg': return MediaType('image', 'jpeg');
+      case 'png': return MediaType('image', 'png');
+      case 'webp': return MediaType('image', 'webp');
+      case 'doc': return MediaType('application', 'msword');
+      case 'docx': return MediaType('application', 'vnd.openxmlformats-officedocument.wordprocessingml.document');
+      case 'xls': return MediaType('application', 'vnd.ms-excel');
+      default: return MediaType('application', 'vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    }
+  }
+
+  Future<void> _upload() async {
+    final files = await FilePicker.pickFiles(
+        type: FileType.custom, allowedExtensions: _ext);
+    if (files.isEmpty || !mounted) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final base = Api.baseUrl.replaceAll(RegExp(r'/+$'), '');
+      final req = http.MultipartRequest(
+          'POST', Uri.parse('$base/stock/transfers/${widget.trfId}/docs'));
+      if (Api.token != null) req.headers['Authorization'] = 'Bearer ${Api.token}';
+      for (final f in files) {
+        req.files.add(http.MultipartFile.fromBytes('files', await f.readAsBytes(),
+            filename: f.name, contentType: _mt(f.name)));
+      }
+      final res = await http.Response.fromStream(
+          await req.send().timeout(const Duration(seconds: 120)));
+      if (res.statusCode >= 400) {
+        var msg = 'Error ${res.statusCode}';
+        try {
+          final d = jsonDecode(utf8.decode(res.bodyBytes));
+          if (d is Map && d['message'] != null) msg = '${d['message']}';
+        } catch (_) {}
+        throw Exception(msg);
+      }
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('ອັບໂຫຼດແລ້ວ')));
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _open(Map<String, dynamic> d) async {
+    try {
+      await launchUrl(Uri.parse(productImageUrl(pick(d, ['url']))),
+          mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('ເປີດບໍ່ໄດ້: $e')));
+      }
+    }
+  }
+
+  Future<void> _delete(Map<String, dynamic> d) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('ລຶບເອກະສານ?'),
+        content: Text(pick(d, ['name'])),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('ຍົກເລີກ')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('ລຶບ')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await Api.delete('/stock/transfers/${widget.trfId}/docs/${pick(d, ['id'])}');
+      if (mounted) setState(() => _docs.removeWhere((x) => '${x['id']}' == '${d['id']}'));
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = pal(context);
+    return Scaffold(
+      appBar: AppBar(title: Text('ເອກະສານ · ${widget.ref}')),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(padding: const EdgeInsets.all(16), children: [
+              if (_error != null)
+                Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(_error!, style: TextStyle(color: p.bad))),
+              if (_docs.isEmpty)
+                Padding(
+                    padding: const EdgeInsets.only(top: 40),
+                    child: Center(
+                        child: Text('ຍັງບໍ່ມີເອກະສານ',
+                            style: TextStyle(color: p.mut)))),
+              for (final d in _docs)
+                ListTile(
+                  leading: Icon(
+                      pick(d, ['mime']).startsWith('image')
+                          ? Icons.image_outlined
+                          : Icons.description_outlined),
+                  title: Text(pick(d, ['name'])),
+                  onTap: () => _open(d),
+                  trailing: IconButton(
+                      icon: Icon(Icons.delete_outline, color: p.bad),
+                      onPressed: () => _delete(d)),
+                ),
+            ]),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: FilledButton.icon(
+            onPressed: _busy ? null : _upload,
+            icon: const Icon(Icons.upload_file),
+            label: Text(_busy ? '...' : 'ອັບໂຫຼດ'),
+          ),
+        ),
+      ),
     );
   }
 }
