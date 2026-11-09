@@ -1245,7 +1245,55 @@ class _TransferScreenState extends State<TransferScreen> {
     if (ok == true) _reload();
   }
 
-  Widget _transferRow(BuildContext context, Map<String, dynamic> t) {
+    Future<void> _openTrf(Map<String, dynamic> t) async {
+    final p = pal(context);
+    final st = pick(t, ['status', 'state']);
+    final info = transferStatus[st];
+    final items =
+        t['items'] is List ? asList(t['items']) : <Map<String, dynamic>>[];
+    final total = items.fold<double>(
+        0, (a, i) => a + num0(i['qty'] ?? i['quantity']).toDouble());
+    final sent = pick(t, ['sentAt']);
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: Text(pick(t, ['transferNo', 'id']))),
+          body: ListView(padding: const EdgeInsets.all(16), children: [
+            Row(children: [
+              Expanded(
+                  child: Text(
+                      '${pick(t, ['fromName', 'fromBranchName', 'fromBranchId'])} → ${pick(t, ['toName', 'toBranchName', 'toBranchId'])}',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 16))),
+              Tag(info?[0] ?? st, info?[1] ?? kindOf(st)),
+            ]),
+            const SizedBox(height: 4),
+            Text(
+                '${items.length} ລາຍການ · ລວມ ${fmtNum(total)}${sent.length >= 10 ? ' · ${sent.substring(0, 10)}' : ''}',
+                style: TextStyle(color: p.mut, fontSize: 13)),
+            const Divider(height: 24),
+            for (final i in items)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(children: [
+                  _trfThumb('${i['productId']}'),
+                  const SizedBox(width: 12),
+                  Expanded(
+                      child: Text(pick(i, ['productName', 'name', 'productId']),
+                          style: const TextStyle(fontWeight: FontWeight.w600))),
+                  Text('× ${fmtNum(num0(i['qty'] ?? i['quantity']).toDouble())}',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 15)),
+                ]),
+              ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+Widget _transferRow(BuildContext context, Map<String, dynamic> t) {
     final p = pal(context);
     final st = pick(t, ['status', 'state']);
     final info = transferStatus[st];
@@ -1265,18 +1313,21 @@ class _TransferScreenState extends State<TransferScreen> {
       decoration:
           BoxDecoration(border: Border(bottom: BorderSide(color: p.bd))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(
-              child: Text(pick(t, ['ref', 'docNo', 'id']),
-                  style: const TextStyle(fontWeight: FontWeight.w600))),
-          Tag(info?[0] ?? st, info?[1] ?? kindOf(st)),
-        ]),
-        Text(
-            '${pick(t, ['fromBranchName', 'fromBranchId'])} → ${pick(t, [
-                  'toBranchName',
-                  'toBranchId'
-                ])}',
-            style: TextStyle(color: p.mut, fontSize: 13)),
+        InkWell(
+          onTap: () => _openTrf(t),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(
+                  child: Text(pick(t, ['transferNo', 'ref', 'docNo', 'id']),
+                      style: const TextStyle(fontWeight: FontWeight.w600))),
+              Tag(info?[0] ?? st, info?[1] ?? kindOf(st)),
+              const Icon(Icons.chevron_right, size: 20),
+            ]),
+            Text(
+                '${pick(t, ['fromName', 'fromBranchName', 'fromBranchId'])} → ${pick(t, ['toName', 'toBranchName', 'toBranchId'])} · ${items.length} ລາຍການ',
+                style: TextStyle(color: p.mut, fontSize: 13)),
+          ]),
+        ),
         if (lines.isNotEmpty)
           Padding(padding: const EdgeInsets.only(top: 4), child: Text(lines)),
         if (st == 'in_transit')
