@@ -147,9 +147,21 @@ class _ReceiveHomeState extends State<ReceiveHome> {
       MaterialPageRoute(
         builder: (_) => _PoPage(group: g, onItem: _openDetail),
       ),
-    ).then((r) {
-      if (r == true && mounted) _reload();
+    ).then((r) async {
       _loadActual();
+      if (r != true || !mounted) return;
+      try {
+        final d = await Api.get('/stock/movements');
+        if (!mounted) return;
+        setState(() {
+          _recent = Future.value(d);
+        });
+        final match = _group(asList(d)).where(
+            (x) => g.po.isNotEmpty ? x.po == g.po : x.grn == g.grn);
+        if (match.isNotEmpty) _openPo(match.first);
+      } catch (_) {
+        if (mounted) _reload();
+      }
     });
   }
 
