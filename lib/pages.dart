@@ -1089,6 +1089,18 @@ class _TransferScreenState extends State<TransferScreen> {
     });
     try {
       // NOTE: body field names are inferred; check against POST /stock/transfers.
+      final bal = asList(
+          await Api.get('/stock/balances?branchId=$_from&limit=2000'));
+      final have = <String, num>{
+        for (final b in bal)
+          pick(b, ['productId']): num0(pick(b, ['qtyOnHand', 'qty']))
+      };
+      for (final l in _lines) {
+        final h = have['${l.product['id']}'] ?? 0;
+        if (l.qty > h) {
+          throw 'ສະຕັອກບໍ່ພໍ: ${pick(l.product, ['name', 'productName'])} (ເຫຼືອ ${fmtNum(h)})';
+        }
+      }
       await Api.post('/stock/transfers', {
         'fromBranchId': _from,
         'toBranchId': _to,
