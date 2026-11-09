@@ -1098,7 +1098,7 @@ class _TransferScreenState extends State<TransferScreen> {
       for (final l in _lines) {
         final h = have['${l.product['id']}'] ?? 0;
         if (l.qty > h) {
-          throw 'ສະຕັອກບໍ່ພໍ: ${pick(l.product, ['name', 'productName'])} (ເຫຼືອ ${fmtNum(h)})';
+          throw 'ສະຕັອກບໍ່ພໍ: ${pick(l.product, ['name', 'productName'])} (ເຫຼືອ ${fmtNum(h.toDouble())})';
         }
       }
       await Api.post('/stock/transfers', {
