@@ -535,7 +535,8 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
   void initState() {
     super.initState();
     _atmLoad = _loadAtm();
-    loadBranches().then((b) {
+    Api.get('/repair/branches').then((d) {
+      final b = asList(d);
       if (!mounted) return;
       setState(() {
         _branches = b;
@@ -596,6 +597,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
         context,
         MaterialPageRoute(
             builder: (_) => PickProductPage(
+                branchId: _branchId,
                 terminalType: pick(widget.terminal, ['typeName']),
                 terminalTypeId: pick(widget.terminal, ['typeId']),
                 terminal: widget.terminal,
@@ -842,8 +844,10 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
 class PickProductPage extends StatefulWidget {
   final String terminalType, terminalTypeId;
   final Map<String, dynamic> atm, terminal;
+  final dynamic branchId;
   const PickProductPage(
       {super.key,
+      this.branchId,
       this.terminalType = '',
       this.terminalTypeId = '',
       this.atm = const {},
@@ -864,7 +868,22 @@ class _PickProductPageState extends State<PickProductPage> {
   final _q = TextEditingController();
   late Future<dynamic> _f = _load();
 
-  Future<dynamic> _load() => Api.get('/products?limit=500');
+  final Map<String, num> _branchStock = {};
+  bool get _hasBranch => widget.branchId != null;
+
+  Future<dynamic> _load() async {
+    if (_hasBranch) {
+      try {
+        final cp = await Api.get(
+            '/repair/parts?barcode=${Uri.encodeQueryComponent(pick(widget.terminal, ['barcode']))}&atmId=${Uri.encodeQueryComponent(pick(widget.atm, ['atmId']))}&branchId=${Uri.encodeQueryComponent('${widget.branchId}')}');
+        _branchStock.clear();
+        for (final e in (cp is Map ? asList(cp['parts']) : <Map<String, dynamic>>[])) {
+          _branchStock['${e['id']}'] = num0(e['stock']);
+        }
+      } catch (_) {}
+    }
+    return Api.get('/products?limit=500');
+  }
   void _reload() => setState(() {
         _f = _load();
       });
@@ -1074,7 +1093,10 @@ class _PickProductPageState extends State<PickProductPage> {
 
   Widget _tile(BuildContext context, Map<String, dynamic> m, CrudSpec? spec,
       bool canEdit) {
-    final stock = pick(m, ['stock', 'qty']);
+    final pid = pick(m, ['id', 'productId']);
+    final branchQty = _branchStock[pid] ?? 0;
+    final soldOut = _hasBranch && branchQty <= 0;
+    final stock = _hasBranch ? '${fmtNum(branchQty.toDouble())}' : pick(m, ['stock', 'qty']);
     return cardBox(
       context,
       margin: const EdgeInsets.only(bottom: 8),
@@ -1117,7 +1139,8 @@ class _PickProductPageState extends State<PickProductPage> {
             ),
           ],
         ]),
-        onTap: () => Navigator.pop(context, m),
+        enabled: soldOut == false,
+        onTap: soldOut ? null : () => Navigator.pop(context, m),
       ),
     );
   }

@@ -31,7 +31,8 @@ List<dynamic> _asL(dynamic d) {
 }
 
 Future<void> poActualMenu(BuildContext context, String poNo) async {
-  await showModalBottomSheet<void>(
+  debugPrint('[PO-UP] menu opened poNo=$poNo');
+  final act = await showModalBottomSheet<String>(
     context: context,
     showDragHandle: true,
     builder: (c) => SafeArea(
@@ -40,33 +41,38 @@ Future<void> poActualMenu(BuildContext context, String poNo) async {
           leading: const Icon(Icons.upload_file_outlined),
           title: const Text('ອັບໂຫຼດ Excel'),
           subtitle: const Text('ໄຟລ໌ທີ່ບັນຊີແກ້ຖັນ F ແລ້ວ'),
-          onTap: () {
-            Navigator.pop(c);
-            poActualUpload(context, poNo);
-          },
+          onTap: () => Navigator.pop(c, 'up'),
         ),
         ListTile(
           leading: const Icon(Icons.history),
           title: const Text('ປະຫວັດການອັບໂຫຼດ'),
-          onTap: () {
-            Navigator.pop(c);
-            poActualHistory(context, poNo);
-          },
+          onTap: () => Navigator.pop(c, 'hist'),
         ),
       ]),
     ),
   );
+  if (context.mounted == false) return;
+  if (act == 'up') {
+    await poActualUpload(context, poNo);
+  } else if (act == 'hist') {
+    await poActualHistory(context, poNo);
+  }
 }
 
 Future<void> poActualUpload(BuildContext context, String poNo) async {
+  debugPrint('[PO-UP] start poNo=$poNo base=${Api.baseUrl} tokenNull=${Api.token == null}');
   final messenger = ScaffoldMessenger.of(context);
   void toast(String t) => messenger.showSnackBar(
       SnackBar(content: Text(t), duration: const Duration(seconds: 6)));
   try {
     final picked = await FilePicker.pickFiles(
         type: FileType.custom, allowedExtensions: ['xlsx']);
-    if (picked.isEmpty) return;
+    if (picked.isEmpty) {
+      debugPrint('[PO-UP] picker cancelled');
+      return;
+    }
     final f = picked.first;
+    debugPrint('[PO-UP] picked name=${f.name} path=${f.path}');
     final fp = f.path;
     final bytes = fp == null ? null : await File(fp).readAsBytes();
     if (bytes == null) {
@@ -82,7 +88,9 @@ Future<void> poActualUpload(BuildContext context, String poNo) async {
     req.fields['poNo'] = poNo;
     req.files
         .add(http.MultipartFile.fromBytes('file', bytes, filename: f.name));
+    debugPrint('[PO-UP] POST ${req.url} bytes=${bytes.length}');
     final res = await http.Response.fromStream(await req.send());
+    debugPrint('[PO-UP] status=${res.statusCode} body=${utf8.decode(res.bodyBytes, allowMalformed: true)}');
     dynamic body;
     try {
       body = jsonDecode(utf8.decode(res.bodyBytes));
@@ -105,7 +113,8 @@ Future<void> poActualUpload(BuildContext context, String poNo) async {
       }
     }
     toast(msg);
-  } catch (e) {
+  } catch (e, st) {
+    debugPrint('[PO-UP] EXCEPTION: $e\n$st');
     debugPrint('[PO] upload failed: $e');
     messenger.hideCurrentSnackBar();
     toast('ອັບໂຫຼດບໍ່ສຳເລັດ: $e');
@@ -182,7 +191,9 @@ Future<void> _items(BuildContext context, Object? id, Object? ver) async {
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 title: Text('${m['itemName'] ?? m['itemId']}'),
-                subtitle: nt.isEmpty ? null : Text(nt),
+                subtitle: m['actualUnitLak'] == null
+                    ? (nt.isEmpty ? null : Text(nt))
+                    : Text('${_lak(m['actualUnitLak'])} × ${m['qty']}${nt.isEmpty ? '' : ' · $nt'}'),
                 trailing: Text('${_lak(m['actualLak'])} LAK',
                     style: const TextStyle(fontWeight: FontWeight.w700)),
               );

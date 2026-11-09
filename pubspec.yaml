@@ -26,6 +26,7 @@ dependencies:
   archive: ^4.6.0
   path_provider: ^2.1.6
   share_plus: ^13.3.1
+  printing: ^5.15.1
 
 dev_dependencies:
   flutter_test:
@@ -34,6 +35,9 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
 
 flutter:
+  assets:
+    - assets/fonts/
+    - assets/ldb/
   uses-material-design: true
   config:
     enable-swift-package-manager: false

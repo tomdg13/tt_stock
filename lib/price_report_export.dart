@@ -1,0 +1,543 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart'
+    show TextPainter, TextSpan, TextStyle, TextDirection;
+import 'package:flutter/services.dart' show rootBundle, FontLoader;
+import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'branch_price_table.dart';
+import 'po_excel.dart';
+
+class PriceReportData {
+  final String range;
+  final String branch;
+  final List<BranchPriceRow> rows;
+  final List<dynamic> pos;
+  final List<dynamic> items;
+  final List<dynamic> used;
+  final String Function(dynamic row, String nameKey) imgFor;
+  const PriceReportData({
+    required this.range,
+    required this.branch,
+    required this.rows,
+    required this.pos,
+    required this.items,
+    required this.used,
+    required this.imgFor,
+  });
+}
+
+class _Ln {
+  final List<Object> cells;
+  final String url;
+  const _Ln(this.cells, this.url);
+}
+
+class _Thumb {
+  final Uint8List bytes;
+  final int w;
+  final int h;
+  const _Thumb(this.bytes, this.w, this.h);
+}
+
+List<Object>? _makeThumb(Uint8List b) {
+  final im = img.decodeImage(b);
+  if (im == null) return null;
+  final sq = img.copyResizeCropSquare(im, size: 96);
+  final jpg = Uint8List.fromList(img.encodeJpg(sq, quality: 78));
+  return <Object>[jpg, 48, 48];
+}
+
+Future<Map<String, _Thumb>> _loadThumbs(Set<String> urls) async {
+  final out = <String, _Thumb>{};
+  await Future.wait(urls.map((u) async {
+    try {
+      final res =
+          await http.get(Uri.parse(u)).timeout(const Duration(seconds: 15));
+      if (res.statusCode == 200) {
+        final r = await compute(_makeThumb, res.bodyBytes);
+        if (r != null) {
+          out[u] = _Thumb(r[0] as Uint8List, r[1] as int, r[2] as int);
+        }
+      }
+    } catch (e) {
+      debugPrint('[REPORT] image failed $u: $e');
+    }
+  }));
+  return out;
+}
+
+// ---- Lao text drawn by Flutter (correct shaping) and placed as images ----
+
+class _TxtImg {
+  final Uint8List bytes;
+  final double w;
+  final double h;
+  const _TxtImg(this.bytes, this.w, this.h);
+}
+
+const double _sc = 4.0;
+final RegExp _laoRe = RegExp(r'[\u0E80-\u0EFF]');
+final Map<String, _TxtImg> _txtCache = {};
+bool _fontReady = false;
+
+Future<void> _ensureFont() async {
+  if (_fontReady) return;
+  final a = FontLoader('PhetsarathRep')
+    ..addFont(rootBundle.load('assets/fonts/Phetsarath-OT.ttf'));
+  await a.load();
+  final b = FontLoader('PhetsarathRepBold')
+    ..addFont(rootBundle.load('assets/fonts/Phetsarath-OT-Bold.ttf'));
+  await b.load();
+  _fontReady = true;
+}
+
+Future<void> _renderLao(String t, double size, bool bold) async {
+  final key = '${bold ? 1 : 0}|$size|$t';
+  if (_txtCache.containsKey(key)) return;
+  final tp = TextPainter(
+    text: TextSpan(
+        text: t,
+        style: TextStyle(
+            fontFamily: bold ? 'PhetsarathRepBold' : 'PhetsarathRep',
+            fontSize: size * _sc,
+            color: const ui.Color(0xFF000000))),
+    textDirection: TextDirection.ltr,
+  );
+  tp.layout();
+  final w = tp.width.ceil() + 2;
+  final h = tp.height.ceil() + 2;
+  final rec = ui.PictureRecorder();
+  final cv = ui.Canvas(rec);
+  tp.paint(cv, const ui.Offset(1, 1));
+  final im = await rec.endRecording().toImage(w, h);
+  final bd = await im.toByteData(format: ui.ImageByteFormat.png);
+  if (bd == null) return;
+  _txtCache[key] =
+      _TxtImg(bd.buffer.asUint8List(), w.toDouble() / _sc, h.toDouble() / _sc);
+}
+
+Future<void> _prepLao(Set<String> all) async {
+  await _ensureFont();
+  for (final t in all) {
+    if (_laoRe.hasMatch(t) == false) continue;
+    await _renderLao(t, 8, false);
+    await _renderLao(t, 8, true);
+  }
+}
+
+pw.Widget _txt(String t,
+    {double size = 8, bool bold = false, bool right = false}) {
+  final c = _txtCache['${bold ? 1 : 0}|$size|$t'];
+  if (c != null) {
+    return pw.Align(
+      alignment: right ? pw.Alignment.centerRight : pw.Alignment.centerLeft,
+      child: pw.Image(pw.MemoryImage(c.bytes), width: c.w, height: c.h),
+    );
+  }
+  return pw.Text(t,
+      textAlign: right ? pw.TextAlign.right : pw.TextAlign.left,
+      style: pw.TextStyle(
+          fontSize: size,
+          fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal));
+}
+
+String _s(dynamic m, String k) {
+  if (m is Map) {
+    final v = m[k];
+    return v == null ? '' : '$v';
+  }
+  return '';
+}
+
+double _n(dynamic v) => v is num ? v.toDouble() : (double.tryParse('$v') ?? 0);
+
+String _day(String v) => v.split('T').first;
+
+String _th(double v) {
+  final n = v.round();
+  final s = n.abs().toString();
+  final b = StringBuffer();
+  for (var i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
+    b.write(s[i]);
+  }
+  return (n < 0 ? '-' : '') + b.toString();
+}
+
+String _stamp() {
+  final t = DateTime.now();
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${two(t.month)}${two(t.day)}_${two(t.hour)}${two(t.minute)}';
+}
+
+List<BranchPriceRow> _shown(PriceReportData d) => d.rows
+    .where((r) => r.priceBuy != 0 || r.priceSale != 0 || r.total != 0)
+    .toList();
+
+// cells: branch, po, grn, date, item, qty, unit, amount
+List<_Ln> _poLines(PriceReportData d, Map<String, String> names) {
+  final out = <_Ln>[];
+  for (final p in d.pos) {
+    final gid = _s(p, 'id');
+    final bid = _s(p, 'branchId');
+    final br = names[bid] ?? bid;
+    for (final e in d.items) {
+      if (_s(e, 'grnId') != gid) continue;
+      out.add(_Ln(<Object>[
+        br,
+        _s(p, 'poNo'),
+        _s(p, 'grnNo'),
+        _day(_s(p, 'receiptDate')),
+        _s(e, 'name'),
+        _n(e['qty']).round(),
+        _n(e['unitCost']).roundToDouble(),
+        _n(e['amount']).roundToDouble(),
+      ], d.imgFor(e, 'name')));
+    }
+  }
+  return out;
+}
+
+// cells: branch, atm, po, date, part, qty, unit, amount
+List<_Ln> _usedLines(PriceReportData d, Map<String, String> names) {
+  final out = <_Ln>[];
+  for (final x in d.used) {
+    final bid = _s(x, 'branchId');
+    final atm = _s(x, 'atmId');
+    out.add(_Ln(<Object>[
+      names[bid] ?? bid,
+      atm.isEmpty ? '-' : atm,
+      _s(x, 'poNo'),
+      _day(_s(x, 'createdAt')),
+      _s(x, 'productName'),
+      _n(x['qty']).round(),
+      _n(x['unitCost']).roundToDouble(),
+      _n(x['amount']).roundToDouble(),
+    ], d.imgFor(x, 'productName')));
+  }
+  return out;
+}
+
+Future<void> sharePriceReportXlsx(PriceReportData d) async {
+  final names = {for (final r in d.rows) r.branchId: r.branch};
+  final po = _poLines(d, names);
+  final us = _usedLines(d, names);
+  final urls = <String>{
+    for (final l in po)
+      if (l.url.isNotEmpty) l.url,
+    for (final l in us)
+      if (l.url.isNotEmpty) l.url,
+  };
+  final thumbs = await _loadThumbs(urls);
+
+  final rows = <List<Object>>[];
+  final bold = <int>{};
+  final images = <XlImage>[];
+  final heights = <int, double>{};
+  void add(List<Object> r, [bool b = false]) {
+    if (b) bold.add(rows.length);
+    rows.add(r);
+  }
+
+  void addLine(_Ln l) {
+    final t = thumbs[l.url];
+    if (t != null) {
+      images.add(XlImage(
+          row: rows.length,
+          col: 0,
+          key: l.url,
+          bytes: t.bytes,
+          w: t.w,
+          h: t.h));
+      heights[rows.length] = 40.0;
+    }
+    add(<Object>['', ...l.cells]);
+  }
+
+  add(<Object>['ລາຍງານລາຄາອາໄຫຼ່ (LAK)'], true);
+  add(<Object>['ໄລຍະ', d.range]);
+  add(<Object>['ສາຂາ', d.branch]);
+  add(<Object>[]);
+  add(<Object>['', 'Branch', 'Price buy', 'Used', 'Total'], true);
+  double tb = 0;
+  double tu = 0;
+  double tt = 0;
+  for (final r in _shown(d)) {
+    tb += r.priceBuy;
+    tu += r.priceSale;
+    tt += r.total;
+    add(<Object>[
+      '',
+      r.branch,
+      r.priceBuy.roundToDouble(),
+      r.priceSale.roundToDouble(),
+      r.total.roundToDouble()
+    ]);
+  }
+  add(<Object>[
+    '',
+    'Total',
+    tb.roundToDouble(),
+    tu.roundToDouble(),
+    tt.roundToDouble()
+  ], true);
+
+  if (po.isNotEmpty) {
+    add(<Object>[]);
+    add(<Object>['ຊື້ເຂົ້າ (PO)'], true);
+    add(<Object>[
+      'Image',
+      'Branch',
+      'PO',
+      'GRN',
+      'Date',
+      'Item',
+      'Qty',
+      'Unit LAK',
+      'Amount LAK'
+    ], true);
+    double sum = 0;
+    for (final l in po) {
+      sum += l.cells[7] as double;
+      addLine(l);
+    }
+    add(<Object>['', '', '', '', '', 'Total', '', '', sum], true);
+  }
+
+  if (us.isNotEmpty) {
+    add(<Object>[]);
+    add(<Object>['ນຳໃຊ້ (ສ້ອມ)'], true);
+    add(<Object>[
+      'Image',
+      'Branch',
+      'ATM ID',
+      'PO',
+      'Date',
+      'Part',
+      'Qty',
+      'Unit LAK',
+      'Amount LAK'
+    ], true);
+    double sum = 0;
+    for (final l in us) {
+      sum += l.cells[7] as double;
+      addLine(l);
+    }
+    add(<Object>['', '', '', '', '', 'Total', '', '', sum], true);
+  }
+
+  debugPrint('[XLSX] build done rows=${rows.length} images=${images.length} ldbImages=${images.where((e) => e.key.startsWith('ldb_')).length}');
+  await sharePoXlsx(
+    fileName: 'PriceReport_${_stamp()}.xlsx',
+    rows: rows,
+    boldRows: bold,
+    widths: [14, 22, 22, 24, 18, 36, 8, 18, 18],
+    images: images,
+    rowHeights: heights,
+  );
+}
+
+pw.Widget _cell(String t, {bool bold = false, bool right = false}) => pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+      child: _txt(t, size: 8, bold: bold, right: right),
+    );
+
+pw.Widget _imgCell(Uint8List? b) => pw.Padding(
+      padding: const pw.EdgeInsets.all(2),
+      child: b == null
+          ? pw.SizedBox(width: 30, height: 30)
+          : pw.Image(pw.MemoryImage(b),
+              width: 30, height: 30, fit: pw.BoxFit.fill),
+    );
+
+pw.Widget _table(List<String> head, List<List<String>> data,
+    Map<int, pw.TableColumnWidth> widths, Set<int> right,
+    {List<String>? foot, List<Uint8List?>? imgs}) {
+  final hasImg = imgs != null;
+  final List<Uint8List?> ims = imgs ?? <Uint8List?>[];
+  final off = hasImg ? 1 : 0;
+  final rows = <pw.TableRow>[
+    pw.TableRow(
+      decoration: pw.BoxDecoration(color: PdfColors.grey200),
+      children: [
+        for (var i = 0; i < head.length; i++)
+          _cell(head[i], bold: true, right: right.contains(i))
+      ],
+    ),
+  ];
+  for (var k = 0; k < data.length; k++) {
+    final r = data[k];
+    rows.add(pw.TableRow(
+      verticalAlignment: pw.TableCellVerticalAlignment.middle,
+      children: [
+        if (hasImg) _imgCell(k < ims.length ? ims[k] : null),
+        for (var i = 0; i < r.length; i++)
+          _cell(r[i], right: right.contains(i + off))
+      ],
+    ));
+  }
+  final f = foot;
+  if (f != null) {
+    rows.add(pw.TableRow(
+      decoration: pw.BoxDecoration(color: PdfColors.grey100),
+      children: [
+        for (var i = 0; i < f.length; i++)
+          _cell(f[i], bold: true, right: right.contains(i))
+      ],
+    ));
+  }
+  return pw.Table(
+    border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.4),
+    columnWidths: widths,
+    children: rows,
+  );
+}
+
+pw.Widget _heading(String t) => pw.Padding(
+      padding: const pw.EdgeInsets.only(top: 14, bottom: 4),
+      child: _txt(t, size: 12, bold: true),
+    );
+
+Future<void> sharePriceReportPdf(PriceReportData d) async {
+  final names = {for (final r in d.rows) r.branchId: r.branch};
+  final po = _poLines(d, names);
+  final us = _usedLines(d, names);
+  final urls = <String>{
+    for (final l in po)
+      if (l.url.isNotEmpty) l.url,
+    for (final l in us)
+      if (l.url.isNotEmpty) l.url,
+  };
+  final thumbs = await _loadThumbs(urls);
+
+  final fBase = await PdfGoogleFonts.notoSansRegular();
+  final fBold = await PdfGoogleFonts.notoSansBold();
+  final doc = pw.Document(
+      theme: pw.ThemeData.withFont(base: fBase, bold: fBold));
+
+  double tb = 0;
+  double tu = 0;
+  double tt = 0;
+  final sumRows = <List<String>>[];
+  for (final r in _shown(d)) {
+    tb += r.priceBuy;
+    tu += r.priceSale;
+    tt += r.total;
+    sumRows.add([r.branch, _th(r.priceBuy), _th(r.priceSale), _th(r.total)]);
+  }
+
+  final poData = <List<String>>[];
+  final poImgs = <Uint8List?>[];
+  double poSum = 0;
+  for (final l in po) {
+    final r = l.cells;
+    poSum += r[7] as double;
+    poImgs.add(thumbs[l.url]?.bytes);
+    poData.add([
+      '${r[0]}',
+      '${r[1]}',
+      '${r[3]}',
+      '${r[4]}',
+      '${r[5]}',
+      _th(r[6] as double),
+      _th(r[7] as double)
+    ]);
+  }
+
+  final usData = <List<String>>[];
+  final usImgs = <Uint8List?>[];
+  double usSum = 0;
+  for (final l in us) {
+    final r = l.cells;
+    usSum += r[7] as double;
+    usImgs.add(thumbs[l.url]?.bytes);
+    usData.add([
+      '${r[0]}',
+      '${r[1]}',
+      '${r[3]}',
+      '${r[4]} (${r[2]})',
+      '${r[5]}',
+      _th(r[6] as double),
+      _th(r[7] as double)
+    ]);
+  }
+
+  final headLine = 'ໄລຍະ: ${d.range}    ສາຂາ: ${d.branch}';
+  final all = <String>{};
+  for (final r in sumRows) {
+    all.addAll(r);
+  }
+  for (final r in poData) {
+    all.addAll(r);
+  }
+  for (final r in usData) {
+    all.addAll(r);
+  }
+  await _prepLao(all);
+  await _renderLao('ລາຍງານລາຄາອາໄຫຼ່ (LAK)', 16, true);
+  await _renderLao('ຊື້ເຂົ້າ (PO)', 12, true);
+  await _renderLao('ນຳໃຊ້ (ສ້ອມ)', 12, true);
+  await _renderLao(headLine, 9, false);
+
+  final lineWidths = <int, pw.TableColumnWidth>{
+    0: const pw.FixedColumnWidth(34),
+    1: const pw.FlexColumnWidth(2),
+    2: const pw.FlexColumnWidth(2),
+    3: const pw.FlexColumnWidth(2),
+    4: const pw.FlexColumnWidth(4),
+    5: const pw.FixedColumnWidth(26),
+    6: const pw.FlexColumnWidth(2.2),
+    7: const pw.FlexColumnWidth(2.4),
+  };
+
+  doc.addPage(pw.MultiPage(
+    pageFormat: PdfPageFormat.a4,
+    margin: const pw.EdgeInsets.all(24),
+    build: (ctx) => [
+      _txt('ລາຍງານລາຄາອາໄຫຼ່ (LAK)', size: 16, bold: true),
+      pw.SizedBox(height: 4),
+      _txt(headLine, size: 9),
+      pw.SizedBox(height: 10),
+      _table(
+        ['Branch', 'Price buy', 'Used', 'Total'],
+        sumRows,
+        {
+          0: const pw.FlexColumnWidth(3),
+          1: const pw.FlexColumnWidth(2),
+          2: const pw.FlexColumnWidth(2),
+          3: const pw.FlexColumnWidth(2),
+        },
+        {1, 2, 3},
+        foot: ['Total', _th(tb), _th(tu), _th(tt)],
+      ),
+      if (poData.isNotEmpty) _heading('ຊື້ເຂົ້າ (PO)'),
+      if (poData.isNotEmpty)
+        _table(
+            ['', 'Branch', 'PO', 'Date', 'Item', 'Qty', 'Unit LAK', 'Amount LAK'],
+            poData,
+            lineWidths,
+            {5, 6, 7},
+            imgs: poImgs,
+            foot: ['', '', '', '', 'Total', '', '', _th(poSum)]),
+      if (usData.isNotEmpty) _heading('ນຳໃຊ້ (ສ້ອມ)'),
+      if (usData.isNotEmpty)
+        _table(
+            ['', 'Branch', 'ATM ID', 'Date', 'Part (PO)', 'Qty', 'Unit LAK', 'Amount LAK'],
+            usData,
+            lineWidths,
+            {5, 6, 7},
+            imgs: usImgs,
+            foot: ['', '', '', '', 'Total', '', '', _th(usSum)]),
+    ],
+  ));
+
+  final bytes = await doc.save();
+  debugPrint('[PDF] saved bytes=${bytes.length}');
+  await Printing.sharePdf(
+      bytes: bytes, filename: 'PriceReport_${_stamp()}.pdf');
+}

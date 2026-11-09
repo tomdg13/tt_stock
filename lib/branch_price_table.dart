@@ -56,12 +56,14 @@ class BranchPriceTable extends StatefulWidget {
   final List<BranchPriceRow> rows;
   final List<BranchPoItem> Function(BranchPriceRow row)? children;
   final List<BranchLineItem> Function(BranchPriceRow row)? used;
+  final List<BranchPoItem> Function(BranchPriceRow row)? usedGroups;
 
   const BranchPriceTable({
     super.key,
     required this.rows,
     this.children,
     this.used,
+    this.usedGroups,
   });
 
   @override
@@ -73,7 +75,30 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
   final Set<String> _openPo = {};
 
   String _key(BranchPriceRow r) => '${r.branchId}|${r.currency}';
-  String _fmt(double v) => v.toStringAsFixed(2);
+  String _fmt(double v) {
+    final neg = v < 0;
+    final a = v.abs();
+    String out;
+    if (a >= 1000000000) {
+      out = '${_trim(a / 1000000000)}B';
+    } else if (a >= 1000000) {
+      out = '${_trim(a / 1000000)}M';
+    } else {
+      final s = a.round().toString();
+      final b = StringBuffer();
+      for (var i = 0; i < s.length; i++) {
+        if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
+        b.write(s[i]);
+      }
+      out = b.toString();
+    }
+    return neg && out != '0' ? '-$out' : out;
+  }
+
+  String _trim(double x) {
+    final t = x.toStringAsFixed(1);
+    return t.endsWith('.0') ? t.substring(0, t.length - 2) : t;
+  }
 
   void _toggle(BranchPriceRow r) {
     final k = _key(r);
@@ -267,6 +292,7 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
     final groups = currencies.isEmpty ? [''] : currencies;
     final cb = widget.children;
     final ub = widget.used;
+    final ug = widget.usedGroups;
 
     return Column(
       children: [
@@ -291,6 +317,7 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
                 children: () {
                   final items = cb(r);
                   final us = ub == null ? <BranchLineItem>[] : ub(r);
+                  final ugs = ug == null ? <BranchPoItem>[] : ug(r);
                   final w = <Widget>[];
                   w.add(section('ຊື້ເຂົ້າ (PO)',
                       '${_fmt(r.priceBuy)} ${r.currency}',
@@ -302,16 +329,21 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
                       w.add(child(it));
                     }
                   }
-                  if (ub != null) {
+                  if (ub != null || ug != null) {
                     w.add(section('ນຳໃຊ້ (ສ້ອມ)',
                         '${_fmt(r.priceSale)} ${r.currency}',
                         Icons.build_outlined));
-                    if (us.isEmpty) {
+                    if (ug != null ? ugs.isEmpty : us.isEmpty) {
                       w.add(const Padding(
                           padding: EdgeInsets.fromLTRB(36, 6, 4, 10),
                           child: Text('-')));
                     } else {
-                      for (final l in us) {
+                      if (ug != null) {
+                        for (final it in ugs) {
+                          w.add(child(it));
+                        }
+                      }
+                      for (final l in (ug != null ? <BranchLineItem>[] : us)) {
                         w.add(lineItem(l));
                       }
                     }

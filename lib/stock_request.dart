@@ -94,7 +94,7 @@ class _StockRequestsPageState extends State<StockRequestsPage> {
         .map((i) => '${pick(i, ['productName', 'productId'])} × ${pick(i, ['qty'])}')
         .join('\n');
     final note = pick(r, ['note']);
-    final canSend = Api.can('TRANSFER_SEND');
+    final canSend = Api.can('REQUEST_APPROVE');
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
@@ -335,8 +335,7 @@ class BranchRequestsBar extends StatelessWidget {
   const BranchRequestsBar({super.key});
   @override
   Widget build(BuildContext context) {
-    if (Api.can('TRANSFER_SEND') == false &&
-        Api.can('TRANSFER_RECEIVE') == false) {
+    if (Api.can('REQUEST_SEND') == false && Api.can('REQUEST_APPROVE') == false) {
       return const SizedBox.shrink();
     }
     return Padding(
@@ -357,8 +356,7 @@ class BranchRequestsBar extends StatelessWidget {
 Widget branchRequestButton(BuildContext context, Map<String, dynamic> row) {
   final mine = Api.user?['branchId'];
   if ('${row['id']}' == '$mine') return const SizedBox.shrink();
-  if (Api.can('TRANSFER_SEND') == false &&
-      Api.can('TRANSFER_RECEIVE') == false) {
+  if (Api.can('REQUEST_SEND') == false && Api.can('REQUEST_APPROVE') == false) {
     return const SizedBox.shrink();
   }
   return TextButton.icon(

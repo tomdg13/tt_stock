@@ -4,6 +4,7 @@ import 'theme.dart';
 import 'widgets.dart';
 import 'product_images.dart';
 import 'branch_price_table.dart';
+import 'price_report_export.dart';
 
 class PriceReportPage extends StatefulWidget {
   const PriceReportPage({super.key});
@@ -124,6 +125,12 @@ class _PriceReportPageState extends State<PriceReportPage> {
     _pos = asList(m['pos']);
     _items = asList(m['items']);
     _used = asList(m['usedItems']);
+    final miss = _v(m['lakMissing']);
+    if (miss > 0 && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${miss.round()} GRN ຍັງບໍ່ມີມູນຄ່າ LAK ຈາກບັນຊີ'),
+          duration: const Duration(seconds: 6)));
+    }
     final list = _branchId == null
         ? bl
         : bl.where((b) => '${b['id']}' == '$_branchId').toList();
@@ -191,6 +198,31 @@ class _PriceReportPageState extends State<PriceReportPage> {
     return productImageUrl(v);
   }
 
+  String _k(dynamic v) {
+    final d = (v is num) ? v.toDouble() : (double.tryParse('$v') ?? 0);
+    final a = d.abs();
+    String t(double x) {
+      final r = x.toStringAsFixed(1);
+      return r.endsWith('.0') ? r.substring(0, r.length - 2) : r;
+    }
+
+    String out;
+    if (a >= 1000000000) {
+      out = '${t(a / 1000000000)}B';
+    } else if (a >= 1000000) {
+      out = '${t(a / 1000000)}M';
+    } else {
+      final n = a.round().toString();
+      final b = StringBuffer();
+      for (var i = 0; i < n.length; i++) {
+        if (i > 0 && (n.length - i) % 3 == 0) b.write(',');
+        b.write(n[i]);
+      }
+      out = b.toString();
+    }
+    return d < 0 && out != '0' ? '-$out' : out;
+  }
+
   List<BranchPoItem> _posFor(BranchPriceRow r) {
     final list = _pos
         .where((x) =>
@@ -206,17 +238,58 @@ class _PriceReportPageState extends State<PriceReportPage> {
                 : 'PO ${pick(x, ['poNo'])}',
             sub:
                 '${pick(x, ['grnNo'])} · ${pick(x, ['receiptDate']).split('T').first}',
-            amount: '${_n(x['total'])} ${pick(x, ['currency'])}',
+            amount: '${_k(x['total'])} ${pick(x, ['currency'])}',
             lines: [
               for (final e in _items.where((e) => '${e['grnId']}' == '${x['id']}'))
                 BranchLineItem(
                     name: pick(e, ['name']),
-                    sub: '${_n(e['unitCost'])} × ${pick(e, ['qty'])}',
-                    amount: '${_n(e['amount'])} ${pick(x, ['currency'])}',
+                    sub: '${_k(e['unitCost'])} × ${pick(e, ['qty'])}',
+                    amount: '${_k(e['amount'])} ${pick(x, ['currency'])}',
                     qty: '+${pick(e, ['qty'])}',
                     imageUrl: _imgFor(e)),
             ]),
     ];
+  }
+
+  List<BranchPoItem> _usedGroupsFor(BranchPriceRow r) {
+    final list = _used
+        .where((x) =>
+            '${x['branchId']}' == r.branchId &&
+            (r.currency.isEmpty || pick(x, ['currency']) == r.currency))
+        .toList();
+    final groups = <String, List<dynamic>>{};
+    for (final x in list) {
+      groups.putIfAbsent(pick(x, ['atmId']), () => <dynamic>[]).add(x);
+    }
+    final out = <BranchPoItem>[];
+    groups.forEach((id, xs) {
+      double tot = 0;
+      var parts = 0;
+      var last = '';
+      for (final x in xs) {
+        tot += _v(x['amount']);
+        parts += _v(x['qty']).round();
+        final d = pick(x, ['createdAt']).split('T').first;
+        if (d.compareTo(last) > 0) last = d;
+      }
+      out.add(BranchPoItem(
+        id: 'atm-${r.branchId}-$id',
+        po: id.isEmpty ? 'ບໍ່ມີ ATM ID' : 'ATM $id',
+        sub: '$parts ອາໄຫຼ່ · $last',
+        amount: '${_k(tot)} ${r.currency}',
+        lines: [
+          for (final x in xs)
+            BranchLineItem(
+                name: pick(x, ['productName']),
+                sub:
+                    '${pick(x, ['createdAt']).split('T').first} · ${_po(x)}',
+                amount: '${_k(x['amount'])} ${pick(x, ['currency'])}',
+                qty: '-${pick(x, ['qty'])}',
+                imageUrl: _imgFor(x, 'productName')),
+        ],
+      ));
+    });
+    return out;
   }
 
   List<BranchLineItem> _usedFor(BranchPriceRow r) {
@@ -228,13 +301,51 @@ class _PriceReportPageState extends State<PriceReportPage> {
     return [
       for (final x in list)
         BranchLineItem(
-            name: pick(x, ['productName']),
+            name: pick(x, ['atmId']).isEmpty
+                ? pick(x, ['productName'])
+                : 'ATM ${pick(x, ['atmId'])}',
             sub:
-                '${pick(x, ['createdAt']).split('T').first} · ${_po(x)} · ${_n(x['unitCost'])} × ${pick(x, ['qty'])}',
-            amount: '${_n(x['amount'])} ${pick(x, ['currency'])}',
+                '${pick(x, ['productName'])} · ${pick(x, ['createdAt']).split('T').first} · ${_po(x)}',
+            amount: '${_k(x['amount'])} ${pick(x, ['currency'])}',
             qty: '-${pick(x, ['qty'])}',
             imageUrl: _imgFor(x, 'productName')),
     ];
+  }
+
+  Future<void> _export(String kind) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final f = _f;
+      final rows = f == null ? <BranchPriceRow>[] : await f;
+      if (rows.isEmpty) {
+        messenger.showSnackBar(const SnackBar(content: Text('ບໍ່ມີຂໍ້ມູນ')));
+        return;
+      }
+      messenger.showSnackBar(const SnackBar(
+          content: Text('ກຳລັງສ້າງໄຟລ໌...'), duration: Duration(seconds: 15)));
+      var branchName = 'ທຸກສາຂາ';
+      for (final b in _branches) {
+        if ('${b['id']}' == '$_branchId') {
+          branchName = pick(b, ['name', 'branchName', 'id']);
+        }
+      }
+      final data = PriceReportData(
+          range: '${_d(_range.start)} - ${_d(_range.end)}',
+          branch: branchName,
+          rows: rows,
+          pos: _pos,
+          items: _items,
+          used: _used,
+          imgFor: (x, k) => _imgFor(x, k));
+      if (kind == 'pdf') {
+        await sharePriceReportPdf(data);
+      } else {
+        await sharePriceReportXlsx(data);
+      }
+    } catch (e) {
+      debugPrint('[REPORT] export $kind failed: $e');
+      messenger.showSnackBar(SnackBar(content: Text('ດາວໂຫຼດບໍ່ສຳເລັດ: $e')));
+    }
   }
 
   @override
@@ -242,6 +353,24 @@ class _PriceReportPageState extends State<PriceReportPage> {
     final p = pal(context);
     return Scaffold(
       appBar: AppBar(title: const Text('ລາຍງານລາຄາອາໄຫຼ່')),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(children: [
+            Expanded(
+                child: FilledButton.tonalIcon(
+                    onPressed: () => _export('xlsx'),
+                    icon: const Icon(Icons.table_view_outlined),
+                    label: const Text('Excel'))),
+            const SizedBox(width: 12),
+            Expanded(
+                child: FilledButton.tonalIcon(
+                    onPressed: () => _export('pdf'),
+                    icon: const Icon(Icons.picture_as_pdf_outlined),
+                    label: const Text('PDF'))),
+          ]),
+        ),
+      ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         DropdownButtonFormField<dynamic>(
           key: ValueKey('rb-${_branches.length}-$_branchId'),
@@ -329,7 +458,7 @@ class _PriceReportPageState extends State<PriceReportPage> {
                 key: ValueKey('t-${_range.start}-${_range.end}-$_branchId'),
                 rows: rows,
                 children: _posFor,
-                used: _usedFor);
+                used: _usedFor, usedGroups: _usedGroupsFor);
           },
         ),
       ]),

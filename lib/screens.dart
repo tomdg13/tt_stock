@@ -26,6 +26,7 @@ import 'transfer_report.dart';
 import 'usage_report.dart';
 import 'price_report.dart';
 import 'stock_count.dart';
+import 'stock_request.dart' show StockRequestsPage;
 
 // ---------------------------------------------------------------- Login
 class LoginScreen extends StatefulWidget {
@@ -273,6 +274,8 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       case 'trf':
         return const TransferScreen();
+      case 'req':
+        return const StockRequestsPage();
       case 'hist':
         return const HistoryScreen();
       case 'ser':
@@ -1427,6 +1430,13 @@ class DashMenuScreen extends StatelessWidget {
             Colors.brown,
             () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const TransferScreen()))),
+      if (Api.can('REQUEST_SEND') || Api.can('REQUEST_APPROVE'))
+        _DashMenuItem(
+            Icons.move_to_inbox_outlined,
+            'ຂໍອາໄຫຼ່',
+            Colors.teal,
+            () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const StockRequestsPage()))),
       if (Api.can('STOCK_COUNT'))
         _DashMenuItem(
             Icons.fact_check_outlined,
