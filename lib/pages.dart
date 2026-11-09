@@ -1472,7 +1472,7 @@ class _TrfAddPageState extends State<_TrfAddPage> {
     return Scaffold(
       appBar: AppBar(title: Text('ເພີ່ມສິນຄ້າ · ${widget.ref}')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        LineEditor(_lines, showCost: true, branchId: widget.fromBranchId),
+        LineEditor(_lines, branchId: widget.fromBranchId),
         if (_error != null)
           Padding(
               padding: const EdgeInsets.only(top: 8),
