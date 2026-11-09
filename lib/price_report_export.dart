@@ -587,3 +587,139 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
   await Printing.sharePdf(
       bytes: bytes, filename: 'PriceReport_${_stamp()}.pdf');
 }
+
+
+/// PDF of one stock transfer: letterhead, header info, item table, signatures.
+Future<void> shareTransferPdf(
+    Map<String, dynamic> t, Map<String, String> imageUrls) async {
+  String g(dynamic m, List<String> keys) {
+    for (final k in keys) {
+      final v = m is Map ? m[k] : null;
+      if (v != null && '$v'.isNotEmpty) return '$v';
+    }
+    return '';
+  }
+
+  final no = g(t, ['transferNo', 'id']);
+  final from = g(t, ['fromName', 'fromBranchName', 'fromBranchId']);
+  final to = g(t, ['toName', 'toBranchName', 'toBranchId']);
+  final sent = g(t, ['sentAt']);
+  final date = sent.length >= 10 ? sent.substring(0, 10) : sent;
+  final items = t['items'] is List
+      ? [for (final e in t['items'] as List) e as Map]
+      : <Map>[];
+
+  final urls = <String>{
+    for (final i in items)
+      if ((imageUrls['${i['productId']}'] ?? '').isNotEmpty)
+        imageUrls['${i['productId']}']!
+  };
+  final thumbs = await _loadThumbs(urls);
+
+  double total = 0;
+  final data = <List<String>>[];
+  final imgs = <Uint8List?>[];
+  var n = 0;
+  for (final i in items) {
+    n++;
+    final q = double.tryParse('${i['qty'] ?? i['quantity'] ?? 0}') ?? 0;
+    total += q;
+    imgs.add(thumbs[imageUrls['${i['productId']}'] ?? '']?.bytes);
+    data.add([
+      '$n',
+      g(i, ['productName', 'name', 'productId']),
+      g(i, ['poNo']),
+      q == q.roundToDouble() ? q.toInt().toString() : q.toStringAsFixed(2),
+    ]);
+  }
+
+  final texts = <String>{
+    'ໃບໂອນອາໄຫຼ່', 'ເລກທີ', 'ວັນທີ', 'ຈາກສາຂາ', 'ໄປສາຂາ',
+    'ລາຍການ', 'ສິນຄ້າ', 'ຈຳນວນ', 'ລວມ', 'ຜູ້ສົ່ງ', 'ຜູ້ຮັບ',
+    'ວັນທີ / Date', 'ລາຍເຊັນ',
+    no, from, to, date,
+    for (final r in data) ...r,
+  };
+  await _prepLao(texts);
+  for (final sz in [16.0, 9.0, 12.0]) {
+    for (final tx in texts) {
+      if (_laoRe.hasMatch(tx)) {
+        await _renderLao(tx, sz, true);
+        await _renderLao(tx, sz, false);
+      }
+    }
+  }
+
+  final fBase = await PdfGoogleFonts.notoSansRegular();
+  final fBold = await PdfGoogleFonts.notoSansBold();
+  final doc = pw.Document(
+      theme: pw.ThemeData.withFont(base: fBase, bold: fBold));
+  final lh = await loadLetterhead();
+  final pageW = PdfPageFormat.a4.width;
+
+  pw.Widget sign(String role) => pw.Expanded(
+          child: pw.Column(children: [
+        _txt(role, size: 9, bold: true),
+        pw.SizedBox(height: 44),
+        pw.Container(height: 0.6, color: PdfColors.grey700),
+        pw.SizedBox(height: 3),
+        _txt('ລາຍເຊັນ', size: 9),
+        pw.SizedBox(height: 6),
+        _txt('ວັນທີ / Date', size: 9),
+      ]));
+
+  doc.addPage(pw.MultiPage(
+    pageTheme: pw.PageTheme(
+      pageFormat: PdfPageFormat.a4,
+      margin: pw.EdgeInsets.fromLTRB(
+          24, pageW * lh.headerRatio + 10, 24, pageW * lh.footerRatio + 8),
+      theme: pw.ThemeData.withFont(base: fBase, bold: fBold),
+      buildBackground: (ctx) => ldbPdfBackground(lh),
+    ),
+    build: (ctx) => [
+      _txt('ໃບໂອນອາໄຫຼ່', size: 16, bold: true),
+      pw.SizedBox(height: 6),
+      pw.Row(children: [
+        _txt('ເລກທີ: ', size: 9, bold: true),
+        _txt(no, size: 9),
+        pw.SizedBox(width: 24),
+        _txt('ວັນທີ: ', size: 9, bold: true),
+        _txt(date, size: 9),
+      ]),
+      pw.SizedBox(height: 3),
+      pw.Row(children: [
+        _txt('ຈາກສາຂາ: ', size: 9, bold: true),
+        _txt(from, size: 9),
+        pw.SizedBox(width: 24),
+        _txt('ໄປສາຂາ: ', size: 9, bold: true),
+        _txt(to, size: 9),
+      ]),
+      pw.SizedBox(height: 10),
+      _table(
+        ['No', '', 'ສິນຄ້າ', 'PO', 'ຈຳນວນ'],
+        data.map((r) => [r[1], r[2], r[3]]).toList(),
+        {
+          0: const pw.FixedColumnWidth(24),
+          1: const pw.FixedColumnWidth(34),
+          2: const pw.FlexColumnWidth(5),
+          3: const pw.FlexColumnWidth(2.4),
+          4: const pw.FlexColumnWidth(1.4),
+        },
+        {4},
+        imgs: imgs,
+        foot: [
+          '', '', 'ລວມ', '',
+          total == total.roundToDouble()
+              ? total.toInt().toString()
+              : total.toStringAsFixed(2)
+        ],
+      ),
+      pw.SizedBox(height: 40),
+      pw.Row(children: [sign('ຜູ້ສົ່ງ'), pw.SizedBox(width: 40), sign('ຜູ້ຮັບ')]),
+    ],
+  ));
+
+  final bytes = await doc.save();
+  await Printing.sharePdf(
+      bytes: bytes, filename: 'Transfer_${no.isEmpty ? _stamp() : no}.pdf');
+}

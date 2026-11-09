@@ -1,3 +1,4 @@
+import 'price_report_export.dart' show shareTransferPdf;
 import 'terminal_actions.dart' show PickProductPage;
 import 'product_images.dart';
 import 'image_search.dart';
@@ -1139,6 +1140,7 @@ class _TransferScreenState extends State<TransferScreen> {
   @override
   void initState() {
     super.initState();
+    _loadImgs();
     loadBranches().then((b) {
       if (!mounted) return;
       setState(() {
@@ -1286,6 +1288,21 @@ class _TransferScreenState extends State<TransferScreen> {
   }
 
     // _trfNavTap marker
+  Map<String, String> _img = {};
+
+  Future<void> _loadImgs() async {
+    try {
+      final d = asList(await Api.get('/products?limit=500'));
+      if (!mounted) return;
+      setState(() {
+        _img = {
+          for (final m in d)
+            pick(m, ['id']): pick(m, ['imageUrl', 'image', 'photo', 'imageFile'])
+        };
+      });
+    } catch (_) {}
+  }
+
   Future<void> _detailAdd(Map<String, dynamic> t) async {
     final ok = await Navigator.push<bool>(
         context,
@@ -1328,6 +1345,13 @@ class _TransferScreenState extends State<TransferScreen> {
             onDestinationSelected: (i) {
               if (i == 0) {
                 _detailAdd(t);
+              } else if (i == 1) {
+                shareTransferPdf(t, _img).catchError((e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(SnackBar(content: Text('$e')));
+                  }
+                });
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('ກຳລັງພັດທະນາ')));
