@@ -4,6 +4,7 @@ import 'theme.dart';
 import 'widgets.dart';
 import 'product_images.dart';
 import 'branch_price_table.dart';
+import 'report_docs_page.dart';
 import 'price_report_export.dart';
 
 class PriceReportPage extends StatefulWidget {
@@ -312,6 +313,22 @@ class _PriceReportPageState extends State<PriceReportPage> {
     ];
   }
 
+  void _openDocs() {
+    var name = 'ທຸກສາຂາ';
+    for (final b in _branches) {
+      if ('${b['id']}' == '$_branchId') {
+        name = pick(b, ['name', 'branchName', 'id']);
+      }
+    }
+    debugPrint('[DOCS] open page branch=$_branchId from=${_d(_range.start)} to=${_d(_range.end)}');
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ReportDocsPage(
+            branchId: _branchId == null ? 0 : (int.tryParse('$_branchId') ?? 0),
+            branchName: name,
+            from: _d(_range.start),
+            to: _d(_range.end))));
+  }
+
   Future<void> _export(String kind) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -353,23 +370,22 @@ class _PriceReportPageState extends State<PriceReportPage> {
     final p = pal(context);
     return Scaffold(
       appBar: AppBar(title: const Text('ລາຍງານລາຄາອາໄຫຼ່')),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: Row(children: [
-            Expanded(
-                child: FilledButton.tonalIcon(
-                    onPressed: () => _export('xlsx'),
-                    icon: const Icon(Icons.table_view_outlined),
-                    label: const Text('Excel'))),
-            const SizedBox(width: 12),
-            Expanded(
-                child: FilledButton.tonalIcon(
-                    onPressed: () => _export('pdf'),
-                    icon: const Icon(Icons.picture_as_pdf_outlined),
-                    label: const Text('PDF'))),
-          ]),
-        ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: 0,
+        indicatorColor: Colors.transparent,
+        onDestinationSelected: (i) {
+          if (i == 0) _export('xlsx');
+          if (i == 1) _export('pdf');
+          if (i == 2) _openDocs();
+        },
+        destinations: const [
+          NavigationDestination(
+              icon: Icon(Icons.table_view_outlined), label: 'Excel'),
+          NavigationDestination(
+              icon: Icon(Icons.picture_as_pdf_outlined), label: 'PDF'),
+          NavigationDestination(
+              icon: Icon(Icons.upload_file_outlined), label: 'ອັບໂຫຼດ'),
+        ],
       ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         DropdownButtonFormField<dynamic>(

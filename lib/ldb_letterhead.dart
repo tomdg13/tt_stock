@@ -137,7 +137,7 @@ Future<LdbLetterhead> loadLetterhead() async {
   return r;
 }
 
-pw.Widget ldbPdfBackground(LdbLetterhead l) {
+pw.Widget ldbPdfBackground(LdbLetterhead l, {bool showFooter = true}) {
   final w = PdfPageFormat.a4.width;
   return pw.FullPage(
     ignoreMargins: true,
@@ -147,11 +147,12 @@ pw.Widget ldbPdfBackground(LdbLetterhead l) {
           top: 0,
           child: pw.Image(pw.MemoryImage(l.headerPng),
               width: w, height: w * l.headerRatio, fit: pw.BoxFit.fill)),
-      pw.Positioned(
-          left: 0,
-          bottom: 0,
-          child: pw.Image(pw.MemoryImage(l.footerPng),
-              width: w, height: w * l.footerRatio, fit: pw.BoxFit.fill)),
+      if (showFooter)
+        pw.Positioned(
+            left: 0,
+            bottom: 0,
+            child: pw.Image(pw.MemoryImage(l.footerPng),
+                width: w, height: w * l.footerRatio, fit: pw.BoxFit.fill)),
     ]),
   );
 }

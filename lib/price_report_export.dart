@@ -347,6 +347,14 @@ Future<void> sharePriceReportXlsx(PriceReportData d) async {
   }
 
   add(<Object>[]);
+  heights[rows.length] = 28.0;
+  add(<Object>['', 'ຜູ້ຈັດທຳ (Prepared by)', '', '', '', 'ຜູ້ອະນຸມັດ (Approved by)'], true);
+  heights[rows.length] = 54.0;
+  add(<Object>[]);
+  add(<Object>['', '______________________', '', '', '', '______________________']);
+  add(<Object>['', 'ຊື່: ........................', '', '', '', 'ຊື່: ........................']);
+  add(<Object>['', 'ວັນທີ: ....../....../..........', '', '', '', 'ວັນທີ: ....../....../..........']);
+  add(<Object>[]);
   images.add(XlImage(
       row: rows.length,
       col: 0,
@@ -430,6 +438,21 @@ pw.Widget _heading(String t) => pw.Padding(
       child: _txt(t, size: 12, bold: true),
     );
 
+pw.Widget _sigBox(String lao, String en, String nameLine, String dateLine) =>
+    pw.SizedBox(
+      width: 200,
+      child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        _txt(lao, size: 10, bold: true),
+        pw.Text(en, style: pw.TextStyle(fontSize: 8)),
+        pw.SizedBox(height: 46),
+        pw.Container(height: 0.7, color: PdfColors.grey700),
+        pw.SizedBox(height: 5),
+        _txt(nameLine, size: 9),
+        pw.SizedBox(height: 4),
+        _txt(dateLine, size: 9),
+      ]),
+    );
+
 Future<void> sharePriceReportPdf(PriceReportData d) async {
   final names = {for (final r in d.rows) r.branchId: r.branch};
   final po = _poLines(d, names);
@@ -511,6 +534,10 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
   await _renderLao('ຊື້ເຂົ້າ (PO)', 12, true);
   await _renderLao('ນຳໃຊ້ (ສ້ອມ)', 12, true);
   await _renderLao(headLine, 9, false);
+  await _renderLao('ຜູ້ຈັດທຳ', 10, true);
+  await _renderLao('ຜູ້ອະນຸມັດ', 10, true);
+  await _renderLao('ຊື່: ..............................', 9, false);
+  await _renderLao('ວັນທີ: ......../......../............', 9, false);
 
   final lineWidths = <int, pw.TableColumnWidth>{
     0: const pw.FixedColumnWidth(34),
@@ -579,6 +606,20 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
             {6, 7, 8},
             imgs: usImgs,
             foot: ['', '', '', '', '', 'Total', '', '', _th(usSum)]),
+      pw.SizedBox(height: 28),
+      pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 18),
+        child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              _sigBox('ຜູ້ຈັດທຳ', 'Prepared by',
+                  'ຊື່: ..............................',
+                  'ວັນທີ: ......../......../............'),
+              _sigBox('ຜູ້ອະນຸມັດ', 'Approved by',
+                  'ຊື່: ..............................',
+                  'ວັນທີ: ......../......../............'),
+            ]),
+      ),
     ],
   ));
 
