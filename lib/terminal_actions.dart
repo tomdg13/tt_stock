@@ -1,5 +1,6 @@
 // Terminal info page with "Fix" and "Change terminal" actions.
 // New file: nothing existing is overwritten. Needs mobile_scanner (already in pubspec).
+import 'terminal_parts_page.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'api.dart';
@@ -258,6 +259,40 @@ class _TerminalInfoPageState extends State<TerminalInfoPage> {
                       _kv(c, 'ສະຖານທີ່', pick(m, ['atmLocation', 'location'])),
                     ]),
               ),
+              AppCard(
+                title: 'ຂໍ້ມູນ Terminal',
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.memory),
+                        label: const Text('ຂໍ້ມູນອາໄຫຼ່ (SP)'),
+                        onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => TerminalPartsPage(_barcode))),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.history),
+                        label: const Text('ປະຫວັດ Terminal'),
+                        onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => HistoryPage(barcode: _barcode))),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.build_circle_outlined),
+                        label: const Text('ລາຍການທີ່ສ້ອມ / ປ່ຽນ'),
+                        onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => HistoryPage(
+                                    barcode: _barcode, initialFilter: 'status'))),
+                      ),
+                    ]),
+              ),
               if (canManage)
                 AppCard(
                   title: 'ຈັດການ Terminal',
@@ -303,14 +338,6 @@ class _TerminalInfoPageState extends State<TerminalInfoPage> {
                           ),
                       ]),
                 ),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.history),
-                label: const Text('ປະຫວັດ Terminal'),
-                onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => HistoryPage(barcode: _barcode))),
-              ),
               const SizedBox(height: 12),
               AppCard(title: 'ລາຍລະອຽດທັງໝົດ', child: DataView(m)),
             ]),

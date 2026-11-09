@@ -15,14 +15,15 @@ class _Ev {
 
 class HistoryPage extends StatefulWidget {
   final String? atmId, barcode;
-  const HistoryPage({super.key, this.atmId, this.barcode});
+  final String initialFilter;
+  const HistoryPage({super.key, this.atmId, this.barcode, this.initialFilter = 'all'});
   @override
   State<HistoryPage> createState() => _HistoryPageState();
 }
 
 class _HistoryPageState extends State<HistoryPage> {
   late Future<List<_Ev>> _f = _load();
-  String _filter = 'all';
+  late String _filter = widget.initialFilter;
 
   bool get _byAtm => widget.atmId != null;
   String get _id => (_byAtm ? widget.atmId : widget.barcode) ?? '';
