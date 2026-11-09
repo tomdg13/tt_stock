@@ -206,9 +206,11 @@ class _LineEditorState extends State<LineEditor> {
           color: p.bg,
           radius: 8,
           child: Column(children: [
-            ListTile(
-            dense: true,
-            leading: Builder(builder: (_) {
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Builder(builder: (_) {
               final u = productImageUrl(pick(lines[i].product,
                   ['imageUrl', 'image', 'photo', 'imageFile']));
               final ph = Container(
@@ -226,48 +228,56 @@ class _LineEditorState extends State<LineEditor> {
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => ph));
             }),
-            title: Text(pick(lines[i].product, ['name', 'productName', 'id'])),
-            subtitle: Text(pick(lines[i].product, ['brandName', 'typeName']),
-                style: TextStyle(color: p.mut)),
-            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-              IconButton(
-                  icon: const Icon(Icons.remove_circle_outline),
-                  onPressed: lines[i].qty > 1
-                      ? () => setState(() {
-                            lines[i].qty--;
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(pick(lines[i].product, ['name', 'productName', 'id']),
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Text(pick(lines[i].product, ['brandName', 'typeName']),
+                          style: TextStyle(color: p.mut, fontSize: 12)),
+                    ]),
+                  ),
+                ]),
+                const SizedBox(height: 6),
+                Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  IconButton(
+                      icon: const Icon(Icons.remove_circle_outline),
+                      onPressed: lines[i].qty > 1
+                          ? () => setState(() {
+                                lines[i].qty--;
+                                _qc(lines[i]).text = '${lines[i].qty}';
+                              })
+                          : null),
+                  SizedBox(
+                    width: 72,
+                    child: TextField(
+                      controller: _qc(lines[i]),
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      decoration: const InputDecoration(isDense: true),
+                      onChanged: (v) {
+                        final n = int.tryParse(v.trim());
+                        if (n != null && n > 0) {
+                          setState(() => lines[i].qty = n);
+                        }
+                      },
+                    ),
+                  ),
+                  IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: () => setState(() {
+                            lines[i].qty++;
                             _qc(lines[i]).text = '${lines[i].qty}';
-                          })
-                      : null),
-              SizedBox(
-                width: 52,
-                child: TextField(
-                  controller: _qc(lines[i]),
-                  keyboardType: TextInputType.number,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                  decoration: const InputDecoration(
-                      isDense: true, border: InputBorder.none),
-                  onChanged: (v) {
-                    final n = int.tryParse(v.trim());
-                    if (n != null && n > 0) {
-                      setState(() => lines[i].qty = n);
-                    }
-                  },
-                ),
-              ),
-              IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  onPressed: () => setState(() {
-                        lines[i].qty++;
-                        _qc(lines[i]).text = '${lines[i].qty}';
-                      })),
-              IconButton(
-                  icon: Icon(Icons.delete_outline, color: p.bad),
-                  onPressed: () => setState(() {
-                        lines.removeAt(i);
-                      })),
-            ]),
-          ),
+                          })),
+                  IconButton(
+                      icon: Icon(Icons.delete_outline, color: p.bad),
+                      onPressed: () => setState(() {
+                            lines.removeAt(i);
+                          })),
+                ]),
+              ]),
+            ),
             if (widget.showCost) _costRow(lines[i]),
           ]),
         ),
