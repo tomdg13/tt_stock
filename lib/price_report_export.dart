@@ -637,6 +637,7 @@ Future<void> shareTransferPdf(
     'ໃບໂອນອາໄຫຼ່', 'ເລກທີ', 'ວັນທີ', 'ຈາກສາຂາ', 'ໄປສາຂາ',
     'ລາຍການ', 'ສິນຄ້າ', 'ຈຳນວນ', 'ລວມ', 'ຜູ້ສົ່ງ', 'ຜູ້ຮັບ',
     'ວັນທີ / Date', 'ລາຍເຊັນ',
+    'ເລກທີ: ', 'ວັນທີ: ', 'ຈາກສາຂາ: ', 'ໄປສາຂາ: ',
     no, from, to, date,
     for (final r in data) ...r,
   };
@@ -695,23 +696,54 @@ Future<void> shareTransferPdf(
         _txt(to, size: 9),
       ]),
       pw.SizedBox(height: 10),
-      _table(
-        ['No', '', 'ສິນຄ້າ', 'PO', 'ຈຳນວນ'],
-        data.map((r) => [r[1], r[2], r[3]]).toList(),
-        {
-          0: const pw.FixedColumnWidth(24),
-          1: const pw.FixedColumnWidth(34),
-          2: const pw.FlexColumnWidth(5),
-          3: const pw.FlexColumnWidth(2.4),
-          4: const pw.FlexColumnWidth(1.4),
+      pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.4),
+        columnWidths: {
+          0: const pw.FixedColumnWidth(68),
+          1: const pw.FlexColumnWidth(5),
+          2: const pw.FlexColumnWidth(2.6),
+          3: const pw.FixedColumnWidth(48),
         },
-        {4},
-        imgs: imgs,
-        foot: [
-          '', '', 'ລວມ', '',
-          total == total.roundToDouble()
-              ? total.toInt().toString()
-              : total.toStringAsFixed(2)
+        children: [
+          pw.TableRow(
+            decoration: pw.BoxDecoration(color: PdfColors.grey200),
+            children: [
+              _cell('', bold: true),
+              _cell('ສິນຄ້າ', bold: true),
+              _cell('PO', bold: true),
+              _cell('ຈຳນວນ', bold: true, right: true),
+            ],
+          ),
+          for (var k = 0; k < data.length; k++)
+            pw.TableRow(
+              verticalAlignment: pw.TableCellVerticalAlignment.middle,
+              children: [
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(3),
+                  child: imgs[k] == null
+                      ? pw.SizedBox(width: 60, height: 60)
+                      : pw.Image(pw.MemoryImage(imgs[k]!),
+                          width: 60, height: 60, fit: pw.BoxFit.cover),
+                ),
+                _cell(data[k][1]),
+                _cell(data[k][2]),
+                _cell(data[k][3], right: true),
+              ],
+            ),
+          pw.TableRow(
+            decoration: pw.BoxDecoration(color: PdfColors.grey100),
+            children: [
+              _cell(''),
+              _cell('ລວມ', bold: true),
+              _cell(''),
+              _cell(
+                  total == total.roundToDouble()
+                      ? total.toInt().toString()
+                      : total.toStringAsFixed(2),
+                  bold: true,
+                  right: true),
+            ],
+          ),
         ],
       ),
       pw.SizedBox(height: 40),

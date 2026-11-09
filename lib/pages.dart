@@ -1346,7 +1346,7 @@ class _TransferScreenState extends State<TransferScreen> {
               if (i == 0) {
                 _detailAdd(t);
               } else if (i == 1) {
-                shareTransferPdf(t, _img).catchError((e) {
+                shareTransferPdf(t, {for (final e in _img.entries) e.key: productImageUrl(e.value)}).catchError((e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context)
                         .showSnackBar(SnackBar(content: Text('$e')));
