@@ -11,6 +11,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'branch_price_table.dart';
 import 'po_excel.dart';
+import 'ldb_letterhead.dart';
 
 class PriceReportData {
   final String range;
@@ -259,6 +260,20 @@ Future<void> sharePriceReportXlsx(PriceReportData d) async {
     add(<Object>['', ...l.cells]);
   }
 
+  final lh = await loadLetterhead();
+  const xlW = 1305;
+  debugPrint('[XLSX] letterhead ready: header ${lh.hw}x${lh.hh}, footer ${lh.fw}x${lh.fh}, po=${po.length} used=${us.length}');
+  images.add(XlImage(
+      row: 0,
+      col: 0,
+      key: 'ldb_header',
+      bytes: lh.headerJpg,
+      w: xlW,
+      h: (xlW * lh.hh / lh.hw).round()));
+  for (var i = 0; i < 4; i++) {
+    heights[rows.length] = 42.0;
+    add(<Object>[]);
+  }
   add(<Object>['ລາຍງານລາຄາອາໄຫຼ່ (LAK)'], true);
   add(<Object>['ໄລຍະ', d.range]);
   add(<Object>['ສາຂາ', d.branch]);
@@ -331,6 +346,18 @@ Future<void> sharePriceReportXlsx(PriceReportData d) async {
     add(<Object>['', '', '', '', '', 'Total', '', '', sum], true);
   }
 
+  add(<Object>[]);
+  images.add(XlImage(
+      row: rows.length,
+      col: 0,
+      key: 'ldb_footer',
+      bytes: lh.footerJpg,
+      w: xlW,
+      h: (xlW * lh.fh / lh.fw).round()));
+  for (var i = 0; i < 3; i++) {
+    heights[rows.length] = 40.0;
+    add(<Object>[]);
+  }
   debugPrint('[XLSX] build done rows=${rows.length} images=${images.length} ldbImages=${images.where((e) => e.key.startsWith('ldb_')).length}');
   await sharePoXlsx(
     fileName: 'PriceReport_${_stamp()}.xlsx',
@@ -495,9 +522,17 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
     7: const pw.FlexColumnWidth(2.4),
   };
 
+  final lh = await loadLetterhead();
+  final pageW = PdfPageFormat.a4.width;
+  debugPrint('[PDF] page width=$pageW headerH=${(pageW * lh.headerRatio).toStringAsFixed(1)} footerH=${(pageW * lh.footerRatio).toStringAsFixed(1)}');
   doc.addPage(pw.MultiPage(
-    pageFormat: PdfPageFormat.a4,
-    margin: const pw.EdgeInsets.all(24),
+    pageTheme: pw.PageTheme(
+      pageFormat: PdfPageFormat.a4,
+      margin: pw.EdgeInsets.fromLTRB(
+          24, pageW * lh.headerRatio + 10, 24, pageW * lh.footerRatio + 8),
+      theme: pw.ThemeData.withFont(base: fBase, bold: fBold),
+      buildBackground: (ctx) => ldbPdfBackground(lh),
+    ),
     build: (ctx) => [
       _txt('ລາຍງານລາຄາອາໄຫຼ່ (LAK)', size: 16, bold: true),
       pw.SizedBox(height: 4),
