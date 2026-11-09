@@ -1,3 +1,4 @@
+import 'transfer_home.dart';
 import 'package:flutter/foundation.dart';
 import 'services/biometric_service.dart';
 import 'image_search.dart';
@@ -1429,10 +1430,7 @@ class DashMenuScreen extends StatelessWidget {
             'ໂອນສາຂາ',
             Colors.brown,
             () => Navigator.push(context,
-                MaterialPageRoute(
-                    builder: (_) => Scaffold(
-                        appBar: AppBar(title: const Text('ໂອນສາຂາ')),
-                        body: const TransferScreen())))),
+                MaterialPageRoute(builder: (_) => const TransferHome()))),
       if (Api.can('REQUEST_SEND') || Api.can('REQUEST_APPROVE'))
         _DashMenuItem(
             Icons.move_to_inbox_outlined,

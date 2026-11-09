@@ -1080,7 +1080,10 @@ class _StockFormPageState extends State<StockFormPage> {
 
 // -------------------------------------------------------------- Transfer
 class TransferScreen extends StatefulWidget {
-  const TransferScreen({super.key});
+  final bool showForm, showList;
+  final VoidCallback? onCreated;
+  const TransferScreen(
+      {super.key, this.showForm = true, this.showList = true, this.onCreated});
   @override
   State<TransferScreen> createState() => _TransferScreenState();
 }
@@ -1153,6 +1156,7 @@ class _TransferScreenState extends State<TransferScreen> {
           .showSnackBar(const SnackBar(content: Text('ສົ່ງໂອນແລ້ວ')));
       setState(_lines.clear);
       _reload();
+      widget.onCreated?.call();
     } catch (e) {
       if (mounted)
         setState(() {
@@ -1185,7 +1189,7 @@ class _TransferScreenState extends State<TransferScreen> {
     return RefreshIndicator(
       onRefresh: () async => _reload(),
       child: ListView(padding: const EdgeInsets.all(16), children: [
-        if (Api.can('TRANSFER_SEND'))
+        if (widget.showForm && Api.can('TRANSFER_SEND'))
           AppCard(
             title: 'ໂອນສິນຄ້າລະຫວ່າງສາຂາ',
             child:
@@ -1215,6 +1219,7 @@ class _TransferScreenState extends State<TransferScreen> {
               saveButton('ສົ່ງໂອນ', _busy, _send),
             ]),
           ),
+        if (widget.showList)
         AppCard(
           title: 'ໃບໂອນ',
           child: futureBlock(_list, _reload, (d) {
