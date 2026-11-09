@@ -1409,8 +1409,6 @@ Widget _transferRow(BuildContext context, Map<String, dynamic> t) {
                 style: TextStyle(color: p.mut, fontSize: 13)),
           ]),
         ),
-        if (lines.isNotEmpty)
-          Padding(padding: const EdgeInsets.only(top: 4), child: Text(lines)),
         if (st == 'in_transit')
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -1423,11 +1421,6 @@ Widget _transferRow(BuildContext context, Map<String, dynamic> t) {
                 OutlinedButton(
                     onPressed: () => _act(t, 'cancel', 'ຍົກເລີກແລ້ວ'),
                     child: const Text('ຍົກເລີກ')),
-              if (Api.can('TRANSFER_SEND'))
-                OutlinedButton.icon(
-                    onPressed: () => _addMore(t),
-                    icon: const Icon(Icons.add),
-                    label: const Text('ເພີ່ມສິນຄ້າ')),
             ]),
           ),
       ]),
