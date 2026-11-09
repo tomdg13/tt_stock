@@ -1382,23 +1382,27 @@ class _TransferScreenState extends State<TransferScreen> {
                 '${items.length} ລາຍການ · ລວມ ${fmtNum(total)}${sent.length >= 10 ? ' · ${sent.substring(0, 10)}' : ''}',
                 style: TextStyle(color: p.mut, fontSize: 13)),
             const Divider(height: 24),
-            for (final i in items)
+            for (final e in items.asMap().entries)
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Row(children: [
-                  _trfThumb('${i['productId']}'),
+                  SizedBox(
+                      width: 22,
+                      child: Text('${e.key + 1}',
+                          style: TextStyle(color: p.mut, fontSize: 13))),
+                  _trfThumb('${e.value['productId']}'),
                   const SizedBox(width: 12),
                   Expanded(
                       child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                        Text(pick(i, ['productName', 'name', 'productId']),
+                        Text(pick(e.value, ['productName', 'name', 'productId']),
                             style: const TextStyle(fontWeight: FontWeight.w600)),
-                        if (pick(i, ['poNo']).isNotEmpty)
-                          Text(pick(i, ['poNo']),
+                        if (pick(e.value, ['poNo']).isNotEmpty)
+                          Text(pick(e.value, ['poNo']),
                               style: TextStyle(color: p.mut, fontSize: 12)),
                       ])),
-                  Text('× ${fmtNum(num0(i['qty'] ?? i['quantity']).toDouble())}',
+                  Text('× ${fmtNum(num0(e.value['qty'] ?? e.value['quantity']).toDouble())}',
                       style: const TextStyle(
                           fontWeight: FontWeight.w700, fontSize: 15)),
                 ]),

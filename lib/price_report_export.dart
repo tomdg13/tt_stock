@@ -699,15 +699,17 @@ Future<void> shareTransferPdf(
       pw.Table(
         border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.4),
         columnWidths: {
-          0: const pw.FixedColumnWidth(68),
-          1: const pw.FlexColumnWidth(5),
-          2: const pw.FlexColumnWidth(2.6),
-          3: const pw.FixedColumnWidth(48),
+          0: const pw.FixedColumnWidth(26),
+          1: const pw.FixedColumnWidth(68),
+          2: const pw.FlexColumnWidth(5),
+          3: const pw.FlexColumnWidth(2.6),
+          4: const pw.FixedColumnWidth(48),
         },
         children: [
           pw.TableRow(
             decoration: pw.BoxDecoration(color: PdfColors.grey200),
             children: [
+              _cell('No', bold: true),
               _cell('', bold: true),
               _cell('ສິນຄ້າ', bold: true),
               _cell('PO', bold: true),
@@ -718,6 +720,7 @@ Future<void> shareTransferPdf(
             pw.TableRow(
               verticalAlignment: pw.TableCellVerticalAlignment.middle,
               children: [
+                _cell(data[k][0]),
                 pw.Padding(
                   padding: const pw.EdgeInsets.all(3),
                   child: imgs[k] == null
@@ -733,6 +736,7 @@ Future<void> shareTransferPdf(
           pw.TableRow(
             decoration: pw.BoxDecoration(color: PdfColors.grey100),
             children: [
+              _cell(''),
               _cell(''),
               _cell('ລວມ', bold: true),
               _cell(''),
