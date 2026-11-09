@@ -1234,6 +1234,17 @@ class _TransferScreenState extends State<TransferScreen> {
     );
   }
 
+  Future<void> _addMore(Map<String, dynamic> t) async {
+    final ok = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+            builder: (_) => _TrfAddPage(
+                trfId: pick(t, ['id']),
+                fromBranchId: pick(t, ['fromBranchId']),
+                ref: pick(t, ['transferNo', 'ref', 'id']))));
+    if (ok == true) _reload();
+  }
+
   Widget _transferRow(BuildContext context, Map<String, dynamic> t) {
     final p = pal(context);
     final st = pick(t, ['status', 'state']);
@@ -1280,8 +1291,77 @@ class _TransferScreenState extends State<TransferScreen> {
                 OutlinedButton(
                     onPressed: () => _act(t, 'cancel', 'ຍົກເລີກແລ້ວ'),
                     child: const Text('ຍົກເລີກ')),
+              if (Api.can('TRANSFER_SEND'))
+                OutlinedButton.icon(
+                    onPressed: () => _addMore(t),
+                    icon: const Icon(Icons.add),
+                    label: const Text('ເພີ່ມສິນຄ້າ')),
             ]),
           ),
+      ]),
+    );
+  }
+}
+
+
+/// Add products to a transfer that is still in transit.
+class _TrfAddPage extends StatefulWidget {
+  final String trfId, fromBranchId, ref;
+  const _TrfAddPage(
+      {required this.trfId, required this.fromBranchId, required this.ref});
+  @override
+  State<_TrfAddPage> createState() => _TrfAddPageState();
+}
+
+class _TrfAddPageState extends State<_TrfAddPage> {
+  final List<Line> _lines = [];
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _save() async {
+    if (_lines.isEmpty) {
+      setState(() => _error = 'ເພີ່ມສິນຄ້າຢ່າງນ້ອຍ 1 ລາຍການ');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await Api.post('/stock/transfers/${widget.trfId}/items', {
+        'items': [
+          for (final l in _lines)
+            {
+              'productId': l.product['id'],
+              'qty': l.qty,
+              if (l.cost > 0) 'unitCost': l.cost
+            }
+        ]
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('ເພີ່ມແລ້ວ')));
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = pal(context);
+    return Scaffold(
+      appBar: AppBar(title: Text('ເພີ່ມສິນຄ້າ · ${widget.ref}')),
+      body: ListView(padding: const EdgeInsets.all(16), children: [
+        LineEditor(_lines, showCost: true, branchId: widget.fromBranchId),
+        if (_error != null)
+          Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(_error!, style: TextStyle(color: p.bad))),
+        const SizedBox(height: 12),
+        saveButton('ບັນທຶກ', _busy, _save),
       ]),
     );
   }
