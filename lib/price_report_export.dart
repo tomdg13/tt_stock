@@ -486,8 +486,9 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
     usData.add([
       '${r[0]}',
       '${r[1]}',
+      '${r[2]}',
       '${r[3]}',
-      '${r[4]} (${r[2]})',
+      '${r[4]}',
       '${r[5]}',
       _th(r[6] as double),
       _th(r[7] as double)
@@ -562,12 +563,22 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
       if (usData.isNotEmpty) _heading('ນຳໃຊ້ (ສ້ອມ)'),
       if (usData.isNotEmpty)
         _table(
-            ['', 'Branch', 'ATM ID', 'Date', 'Part (PO)', 'Qty', 'Unit LAK', 'Amount LAK'],
+            ['', 'Branch', 'ATM ID', 'PO', 'Date', 'Part', 'Qty', 'Unit LAK', 'Amount LAK'],
             usData,
-            lineWidths,
-            {5, 6, 7},
+            <int, pw.TableColumnWidth>{
+              0: const pw.FixedColumnWidth(34),
+              1: const pw.FlexColumnWidth(2),
+              2: const pw.FlexColumnWidth(2),
+              3: const pw.FlexColumnWidth(2.4),
+              4: const pw.FlexColumnWidth(2),
+              5: const pw.FlexColumnWidth(3.4),
+              6: const pw.FixedColumnWidth(24),
+              7: const pw.FlexColumnWidth(2.2),
+              8: const pw.FlexColumnWidth(2.4),
+            },
+            {6, 7, 8},
             imgs: usImgs,
-            foot: ['', '', '', '', 'Total', '', '', _th(usSum)]),
+            foot: ['', '', '', '', '', 'Total', '', '', _th(usSum)]),
     ],
   ));
 

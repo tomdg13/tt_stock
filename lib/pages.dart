@@ -1294,8 +1294,16 @@ class _TransferScreenState extends State<TransferScreen> {
                 fromBranchId: pick(t, ['fromBranchId']),
                 ref: pick(t, ['transferNo', 'id']))));
     if (ok == true && mounted) {
-      _reload();
       Navigator.pop(context);
+      try {
+        final d = await Api.get('/stock/transfers');
+        if (!mounted) return;
+        _reload();
+        final m = asList(d).where((x) => pick(x, ['id']) == pick(t, ['id']));
+        if (m.isNotEmpty) _openTrf(m.first);
+      } catch (_) {
+        if (mounted) _reload();
+      }
     }
   }
 
@@ -1346,8 +1354,15 @@ class _TransferScreenState extends State<TransferScreen> {
                   _trfThumb('${i['productId']}'),
                   const SizedBox(width: 12),
                   Expanded(
-                      child: Text(pick(i, ['productName', 'name', 'productId']),
-                          style: const TextStyle(fontWeight: FontWeight.w600))),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(pick(i, ['productName', 'name', 'productId']),
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                        if (pick(i, ['poNo']).isNotEmpty)
+                          Text(pick(i, ['poNo']),
+                              style: TextStyle(color: p.mut, fontSize: 12)),
+                      ])),
                   Text('× ${fmtNum(num0(i['qty'] ?? i['quantity']).toDouble())}',
                       style: const TextStyle(
                           fontWeight: FontWeight.w700, fontSize: 15)),
