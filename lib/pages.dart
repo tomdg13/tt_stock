@@ -1285,7 +1285,21 @@ class _TransferScreenState extends State<TransferScreen> {
     if (ok == true) _reload();
   }
 
-    Future<void> _openTrf(Map<String, dynamic> t) async {
+    Future<void> _detailAdd(Map<String, dynamic> t) async {
+    final ok = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+            builder: (_) => _TrfAddPage(
+                trfId: pick(t, ['id']),
+                fromBranchId: pick(t, ['fromBranchId']),
+                ref: pick(t, ['transferNo', 'id']))));
+    if (ok == true && mounted) {
+      _reload();
+      Navigator.pop(context);
+    }
+  }
+
+  Future<void> _openTrf(Map<String, dynamic> t) async {
     final p = pal(context);
     final st = pick(t, ['status', 'state']);
     final info = transferStatus[st];
@@ -1299,6 +1313,18 @@ class _TransferScreenState extends State<TransferScreen> {
       MaterialPageRoute(
         builder: (_) => Scaffold(
           appBar: AppBar(title: Text(pick(t, ['transferNo', 'id']))),
+          bottomNavigationBar: st == 'in_transit' && Api.can('TRANSFER_SEND')
+              ? SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: FilledButton.icon(
+                      onPressed: () => _detailAdd(t),
+                      icon: const Icon(Icons.add),
+                      label: const Text('ເພີ່ມສິນຄ້າ'),
+                    ),
+                  ),
+                )
+              : null,
           body: ListView(padding: const EdgeInsets.all(16), children: [
             Row(children: [
               Expanded(
