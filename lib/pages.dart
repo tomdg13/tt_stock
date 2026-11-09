@@ -1,3 +1,4 @@
+import 'terminal_actions.dart' show PickProductPage;
 import 'product_images.dart';
 import 'image_search.dart';
 import 'package:flutter/material.dart';
@@ -56,8 +57,11 @@ class _ProductPickerState extends State<_ProductPicker> {
 
   final _q = TextEditingController();
   late Future<dynamic> _f = _load();
-  Future<dynamic> _load() => Api.get(
-      '/products?limit=30&active=1&q=${Uri.encodeQueryComponent(_q.text.trim())}');
+  Future<dynamic> _load() {
+    debugPrint('[PICK] OLD bottom-sheet picker (_ProductPicker) -> GET /products?limit=30&active=1');
+    return Api.get(
+        '/products?limit=30&active=1&q=${Uri.encodeQueryComponent(_q.text.trim())}');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -126,7 +130,9 @@ class _ProductPickerState extends State<_ProductPicker> {
 class LineEditor extends StatefulWidget {
   final List<Line> lines;
   final bool showCost;
-  const LineEditor(this.lines, {super.key, this.showCost = false});
+  final dynamic branchId;
+  const LineEditor(this.lines,
+      {super.key, this.showCost = false, this.branchId});
   @override
   State<LineEditor> createState() => _LineEditorState();
 }
@@ -175,7 +181,13 @@ class _LineEditorState extends State<LineEditor> {
         const Spacer(),
         TextButton.icon(
           onPressed: () async {
-            final prod = await pickProduct(context);
+            final prod = widget.branchId != null
+                ? await Navigator.push<Map<String, dynamic>>(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => PickProductPage(
+                            branchId: widget.branchId, pickerMode: true)))
+                : await pickProduct(context);
             if (prod != null)
               setState(() {
                 lines.add(Line(prod, 1));
@@ -1166,7 +1178,7 @@ class _TransferScreenState extends State<TransferScreen> {
                         _to = v;
                       })),
               const SizedBox(height: 12),
-              LineEditor(_lines),
+              LineEditor(_lines, branchId: _from),
               if (_error != null)
                 Padding(
                     padding: const EdgeInsets.only(top: 8),

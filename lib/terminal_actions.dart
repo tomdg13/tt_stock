@@ -874,6 +874,7 @@ class _PickProductPageState extends State<PickProductPage> {
   bool get _hasBranch => widget.branchId != null;
 
   Future<dynamic> _load() async {
+    debugPrint('[PICK] NEW PickProductPage branchId=${widget.branchId} -> GET /products?limit=500 + stock call below');
     if (_hasBranch && widget.pickerMode) {
       try {
         final bal = asList(await Api.get(
