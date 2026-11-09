@@ -845,9 +845,11 @@ class PickProductPage extends StatefulWidget {
   final String terminalType, terminalTypeId;
   final Map<String, dynamic> atm, terminal;
   final dynamic branchId;
+  final bool pickerMode;
   const PickProductPage(
       {super.key,
       this.branchId,
+      this.pickerMode = false,
       this.terminalType = '',
       this.terminalTypeId = '',
       this.atm = const {},
@@ -872,7 +874,17 @@ class _PickProductPageState extends State<PickProductPage> {
   bool get _hasBranch => widget.branchId != null;
 
   Future<dynamic> _load() async {
-    if (_hasBranch) {
+    if (_hasBranch && widget.pickerMode) {
+      try {
+        final bal = asList(await Api.get(
+            '/stock/balances?branchId=${Uri.encodeQueryComponent('${widget.branchId}')}&limit=2000'));
+        _branchStock.clear();
+        for (final b in bal) {
+          _branchStock[pick(b, ['productId'])] =
+              num0(pick(b, ['qtyOnHand', 'qty']));
+        }
+      } catch (_) {}
+    } else if (_hasBranch) {
       try {
         final cp = await Api.get(
             '/repair/parts?barcode=${Uri.encodeQueryComponent(pick(widget.terminal, ['barcode']))}&atmId=${Uri.encodeQueryComponent(pick(widget.atm, ['atmId']))}&branchId=${Uri.encodeQueryComponent('${widget.branchId}')}');
@@ -1118,7 +1130,7 @@ class _PickProductPageState extends State<PickProductPage> {
               child: Text(stock,
                   style: const TextStyle(fontWeight: FontWeight.w700)),
             ),
-          if (canEdit) ...[
+          if (canEdit && !widget.pickerMode) ...[
             IconButton(
               icon: const Icon(Icons.edit_outlined, size: 20),
               tooltip: 'ແກ້ໄຂ',
@@ -1154,7 +1166,7 @@ class _PickProductPageState extends State<PickProductPage> {
       appBar: AppBar(
         title: const Text('ເລືອກອາໄຫຼ່ / ສິນຄ້າ'),
         actions: [
-          if (canEdit)
+          if (canEdit && !widget.pickerMode)
             TextButton.icon(
               icon: const Icon(Icons.add),
               label: const Text('ເພີ່ມ'),
