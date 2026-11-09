@@ -1429,7 +1429,10 @@ class DashMenuScreen extends StatelessWidget {
             'ໂອນສາຂາ',
             Colors.brown,
             () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const TransferScreen()))),
+                MaterialPageRoute(
+                    builder: (_) => Scaffold(
+                        appBar: AppBar(title: const Text('ໂອນສາຂາ')),
+                        body: const TransferScreen())))),
       if (Api.can('REQUEST_SEND') || Api.can('REQUEST_APPROVE'))
         _DashMenuItem(
             Icons.move_to_inbox_outlined,

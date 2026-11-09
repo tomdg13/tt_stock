@@ -208,6 +208,24 @@ class _LineEditorState extends State<LineEditor> {
           child: Column(children: [
             ListTile(
             dense: true,
+            leading: Builder(builder: (_) {
+              final u = productImageUrl(pick(lines[i].product,
+                  ['imageUrl', 'image', 'photo', 'imageFile']));
+              final ph = Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                      color: p.bd, borderRadius: BorderRadius.circular(8)),
+                  child: Icon(Icons.image_outlined, color: p.mut));
+              if (u.isEmpty) return ph;
+              return ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(u,
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => ph));
+            }),
             title: Text(pick(lines[i].product, ['name', 'productName', 'id'])),
             subtitle: Text(pick(lines[i].product, ['brandName', 'typeName']),
                 style: TextStyle(color: p.mut)),
