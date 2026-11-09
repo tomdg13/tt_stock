@@ -147,7 +147,10 @@ class _ReceiveHomeState extends State<ReceiveHome> {
       MaterialPageRoute(
         builder: (_) => _PoPage(group: g, onItem: _openDetail),
       ),
-    ).then((_) => _loadActual());
+    ).then((r) {
+      if (r == true && mounted) _reload();
+      _loadActual();
+    });
   }
 
   Widget _poRow(_PoGroup g) {
