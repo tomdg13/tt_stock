@@ -249,7 +249,6 @@ class _ReceiveHomeState extends State<ReceiveHome> {
                   final t = pick(m, ['type', 'movementType']);
                   return t.contains('purchase') || t.contains('receive');
                 }).toList();
-                if (rows.isEmpty) rows = all;
                 if (rows.isEmpty) {
                   return Text('ຍັງບໍ່ມີລາຍການ', style: TextStyle(color: p.mut));
                 }
