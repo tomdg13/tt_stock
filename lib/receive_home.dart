@@ -26,7 +26,7 @@ class ReceiveHome extends StatefulWidget {
 
 class _ReceiveHomeState extends State<ReceiveHome> {
   bool _adding = false;
-  late Future<dynamic> _recent = Api.get('/stock/movements');
+  late Future<dynamic> _recent = Api.get('/stock/movements?type=purchase_in&limit=500');
 
   // key names tried in order (adjust if your API uses other names)
   static const _poKeys = ['poNo', 'poNumber', 'po', 'poCode', 'refNo'];
@@ -61,7 +61,7 @@ class _ReceiveHomeState extends State<ReceiveHome> {
 
   void _reload() {
     setState(() {
-      _recent = Api.get('/stock/movements');
+      _recent = Api.get('/stock/movements?type=purchase_in&limit=500');
     });
     _loadActual();
   }
