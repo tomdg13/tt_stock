@@ -60,11 +60,11 @@ class _StockCountPageState extends State<StockCountPage> {
     return own.isNotEmpty ? own : (_imgById['${r['productId']}'] ?? '');
   }
 
-  Widget _thumb(String raw) {
+  Widget _thumb(String raw, {double size = 48}) {
     final cs = Theme.of(context).colorScheme;
     final ph = Container(
-      width: 48,
-      height: 48,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
           color: cs.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(8)),
@@ -88,8 +88,8 @@ class _StockCountPageState extends State<StockCountPage> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Image.network(url,
-            width: 48,
-            height: 48,
+            width: size,
+            height: size,
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => ph),
       ),
@@ -159,6 +159,8 @@ class _StockCountPageState extends State<StockCountPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(child: _thumb(_imgOf(r), size: 100)),
+              const SizedBox(height: 12),
               Text('ໃນລະບົບ: ${_s(num0(r['qtyOnHand']))} ${pick(r, ['unit'])}'),
               const SizedBox(height: 8),
               TextField(
