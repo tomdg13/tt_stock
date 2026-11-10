@@ -1,6 +1,8 @@
 import "po_actual_ui.dart";
 import "po_excel.dart";
 import 'product_images.dart';
+import 'crud.dart' show CrudDetail;
+import 'specs.dart' show crudSpec;
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'stock_drill.dart';
@@ -328,6 +330,21 @@ class _PoPageState extends State<_PoPage> {
     }
   }
 
+  Future<void> _openProduct(Map<String, dynamic> m, String name) async {
+    final id = pick(m, ['productId']);
+    if (id.isEmpty) return;
+    final sp = crudSpec('prod');
+    if (sp == null || !mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            CrudDetail(sp, {'id': id, 'name': name}, onChanged: () {}),
+      ),
+    );
+    if (mounted) _loadImgs();
+  }
+
   Widget _thumb(Map<String, dynamic> m, String name) {
     final p = pal(context);
     final v = _imgById[pick(m, ['productId'])] ??
@@ -341,7 +358,12 @@ class _PoPageState extends State<_PoPage> {
       child: Icon(Icons.image_outlined, color: p.mut),
     );
     final url = productImageUrl(v);
-    if (url.isEmpty) return ph;
+    if (url.isEmpty) {
+      return GestureDetector(
+        onTap: () => _openProduct(m, name),
+        child: ph,
+      );
+    }
     return GestureDetector(
       onTap: () => showDialog(
         context: context,
