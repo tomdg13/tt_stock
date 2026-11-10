@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'price_report_export.dart' show shareTransferPdf;
 import 'terminal_actions.dart' show PickProductPage;
 import 'product_images.dart';
+import 'crud.dart' show CrudDetail;
+import 'specs.dart' show crudSpec;
 import 'image_search.dart';
 import 'package:flutter/material.dart';
 import 'api.dart';
@@ -1108,6 +1110,21 @@ class _TransferScreenState extends State<TransferScreen> {
     }
   }
 
+  Future<void> _openProduct(String id, String name) async {
+    if (id.isEmpty || id == 'null') return;
+    final sp = crudSpec('prod');
+    if (sp == null || !mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            CrudDetail(sp, {'id': id, 'name': name}, onChanged: () {}),
+      ),
+    );
+    _trfImgs.remove(id);
+    if (mounted) setState(() {});
+  }
+
   Widget _trfThumb(String id) {
     final p = pal(context);
     final ph = Container(
@@ -1394,7 +1411,10 @@ class _TransferScreenState extends State<TransferScreen> {
             for (final e in items.asMap().entries)
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: Row(children: [
+                child: InkWell(
+                  onTap: () => _openProduct('${e.value['productId']}',
+                      pick(e.value, ['productName', 'name', 'productId'])),
+                  child: Row(children: [
                   SizedBox(
                       width: 22,
                       child: Text('${e.key + 1}',
@@ -1415,6 +1435,7 @@ class _TransferScreenState extends State<TransferScreen> {
                       style: const TextStyle(
                           fontWeight: FontWeight.w700, fontSize: 15)),
                 ]),
+                ),
               ),
           ]),
         ),
