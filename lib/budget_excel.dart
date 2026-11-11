@@ -55,11 +55,10 @@ Future<Map<String, _Thumb>> _loadThumbs(Set<String> urls) async {
 
 Future<void> exportBudgetXlsx(Map<String, dynamic> d,
     {String branchName = '', String poText = '', String auditText = ''}) async {
-  final past = asList(d['pastYears']);
-  final future = asList(d['futureYears']);
   final years = asList(d['budgetByYear']);
   final items = asList(d['items']);
   final fm = num0(d['fm']).toInt();
+  final pct = num0(d['pct']);
 
   final urls = <String>{};
   for (final it in items) {
@@ -78,125 +77,74 @@ Future<void> exportBudgetXlsx(Map<String, dynamic> d,
     rows.add(r);
   }
 
-  // settings + summary
-  add(<Object>['ງົບປະມານອາໄຫຼ່'], b: true);
-  add(<Object>['ສາຂາ', branchName.isEmpty ? 'ທຸກສາຂາ' : branchName]);
-  add(<Object>['ປີງົບປະມານ', fm == 1 ? 'ມັງກອນ - ທັນວາ' : 'ຕຸລາ - ກັນຍາ']);
-  add(<Object>['ຮອດສິ້ນປີ', num0(d['toYear']).toInt()]);
-  add(<Object>['ເຜື່ອ (%)', num0(d['pct']).toInt()]);
-  if (poText.isNotEmpty) add(<Object>['PO', poText]);
-  if (auditText.isNotEmpty) add(<Object>['ໃບນັບສະຕັອກ', auditText]);
-  add(<Object>['ຄິດຈາກການໃຊ້ 12 ເດືອນຜ່ານມາ']);
+  // settings + per-year budget (columns B, C)
+  add(<Object>['', 'ງົບປະມານອາໄຫຼ່'], b: true);
+  add(<Object>['', 'ສາຂາ', branchName.isEmpty ? 'ທຸກສາຂາ' : branchName]);
+  add(<Object>['', 'ປີງົບປະມານ', fm == 1 ? 'ມັງກອນ - ທັນວາ' : 'ຕຸລາ - ກັນຍາ']);
+  add(<Object>['', 'ຮອດສິ້ນປີ', num0(d['toYear']).toInt()]);
+  add(<Object>['', 'ເຜື່ອ (%)', _q(pct)]);
+  if (poText.isNotEmpty) add(<Object>['', 'PO', poText]);
+  if (auditText.isNotEmpty) add(<Object>['', 'ໃບນັບສະຕັອກ', auditText]);
+  add(<Object>['', 'ຄິດຈາກການໃຊ້ 12 ເດືອນຜ່ານມາ']);
+  add(<Object>['', 'ຕ້ອງຊື້ = ໃຊ້ x % ຕ້ອງຊື້ ເພີມ - ຍັງໃນສາງ']);
   add(<Object>[]);
-  add(<Object>['ປີ', 'ງົບປະມານ'], b: true);
+  add(<Object>['', 'ປີ', 'ງົບປະມານ'], b: true);
   for (final y in years) {
-    add(<Object>['${y['label']}', _m(num0(y['amount']))]);
+    add(<Object>['', '${y['label']}', _m(num0(y['amount']))]);
   }
-  add(<Object>['ລວມ', _m(num0(d['totalAmount']))], b: true);
+  add(<Object>['', 'ລວມ', _m(num0(d['totalAmount']))], b: true);
   add(<Object>[]);
 
-  // item table header (column A = picture)
-  final head = <Object>[
+  add(<Object>[
+    'ຮຸນ',
     'ຮູບ',
     'ສິນຄ້າ',
+    'Barcode',
+    'ປະເພດ',
     'ໜ່ວຍ',
     'ລາຄາ/ໜ່ວຍ',
     'ສະຕັອກ',
     'ເຄື່ອງຕົວຈິງ',
-    'ຊື້ທັງໝົດ (PO)',
-    'PO ຄ້າງຮັບ',
-    'ໃຊ້/ປີ',
-  ];
-  for (final p in past) {
-    head.add('ຊື້ ${p['label']}');
-    head.add('ໃຊ້ ${p['label']}');
-  }
-  for (final f in future) {
-    head.add('ຕ້ອງໃຊ້ ${f['label']}');
-    head.add('ຕ້ອງຊື້ ${f['label']}');
-    head.add('ເງິນ ${f['label']}');
-  }
-  head.add('ຄວນຊື້ (ລວມ)');
-  head.add('ລວມເງິນ');
-  add(head, b: true);
+    'ໃຊ້',
+    '% ຕ້ອງຊື້ ເພີມ',
+    'ຕ້ອງຊື້',
+    'ເງິນ',
+  ], b: true);
 
-  // item rows
   for (final it in items) {
-    final bought = (it['bought'] as List?) ?? const [];
-    final used = (it['used'] as List?) ?? const [];
-    final plan = asList(it['plan']);
-
     final u = productImageUrl(pick(it, ['imageUrl']));
     final t = thumbs[u];
     if (t != null) {
       images.add(XlImage(
           row: rows.length,
-          col: 0,
+          col: 1,
           key: u,
           bytes: t.bytes,
           w: t.w,
           h: t.h));
       heights[rows.length] = 40.0;
     }
-
-    final r = <Object>[
+    add(<Object>[
+      pick(it, ['models']),
       '',
       pick(it, ['productName']),
+      pick(it, ['barcodes']),
+      pick(it, ['typeName']),
       pick(it, ['unit']),
       _m(num0(it['unitCost'])),
       _q(num0(it['stock'])),
       it['counted'] == null ? '' : _q(num0(it['counted'])),
-      _q(num0(it['poTotal'])),
-      _q(num0(it['ordered'])),
       _q(num0(it['ratePerYear'])),
-    ];
-    for (var i = 0; i < past.length; i++) {
-      r.add(_q(i < bought.length ? num0(bought[i]) : 0));
-      r.add(_q(i < used.length ? num0(used[i]) : 0));
-    }
-    for (var i = 0; i < future.length; i++) {
-      if (i < plan.length) {
-        r.add(_q(num0(plan[i]['need'])));
-        r.add(_q(num0(plan[i]['buy'])));
-        r.add(_m(num0(plan[i]['amount'])));
-      } else {
-        r.add(0);
-        r.add(0);
-        r.add(_m(0));
-      }
-    }
-    r.add(_q(num0(it['totalBuy'])));
-    r.add(_m(num0(it['totalAmount'])));
-    add(r);
+      _q(pct),
+      _q(num0(it['totalBuy'])),
+      _m(num0(it['totalAmount'])),
+    ]);
   }
 
-  // total row (amount columns only, units differ per item)
-  final tot = <Object>['', 'ລວມ', '', '', '', '', '', '', ''];
-  for (var i = 0; i < past.length; i++) {
-    tot.add('');
-    tot.add('');
-  }
-  for (var i = 0; i < future.length; i++) {
-    tot.add('');
-    tot.add('');
-    tot.add(_m(i < years.length ? num0(years[i]['amount']) : 0));
-  }
-  tot.add('');
-  tot.add(_m(num0(d['totalAmount'])));
-  add(tot, b: true);
+  add(<Object>['', '', 'ລວມ', '', '', '', '', '', '', '', '', '', _m(num0(d['totalAmount']))],
+      b: true);
 
-  final widths = <double>[16, 36, 10, 14, 12, 14, 14, 12, 12];
-  for (var i = 0; i < past.length; i++) {
-    widths.add(12);
-    widths.add(12);
-  }
-  for (var i = 0; i < future.length; i++) {
-    widths.add(12);
-    widths.add(12);
-    widths.add(16);
-  }
-  widths.add(14);
-  widths.add(18);
+  final widths = <double>[16, 12, 36, 17, 14, 10, 14, 12, 14, 12, 14, 14, 16];
 
   final n = DateTime.now();
   final fileName = 'budget_${n.year}${_two(n.month)}${_two(n.day)}.xlsx';
