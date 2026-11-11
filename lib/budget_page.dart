@@ -38,8 +38,9 @@ class _BudgetPageState extends State<BudgetPage> {
   bool _exporting = false;
   bool _saving = false;
   Set<int> _poIds = {};
-  bool _countedOnly = false;
+  Set<int> _auditIds = {};
   List<Map<String, dynamic>> _pos = [];
+  List<Map<String, dynamic>> _audits = [];
   dynamic _planId;
   String _planName = '';
 
@@ -57,9 +58,13 @@ class _BudgetPageState extends State<BudgetPage> {
         for (final x in '${p['poIds'] ?? ''}'.split(','))
           if (int.tryParse(x.trim()) != null) int.parse(x.trim())
       };
-      _countedOnly = '${p['countedOnly']}' == '1';
+      _auditIds = {
+        for (final x in '${p['auditIds'] ?? ''}'.split(','))
+          if (int.tryParse(x.trim()) != null) int.parse(x.trim())
+      };
     }
     _loadPos();
+    _loadAudits();
     final wantBranch = p?['branchId'];
     final hasBranch = wantBranch != null && '$wantBranch'.isNotEmpty;
     loadBranches().then((b) {
@@ -150,6 +155,77 @@ class _BudgetPageState extends State<BudgetPage> {
     }
   }
 
+  int _auditId(Map<String, dynamic> a) => int.tryParse('${a['id']}') ?? 0;
+
+  Future<void> _loadAudits() async {
+    try {
+      var d = await Api.get('/stock/audits?limit=100');
+      if (d is Map && d['data'] != null) d = d['data'];
+      if (d is List && mounted) {
+        setState(() => _audits = [
+              for (final x in d)
+                if (x is Map) Map<String, dynamic>.from(x)
+            ]);
+      }
+    } catch (_) {}
+  }
+
+  String _auditLabel() => [
+        for (final a in _audits)
+          if (_auditIds.contains(_auditId(a))) pick(a, ['countNo'])
+      ].join(', ');
+
+  Future<void> _pickAudits() async {
+    final sel = {..._auditIds};
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('ເລືອກໃບນັບສະຕັອກ'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: _audits.isEmpty
+                ? const Text('ບໍ່ມີໃບນັບສະຕັອກ')
+                : ListView(shrinkWrap: true, children: [
+                    for (final a in _audits)
+                      CheckboxListTile(
+                        dense: true,
+                        value: sel.contains(_auditId(a)),
+                        title: Text(pick(a, ['countNo'])),
+                        subtitle: Text(
+                            '${pick(a, ['branchName'])} • '
+                            '${pick(a, ['createdAt']).split('T').first} • '
+                            'ນັບແລ້ວ ${_n(num0(a['counted']))}/${_n(num0(a['total']))}'),
+                        onChanged: (v) => setD(() {
+                          if (v == true) {
+                            sel.add(_auditId(a));
+                          } else {
+                            sel.remove(_auditId(a));
+                          }
+                        }),
+                      ),
+                  ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => setD(() => sel.clear()),
+                child: const Text('ລ້າງ')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('ຍົກເລີກ')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('ຕົກລົງ')),
+          ],
+        ),
+      ),
+    );
+    if (ok == true) {
+      _auditIds = sel;
+      _run();
+    }
+  }
+
   @override
   void dispose() {
     _pct.dispose();
@@ -163,7 +239,7 @@ class _BudgetPageState extends State<BudgetPage> {
       'toYear=$_toYear',
       'pct=$pct',
       if (_poIds.isNotEmpty) 'poIds=${_poIds.join(',')}',
-      if (_countedOnly) 'counted=1',
+      if (_auditIds.isNotEmpty) 'auditIds=${_auditIds.join(',')}',
       if (_branchId != null) 'branchId=$_branchId'
     ].join('&');
     final f = Api.get('/stock/budget?$q');
@@ -223,7 +299,7 @@ class _BudgetPageState extends State<BudgetPage> {
                 .map((b) => pick(b, ['name']))
                 .join(),
         'poIds': _poIds.join(','),
-        'countedOnly': _countedOnly ? 1 : 0,
+        'auditIds': _auditIds.join(','),
         'totalAmount': num0(d['totalAmount']),
       };
       if (_planId == null) {
@@ -258,7 +334,7 @@ class _BudgetPageState extends State<BudgetPage> {
         if ('${b['id']}' == '$_branchId') bn = pick(b, ['name']);
       }
       await exportBudgetXlsx(d,
-          branchName: bn, poText: _poLabel(), countedOnly: _countedOnly);
+          branchName: bn, poText: _poLabel(), auditText: _auditLabel());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -379,15 +455,16 @@ class _BudgetPageState extends State<BudgetPage> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),
           ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            value: _countedOnly,
-            title: const Text('ສະເພາະລາຍການທີ່ນັບສະຕັອກແລ້ວ'),
-            onChanged: (v) {
-              _countedOnly = v;
-              _run();
-            },
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _pickAudits,
+            icon: const Icon(Icons.fact_check_outlined),
+            label: Text(
+                _auditIds.isEmpty
+                    ? 'ເລືອກໃບນັບສະຕັອກ'
+                    : 'ໃບນັບ ${_auditIds.length} ໃບ: ${_auditLabel()}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
           ),
         ]),
       ),
@@ -442,7 +519,7 @@ class _BudgetPageState extends State<BudgetPage> {
         leading: _thumb(pick(it, ['imageUrl'])),
         title: Text(pick(it, ['productName'])),
         subtitle: Text(
-            'ສະຕັອກ ${_n(num0(it['stock']))} $unit  •  ໃຊ້/ປີ ${_n(num0(it['ratePerYear']))}\n'
+            'ສະຕັອກ ${_n(num0(it['stock']))} $unit${it['counted'] != null ? ' (ນັບຕົວຈິງ ${_n(num0(it['counted']))})' : ''}  •  ໃຊ້/ປີ ${_n(num0(it['ratePerYear']))}\n'
             'ຕ້ອງຊື້ ${_n(num0(it['totalBuy']))} $unit'
             '${num0(it['ordered']) > 0 ? '  •  PO ຄ້າງຮັບ ${_n(num0(it['ordered']))}' : ''}'),
         trailing: Text(_money(num0(it['totalAmount'])),

@@ -54,7 +54,7 @@ Future<Map<String, _Thumb>> _loadThumbs(Set<String> urls) async {
 }
 
 Future<void> exportBudgetXlsx(Map<String, dynamic> d,
-    {String branchName = '', String poText = '', bool countedOnly = false}) async {
+    {String branchName = '', String poText = '', String auditText = ''}) async {
   final past = asList(d['pastYears']);
   final future = asList(d['futureYears']);
   final years = asList(d['budgetByYear']);
@@ -85,7 +85,7 @@ Future<void> exportBudgetXlsx(Map<String, dynamic> d,
   add(<Object>['ຮອດສິ້ນປີ', num0(d['toYear']).toInt()]);
   add(<Object>['ເຜື່ອ (%)', num0(d['pct']).toInt()]);
   if (poText.isNotEmpty) add(<Object>['PO', poText]);
-  if (countedOnly) add(<Object>['ສະເພາະລາຍການທີ່ນັບສະຕັອກແລ້ວ']);
+  if (auditText.isNotEmpty) add(<Object>['ໃບນັບສະຕັອກ', auditText]);
   add(<Object>['ຄິດຈາກການໃຊ້ 12 ເດືອນຜ່ານມາ']);
   add(<Object>[]);
   add(<Object>['ປີ', 'ງົບປະມານ'], b: true);
@@ -102,6 +102,8 @@ Future<void> exportBudgetXlsx(Map<String, dynamic> d,
     'ໜ່ວຍ',
     'ລາຄາ/ໜ່ວຍ',
     'ສະຕັອກ',
+    'ເຄື່ອງຕົວຈິງ',
+    'ຊື້ທັງໝົດ (PO)',
     'PO ຄ້າງຮັບ',
     'ໃຊ້/ປີ',
   ];
@@ -114,7 +116,7 @@ Future<void> exportBudgetXlsx(Map<String, dynamic> d,
     head.add('ຕ້ອງຊື້ ${f['label']}');
     head.add('ເງິນ ${f['label']}');
   }
-  head.add('ລວມຕ້ອງຊື້');
+  head.add('ຄວນຊື້ (ລວມ)');
   head.add('ລວມເງິນ');
   add(head, b: true);
 
@@ -143,6 +145,8 @@ Future<void> exportBudgetXlsx(Map<String, dynamic> d,
       pick(it, ['unit']),
       _m(num0(it['unitCost'])),
       _q(num0(it['stock'])),
+      it['counted'] == null ? '' : _q(num0(it['counted'])),
+      _q(num0(it['poTotal'])),
       _q(num0(it['ordered'])),
       _q(num0(it['ratePerYear'])),
     ];
@@ -167,7 +171,7 @@ Future<void> exportBudgetXlsx(Map<String, dynamic> d,
   }
 
   // total row (amount columns only, units differ per item)
-  final tot = <Object>['', 'ລວມ', '', '', '', '', ''];
+  final tot = <Object>['', 'ລວມ', '', '', '', '', '', '', ''];
   for (var i = 0; i < past.length; i++) {
     tot.add('');
     tot.add('');
@@ -181,7 +185,7 @@ Future<void> exportBudgetXlsx(Map<String, dynamic> d,
   tot.add(_m(num0(d['totalAmount'])));
   add(tot, b: true);
 
-  final widths = <double>[16, 36, 10, 14, 12, 12, 12];
+  final widths = <double>[16, 36, 10, 14, 12, 14, 14, 12, 12];
   for (var i = 0; i < past.length; i++) {
     widths.add(12);
     widths.add(12);
