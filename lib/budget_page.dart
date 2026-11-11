@@ -1,5 +1,6 @@
 // Budget: bought and used per fiscal year, stock now, need until a target year, amount to buy.
 // Server: GET /stock/budget?fm=10&toYear=2028&pct=0&branchId=
+// Saved budgets: POST /stock/budget-plans, PUT /stock/budget-plans/:id
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'budget_excel.dart';
@@ -19,7 +20,9 @@ String _money(num v) {
 }
 
 class BudgetPage extends StatefulWidget {
-  const BudgetPage({super.key});
+  // plan == null -> new budget. plan != null -> open a saved budget.
+  final Map<String, dynamic>? plan;
+  const BudgetPage({super.key, this.plan});
   @override
   State<BudgetPage> createState() => _BudgetPageState();
 }
@@ -33,14 +36,118 @@ class _BudgetPageState extends State<BudgetPage> {
   Future<dynamic>? _f;
   Map<String, dynamic>? _last;
   bool _exporting = false;
+  bool _saving = false;
+  Set<int> _poIds = {};
+  bool _countedOnly = false;
+  List<Map<String, dynamic>> _pos = [];
+  dynamic _planId;
+  String _planName = '';
 
   @override
   void initState() {
     super.initState();
+    final p = widget.plan;
+    if (p != null) {
+      _planId = p['id'];
+      _planName = '${p['name'] ?? ''}';
+      _fm = int.tryParse('${p['fm']}') ?? 10;
+      _toYear = int.tryParse('${p['toYear']}') ?? _toYear;
+      _pct.text = '${int.tryParse('${p['pct']}') ?? 0}';
+      _poIds = {
+        for (final x in '${p['poIds'] ?? ''}'.split(','))
+          if (int.tryParse(x.trim()) != null) int.parse(x.trim())
+      };
+      _countedOnly = '${p['countedOnly']}' == '1';
+    }
+    _loadPos();
+    final wantBranch = p?['branchId'];
+    final hasBranch = wantBranch != null && '$wantBranch'.isNotEmpty;
     loadBranches().then((b) {
-      if (mounted) setState(() => _branches = b);
-    }).catchError((_) {});
-    _run();
+      if (!mounted) return;
+      setState(() {
+        _branches = b;
+        if (hasBranch) {
+          for (final x in b) {
+            if ('${x['id']}' == '$wantBranch') _branchId = x['id'];
+          }
+        }
+      });
+      if (hasBranch) _run();
+    }).catchError((_) {
+      if (hasBranch && mounted) _run();
+    });
+    if (!hasBranch) _run();
+  }
+
+  int _poId(Map<String, dynamic> p) => int.tryParse('${p['id']}') ?? 0;
+
+  Future<void> _loadPos() async {
+    try {
+      var d = await Api.get('/purchase-orders');
+      if (d is Map && d['data'] != null) d = d['data'];
+      if (d is List && mounted) {
+        setState(() => _pos = [
+              for (final x in d)
+                if (x is Map) Map<String, dynamic>.from(x)
+            ]);
+      }
+    } catch (_) {}
+  }
+
+  String _poLabel() => [
+        for (final p in _pos)
+          if (_poIds.contains(_poId(p))) pick(p, ['poNo'])
+      ].join(', ');
+
+  Future<void> _pickPos() async {
+    final sel = {..._poIds};
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('ເລືອກ PO'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: _pos.isEmpty
+                ? const Text('ບໍ່ມີ PO')
+                : ListView(shrinkWrap: true, children: [
+                    for (final p in _pos)
+                      CheckboxListTile(
+                        dense: true,
+                        value: sel.contains(_poId(p)),
+                        title: Text(pick(p, ['poNo'])),
+                        subtitle: Text([
+                          pick(p, ['vendor']),
+                          pick(p, ['title'])
+                        ].where((e) => e.isNotEmpty).join(' • ')),
+                        onChanged: (v) => setD(() {
+                          if (v == true) {
+                            sel.add(_poId(p));
+                          } else {
+                            sel.remove(_poId(p));
+                          }
+                        }),
+                      ),
+                  ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => setD(() => sel.clear()),
+                child: const Text('ລ້າງ')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('ຍົກເລີກ')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('ຕົກລົງ')),
+          ],
+        ),
+      ),
+    );
+    if (ok == true) {
+      _poIds = sel;
+      _run();
+    }
   }
 
   @override
@@ -55,6 +162,8 @@ class _BudgetPageState extends State<BudgetPage> {
       'fm=$_fm',
       'toYear=$_toYear',
       'pct=$pct',
+      if (_poIds.isNotEmpty) 'poIds=${_poIds.join(',')}',
+      if (_countedOnly) 'counted=1',
       if (_branchId != null) 'branchId=$_branchId'
     ].join('&');
     final f = Api.get('/stock/budget?$q');
@@ -71,6 +180,74 @@ class _BudgetPageState extends State<BudgetPage> {
     }).catchError((_) {});
   }
 
+  Future<String?> _askName() {
+    final c = TextEditingController(text: _planName);
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('ບັນທຶກງົບປະມານ'),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'ຊື່ງົບປະມານ'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('ຍົກເລີກ')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, c.text.trim()),
+              child: const Text('ບັນທຶກ')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _save() async {
+    final d = _last;
+    if (d == null) return;
+    final name = await _askName();
+    if (name == null || name.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      final body = {
+        'name': name,
+        'fm': _fm,
+        'toYear': _toYear,
+        'pct': int.tryParse(_pct.text.trim()) ?? 0,
+        'branchId': _branchId,
+        'branchName': _branchId == null
+            ? ''
+            : _branches
+                .where((b) => '${b['id']}' == '$_branchId')
+                .map((b) => pick(b, ['name']))
+                .join(),
+        'poIds': _poIds.join(','),
+        'countedOnly': _countedOnly ? 1 : 0,
+        'totalAmount': num0(d['totalAmount']),
+      };
+      if (_planId == null) {
+        final r = await Api.post('/stock/budget-plans', body);
+        var x = r;
+        if (x is Map && x['data'] is Map) x = x['data'];
+        if (x is Map && x['id'] != null) _planId = x['id'];
+      } else {
+        await Api.put('/stock/budget-plans/$_planId', body);
+      }
+      if (mounted) {
+        setState(() => _planName = name);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('ບັນທຶກແລ້ວ')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('ບັນທຶກບໍ່ສຳເລັດ: $e')));
+      }
+    }
+    if (mounted) setState(() => _saving = false);
+  }
+
   Future<void> _export() async {
     final d = _last;
     if (d == null) return;
@@ -80,7 +257,8 @@ class _BudgetPageState extends State<BudgetPage> {
       for (final b in _branches) {
         if ('${b['id']}' == '$_branchId') bn = pick(b, ['name']);
       }
-      await exportBudgetXlsx(d, branchName: bn);
+      await exportBudgetXlsx(d,
+          branchName: bn, poText: _poLabel(), countedOnly: _countedOnly);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -128,6 +306,7 @@ class _BudgetPageState extends State<BudgetPage> {
 
   Widget _filters() {
     final thisYear = DateTime.now().year;
+    final yearFrom = _toYear < thisYear ? _toYear : thisYear;
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -168,7 +347,7 @@ class _BudgetPageState extends State<BudgetPage> {
                 initialValue: _toYear,
                 decoration: const InputDecoration(labelText: 'ຮອດສິ້ນປີ'),
                 items: [
-                  for (var y = thisYear; y <= thisYear + 6; y++)
+                  for (var y = yearFrom; y <= thisYear + 6; y++)
                     DropdownMenuItem<int>(value: y, child: Text('$y')),
                 ],
                 onChanged: (v) {
@@ -189,6 +368,27 @@ class _BudgetPageState extends State<BudgetPage> {
             ),
             IconButton(onPressed: _run, icon: const Icon(Icons.refresh)),
           ]),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _pickPos,
+            icon: const Icon(Icons.receipt_long_outlined),
+            label: Text(
+                _poIds.isEmpty
+                    ? 'ເລືອກ PO'
+                    : 'PO ${_poIds.length} ໃບ: ${_poLabel()}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: _countedOnly,
+            title: const Text('ສະເພາະລາຍການທີ່ນັບສະຕັອກແລ້ວ'),
+            onChanged: (v) {
+              _countedOnly = v;
+              _run();
+            },
+          ),
         ]),
       ),
     );
@@ -200,7 +400,7 @@ class _BudgetPageState extends State<BudgetPage> {
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
           const Text('ງົບປະມານທີ່ຕ້ອງໃຊ້ຊື້',
               style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
@@ -243,7 +443,8 @@ class _BudgetPageState extends State<BudgetPage> {
         title: Text(pick(it, ['productName'])),
         subtitle: Text(
             'ສະຕັອກ ${_n(num0(it['stock']))} $unit  •  ໃຊ້/ປີ ${_n(num0(it['ratePerYear']))}\n'
-            'ຕ້ອງຊື້ ${_n(num0(it['totalBuy']))} $unit'),
+            'ຕ້ອງຊື້ ${_n(num0(it['totalBuy']))} $unit'
+            '${num0(it['ordered']) > 0 ? '  •  PO ຄ້າງຮັບ ${_n(num0(it['ordered']))}' : ''}'),
         trailing: Text(_money(num0(it['totalAmount'])),
             style: const TextStyle(fontWeight: FontWeight.bold)),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -293,6 +494,7 @@ class _BudgetPageState extends State<BudgetPage> {
 
   Widget _bottomBar() {
     final cs = Theme.of(context).colorScheme;
+    final busy = _last == null || _exporting || _saving;
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
@@ -302,19 +504,33 @@ class _BudgetPageState extends State<BudgetPage> {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: (_last == null || _exporting) ? null : _export,
-              icon: _exporting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.table_view_outlined),
-              label: const Text('ສົ່ງອອກ Excel'),
+          child: Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: busy ? null : _save,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.save_outlined),
+                label: const Text('ບັນທຶກ'),
+              ),
             ),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: busy ? null : _export,
+                icon: _exporting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.table_view_outlined),
+                label: const Text('ສົ່ງອອກ Excel'),
+              ),
+            ),
+          ]),
         ),
       ),
     );
@@ -323,7 +539,8 @@ class _BudgetPageState extends State<BudgetPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('ງົບປະມານອາໄຫຼ່')),
+      appBar: AppBar(
+          title: Text(_planName.isEmpty ? 'ງົບປະມານອາໄຫຼ່' : _planName)),
       bottomNavigationBar: _bottomBar(),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         _filters(),
