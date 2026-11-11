@@ -6,6 +6,7 @@ import 'receive_home.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'stock_drill.dart';
 import 'purchase_plan_page.dart';
+import 'budget_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api.dart';
@@ -1419,11 +1420,11 @@ class DashMenuScreen extends StatelessWidget {
                 MaterialPageRoute(builder: (_) => const ReportsScreen()))),
       if (Api.can('STOCK_VIEW'))
         _DashMenuItem(
-            Icons.event_note_outlined,
-            'ແຜນຈັດຊື້ອາໄຫຼ່',
-            Colors.indigo,
+            Icons.account_balance_wallet_outlined,
+            'ງົບປະມານ',
+            Colors.green,
             () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const PurchasePlanPage()))),
+                MaterialPageRoute(builder: (_) => const BudgetPage()))),
       if (Api.can('TRANSFER_SEND') || Api.can('TRANSFER_RECEIVE'))
         _DashMenuItem(
             Icons.swap_horiz,
@@ -1431,13 +1432,6 @@ class DashMenuScreen extends StatelessWidget {
             Colors.brown,
             () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const TransferHome()))),
-      if (Api.can('REQUEST_SEND') || Api.can('REQUEST_APPROVE'))
-        _DashMenuItem(
-            Icons.move_to_inbox_outlined,
-            'ຂໍອາໄຫຼ່',
-            Colors.teal,
-            () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const StockRequestsPage()))),
       if (Api.can('STOCK_COUNT'))
         _DashMenuItem(
             Icons.fact_check_outlined,
