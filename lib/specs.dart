@@ -1,3 +1,4 @@
+import 'product_usage.dart';
 // ignore_for_file: prefer_const_constructors
 import 'package:flutter/material.dart';
 import 'api.dart';
@@ -239,6 +240,10 @@ CrudSpec? crudSpec(String key) {
         actions: [
           RowAction('ຮູບພາບ', Icons.photo_library_outlined,
               (c, r) => openProductImages(c, r)),
+          RowAction('ໃບສັ່ງຊື້ (PO)', Icons.receipt_long_outlined,
+              (c, r) => openProductPOs(c, r)),
+          RowAction('ໃຊ້ໃນ ATM', Icons.atm_outlined,
+              (c, r) => openProductInstalls(c, r)),
         ],
       );
     case 'users':
