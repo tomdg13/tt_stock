@@ -70,8 +70,8 @@ class _StockCountPageState extends State<StockCountPage> {
     final id = await showDialog<String>(
         context: context, builder: (_) => const _NewAuditDialog());
     if (id == null || !mounted) return;
-    await Navigator.push(context,
-        MaterialPageRoute(builder: (_) => AuditPage(auditId: id)));
+    await Navigator.push(
+        context, MaterialPageRoute(builder: (_) => AuditPage(auditId: id)));
     _load();
   }
 
@@ -104,14 +104,12 @@ class _StockCountPageState extends State<StockCountPage> {
               ? Center(
                   child: Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_err!, style: TextStyle(color: cs.error)),
-                            const SizedBox(height: 12),
-                            FilledButton(
-                                onPressed: _load, child: const Text('ລອງໃໝ່')),
-                          ])))
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Text(_err!, style: TextStyle(color: cs.error)),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                            onPressed: _load, child: const Text('ລອງໃໝ່')),
+                      ])))
               : _audits.isEmpty
                   ? const Center(child: Text('ຍັງບໍ່ມີການນັບ'))
                   : ListView.separated(
@@ -131,16 +129,13 @@ class _StockCountPageState extends State<StockCountPage> {
     return ListTile(
       onTap: () => _open(a),
       title: Text('${a['countNo'] ?? ''}'),
-      subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${a['branchName'] ?? ''}  •  ${_day(a['createdAt'])}'),
-            const SizedBox(height: 6),
-            LinearProgressIndicator(value: total == 0 ? 0 : counted / total),
-            const SizedBox(height: 2),
-            Text('ນັບແລ້ວ $counted/$total',
-                style: const TextStyle(fontSize: 12)),
-          ]),
+      subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('${a['branchName'] ?? ''}  •  ${_day(a['createdAt'])}'),
+        const SizedBox(height: 6),
+        LinearProgressIndicator(value: total == 0 ? 0 : counted / total),
+        const SizedBox(height: 2),
+        Text('ນັບແລ້ວ $counted/$total', style: const TextStyle(fontSize: 12)),
+      ]),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
@@ -289,6 +284,7 @@ class _AuditPageState extends State<AuditPage> {
   Map<String, String> _imgById = {};
   Map<String, Map<String, dynamic>> _info = {};
   String _q = '';
+  int _tab = 1;
   int _filter = 0; // 0 all, 1 not counted, 2 counted, 3 differences
   bool _busy = true;
   String? _err;
@@ -426,8 +422,7 @@ class _AuditPageState extends State<AuditPage> {
             children: [
               Center(child: _thumb(_imgOf(r), size: 100)),
               const SizedBox(height: 12),
-              Text(
-                  'ໃນລະບົບ: ${_s(num0(r['systemQty']))} ${pick(r, ['unit'])}'),
+              Text('ໃນລະບົບ: ${_s(num0(r['systemQty']))} ${pick(r, ['unit'])}'),
               const SizedBox(height: 8),
               TextField(
                 controller: c,
@@ -461,8 +456,8 @@ class _AuditPageState extends State<AuditPage> {
   }
 
   Future<void> _scan() async {
-    final code = await Navigator.push<String>(context,
-        MaterialPageRoute(builder: (_) => const BarcodeScanPage()));
+    final code = await Navigator.push<String>(
+        context, MaterialPageRoute(builder: (_) => const BarcodeScanPage()));
     if (code == null || code.isEmpty) return;
     try {
       var pr =
@@ -612,26 +607,35 @@ class _AuditPageState extends State<AuditPage> {
             ),
         ],
       ),
-      floatingActionButton: _isOpen
-          ? FloatingActionButton.extended(
-              onPressed: _scan,
-              icon: const Icon(Icons.qr_code_scanner),
-              label: const Text('ສະແກນ'))
-          : null,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tab == 2 ? 2 : 1,
+        onDestinationSelected: (i) {
+          if (i == 0) {
+            if (_isOpen) _scan();
+          } else {
+            setState(() => _tab = i);
+          }
+        },
+        destinations: const [
+          NavigationDestination(
+              icon: Icon(Icons.qr_code_scanner), label: 'ສະແກນ'),
+          NavigationDestination(icon: Icon(Icons.view_list), label: 'ລາຍການ'),
+          NavigationDestination(
+              icon: Icon(Icons.table_chart), label: 'ຕາຕະລາງ'),
+        ],
+      ),
       body: _busy && _lines.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : _err != null
               ? Center(
                   child: Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_err!, style: TextStyle(color: cs.error)),
-                            const SizedBox(height: 12),
-                            FilledButton(
-                                onPressed: _load, child: const Text('ລອງໃໝ່')),
-                          ])))
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Text(_err!, style: TextStyle(color: cs.error)),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                            onPressed: _load, child: const Text('ລອງໃໝ່')),
+                      ])))
               : Column(children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -707,15 +711,61 @@ class _AuditPageState extends State<AuditPage> {
                   Expanded(
                     child: rows.isEmpty
                         ? const Center(child: Text('ບໍ່ມີຂໍ້ມູນ'))
-                        : ListView.separated(
-                            padding: const EdgeInsets.only(bottom: 90),
-                            itemCount: rows.length,
-                            separatorBuilder: (_, __) =>
-                                const Divider(height: 1),
-                            itemBuilder: (_, i) => _row(rows[i]),
-                          ),
+                        : _tab == 2
+                            ? _table(rows)
+                            : ListView.separated(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                itemCount: rows.length,
+                                separatorBuilder: (_, __) =>
+                                    const Divider(height: 1),
+                                itemBuilder: (_, i) => _row(rows[i]),
+                              ),
                   ),
                 ]),
+    );
+  }
+
+  Widget _table(List<Map<String, dynamic>> rows) {
+    return SingleChildScrollView(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columnSpacing: 16,
+          headingRowHeight: 40,
+          dataRowMinHeight: 44,
+          dataRowMaxHeight: 60,
+          columns: const [
+            DataColumn(label: Text('ລາຍການ')),
+            DataColumn(label: Text('ທີ່ເກັບ')),
+            DataColumn(label: Text('ໃນລະບົບ'), numeric: true),
+            DataColumn(label: Text('ນັບໄດ້'), numeric: true),
+            DataColumn(label: Text('ຕ່າງ'), numeric: true),
+          ],
+          rows: rows.map((r) {
+            final sys = num0(r['systemQty']);
+            final c = r['countedQty'] == null ? null : num0(r['countedQty']);
+            final diff = c == null ? null : c - sys;
+            final inf = _info['${r['productId']}'] ?? const <String, dynamic>{};
+            return DataRow(
+              onSelectChanged: _isOpen ? (_) => _askQty(r) : null,
+              cells: [
+                DataCell(SizedBox(
+                    width: 200,
+                    child: Text(pick(r, ['productName']),
+                        maxLines: 2, overflow: TextOverflow.ellipsis))),
+                DataCell(Text(pick(inf, ['binCode']))),
+                DataCell(Text(_s(sys))),
+                DataCell(Text(c == null ? '-' : _s(c))),
+                DataCell(Text(
+                    diff == null ? '-' : '${diff > 0 ? '+' : ''}${_s(diff)}',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: diff == null || diff == 0 ? null : Colors.red))),
+              ],
+            );
+          }).toList(),
+        ),
+      ),
     );
   }
 
