@@ -1,3 +1,5 @@
+import 'product_usage.dart';
+import 'product_usage_buttons.dart';
 import 'dart:math';
 // ignore_for_file: camel_case_types
 import 'plan_import.dart';
@@ -418,6 +420,11 @@ class _CrudDetailState extends State<CrudDetail> {
                     child:
                         ProductImageStrip(asList((s.data as Map)['images']))),
               if (sp.path == '/branches') BranchRequestInfo(widget.row['id']),
+                if (sp.path == '/products')
+                  ProductUsageButtons(
+                    onOpenPOs: () => openProductPOs(context, widget.row),
+                    onOpenATMs: () => openProductInstalls(context, widget.row),
+                  ),
               AppCard(child: DataView(s.data)),
             ]),
           );
