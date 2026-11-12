@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'screens.dart' show BarcodeScanPage;
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show compute;
+import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
 import 'dart:convert' as cv;
 import 'dart:io' as io;
 import 'package:archive/archive.dart' as ar;
 import 'package:file_picker/file_picker.dart' as fp;
-import 'po_excel.dart' show sharePoXlsx;
+import 'po_excel.dart' show sharePoXlsx, XlImage;
 import 'product_images.dart' show productImageUrl;
 import 'crud.dart' show openEdit;
 import 'specs.dart' show crudSpec;
@@ -40,6 +44,14 @@ String _statusLabel(String s) {
 // ---------------------------------------------------------------------------
 // 1) list of audits + create new audit
 // ---------------------------------------------------------------------------
+List<Object>? _xlThumb(Uint8List b) {
+  final im = img.decodeImage(b);
+  if (im == null) return null;
+  final sq = img.copyResizeCropSquare(im, size: 96);
+  final jpg = Uint8List.fromList(img.encodeJpg(sq, quality: 78));
+  return <Object>[jpg, 48, 48];
+}
+
 class StockCountPage extends StatefulWidget {
   const StockCountPage({super.key});
   @override
@@ -749,30 +761,50 @@ class _AuditPageState extends State<AuditPage> {
     'id': 'productId',
   };
 
+  static bool _xlPhotos = true;
+  static bool _xlCodes = true;
+
   Future<List<String>?> _askSort() {
     final cur = [..._sortKeys, '', '', ''].take(3).toList();
+    var photos = _xlPhotos;
+    var codes = _xlCodes;
     return showDialog<List<String>>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setS) => AlertDialog(
-          title: const Text('ລຽງລຳດັບກ່ອນ Export'),
-          content: Column(mainAxisSize: MainAxisSize.min, children: [
-            for (var i = 0; i < 3; i++)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: DropdownButtonFormField<String>(
-                  initialValue: cur[i],
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                      labelText: i == 0 ? 'ລຽງຕາມ' : 'ແລ້ວຕາມ'),
-                  items: [
-                    for (final e in _sortOpts.entries)
-                      DropdownMenuItem(value: e.key, child: Text(e.value)),
-                  ],
-                  onChanged: (v) => setS(() => cur[i] = v ?? ''),
+          title: const Text('ຕັ້ງຄ່າກ່ອນ Export'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              for (var i = 0; i < 3; i++)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: DropdownButtonFormField<String>(
+                    initialValue: cur[i],
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                        labelText: i == 0 ? 'ລຽງຕາມ' : 'ແລ້ວຕາມ'),
+                    items: [
+                      for (final e in _sortOpts.entries)
+                        DropdownMenuItem(value: e.key, child: Text(e.value)),
+                    ],
+                    onChanged: (v) => setS(() => cur[i] = v ?? ''),
+                  ),
                 ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('ໃສ່ຮູບ (ຊ້າກວ່າ)'),
+                value: photos,
+                onChanged: (v) => setS(() => photos = v),
               ),
-          ]),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('ໃສ່ barcode'),
+                value: codes,
+                onChanged: (v) => setS(() => codes = v),
+              ),
+            ]),
+          ),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(c),
@@ -784,6 +816,8 @@ class _AuditPageState extends State<AuditPage> {
                     if (k.isNotEmpty && !keys.contains(k)) keys.add(k);
                   }
                   _sortKeys = keys;
+                  _xlPhotos = photos;
+                  _xlCodes = codes;
                   Navigator.pop(c, keys);
                 },
                 child: const Text('Export')),
@@ -842,10 +876,70 @@ class _AuditPageState extends State<AuditPage> {
   }
 
   Future<void> _exportXlsx() async {
+    final keys = await _askSort();
+    if (keys == null || !mounted) return;
+    final lines = _sorted(keys);
+    var busyOpen = false;
+    void closeBusy() {
+      if (busyOpen && mounted) {
+        busyOpen = false;
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+
     try {
-      final keys = await _askSort();
-      if (keys == null) return;
-      final lines = _sorted(keys);
+      if (_xlPhotos || _xlCodes) {
+        busyOpen = true;
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const AlertDialog(
+            content: Row(children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Expanded(child: Text('ກຳລັງສ້າງໄຟລ໌…')),
+            ]),
+          ),
+        );
+      }
+
+      final bc = <String, String>{};
+      if (_xlCodes) {
+        final ids = [for (final r in lines) '${r['productId']}'];
+        for (var i = 0; i < ids.length; i += 8) {
+          await Future.wait(ids.skip(i).take(8).map((id) async {
+            try {
+              final d = await Api.get(
+                  '/products/${Uri.encodeComponent(id)}/barcodes');
+              if (d is List) bc[id] = d.map((e) => '$e').join(', ');
+            } catch (_) {}
+          }));
+        }
+      }
+
+      final thumbs = <String, List<Object>>{};
+      if (_xlPhotos) {
+        final urls = <String>{
+          for (final r in lines)
+            if (productImageUrl(_imgOf(r)).isNotEmpty)
+              productImageUrl(_imgOf(r)),
+        };
+        final list = urls.toList();
+        for (var i = 0; i < list.length; i += 8) {
+          await Future.wait(list.skip(i).take(8).map((u) async {
+            try {
+              final res = await http
+                  .get(Uri.parse(u))
+                  .timeout(const Duration(seconds: 15));
+              if (res.statusCode == 200) {
+                final t = await compute(_xlThumb, res.bodyBytes);
+                if (t != null) thumbs[u] = t;
+              }
+            } catch (_) {}
+          }));
+        }
+      }
+
       String hf(String s) => s.replaceAll('&', '&&');
       final created = '${_h['createdAt'] ?? ''}';
       final date = created.length >= 10 ? created.substring(0, 10) : '';
@@ -865,33 +959,52 @@ class _AuditPageState extends State<AuditPage> {
           'ນັບໄດ້',
         ],
       ];
+      final images = <XlImage>[];
+      final heights = <int, double>{};
       for (final r in lines) {
-        final inf = _info['${r['productId']}'] ?? const <String, dynamic>{};
+        final id = '${r['productId']}';
+        final inf = _info[id] ?? const <String, dynamic>{};
         final sys = num0(r['systemQty']);
         final c = r['countedQty'] == null ? null : num0(r['countedQty']);
+        final u = productImageUrl(_imgOf(r));
+        final t = thumbs[u];
+        if (t != null) {
+          images.add(XlImage(
+              row: rows.length,
+              col: 4,
+              key: u,
+              bytes: t[0] as Uint8List,
+              w: t[1] as int,
+              h: t[2] as int));
+          heights[rows.length] = 40.0;
+        }
         rows.add([
-          int.tryParse('${r['productId']}') ?? 0,
+          int.tryParse(id) ?? 0,
           pick(inf, ['binCode']),
           pick(inf, ['brandName']),
           pick(inf, ['modelName']),
           '',
           pick(r, ['productName']),
-          pick(inf, ['barcode']),
+          bc[id] ?? '',
           pick(r, ['unit']),
           sys % 1 == 0 ? sys.toInt() : sys,
           c == null ? '' : (c % 1 == 0 ? c.toInt() : c),
         ]);
       }
+      closeBusy();
       await sharePoXlsx(
         fileName: '${_h['countNo'] ?? 'count'}.xlsx',
         rows: rows,
         boldRows: {0},
-        widths: [10, 9, 11.3, 14, 10, 70, 12, 8, 12, 12],
+        widths: [10, 9, 11.3, 14, 10, 70, 18, 8, 12, 12],
+        images: images,
+        rowHeights: heights,
         pageHeader: '&L Lao Development Bank&C&Bນັບສະຕັອກ $cn&B&R$br • $date',
         pageFooter:
             '&Lຜູ້ນັບ: ______________   ຜູ້ກວດ: ______________&Cໜ້າ &P / &N&R&D',
       );
     } catch (e) {
+      closeBusy();
       _snack('Export ບໍ່ສຳເລັດ: $e');
     }
   }
