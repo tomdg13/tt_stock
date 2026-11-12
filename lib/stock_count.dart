@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart' show compute;
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 import 'dart:convert' as cv;
-import 'dart:io' as io;
 import 'package:archive/archive.dart' as ar;
 import 'package:file_picker/file_picker.dart' as fp;
 import 'po_excel.dart' show sharePoXlsx, XlImage;
@@ -382,7 +381,7 @@ class _AuditPageState extends State<AuditPage> {
         context: context,
         builder: (c) => Dialog(
           child: InteractiveViewer(
-            child: Image.network(url,
+            child: Image.network(url, webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => const Padding(
                     padding: EdgeInsets.all(40),
@@ -392,7 +391,7 @@ class _AuditPageState extends State<AuditPage> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: Image.network(url,
+        child: Image.network(url, webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
             width: size,
             height: size,
             fit: BoxFit.cover,
@@ -617,8 +616,10 @@ class _AuditPageState extends State<AuditPage> {
             PopupMenuButton<String>(
               onSelected: (v) {
                 if (v == 'cancel') _cancelAudit();
+                if (v == 'add') _addMissing();
               },
               itemBuilder: (_) => const [
+                PopupMenuItem(value: 'add', child: Text('ດຶງລາຍການທີ່ຂາດ')),
                 PopupMenuItem(value: 'cancel', child: Text('ຍົກເລີກການນັບ')),
               ],
             ),
@@ -875,6 +876,21 @@ class _AuditPageState extends State<AuditPage> {
     return [for (final e in ents) e.value];
   }
 
+  Future<void> _addMissing() async {
+    if (!_isOpen) return;
+    setState(() => _busy = true);
+    try {
+      final r =
+          await Api.post('/stock/audits/${widget.auditId}/add-missing', {});
+      final n = r is Map ? num0(r['added']).toInt() : 0;
+      await _load();
+      _snack(n == 0 ? 'ບໍ່ມີລາຍການໃໝ່' : 'ເພີ່ມ $n ລາຍການ');
+    } catch (e) {
+      if (mounted) setState(() => _busy = false);
+      _snack('ບໍ່ສຳເລັດ: $e');
+    }
+  }
+
   Future<void> _exportXlsx() async {
     final keys = await _askSort();
     if (keys == null || !mounted) return;
@@ -1103,9 +1119,8 @@ class _AuditPageState extends State<AuditPage> {
           type: fp.FileType.custom, allowedExtensions: ['xlsx']);
       if (r.isEmpty) return;
       final pf = r.first;
-      final path = pf.path;
-      if (path == null) throw 'ອ່ານໄຟລ໌ບໍ່ໄດ້';
-      final bytes = await io.File(path).readAsBytes();
+      final bytes = await pf.readAsBytes();
+      if (bytes == null) throw 'ອ່ານໄຟລ໌ບໍ່ໄດ້';
       final ups = _readCounts(bytes);
       final byId = <int, Map<String, dynamic>>{
         for (final x in _lines) (int.tryParse('${x['productId']}') ?? -1): x
@@ -1234,7 +1249,11 @@ class _AuditPageState extends State<AuditPage> {
         leading: _thumb(_imgOf(r)),
         title: Text(pick(r, ['productName'])),
         subtitle: sub.isEmpty ? null : Text(sub),
-        trailing: Column(
+        trailing: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Column(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -1254,6 +1273,7 @@ class _AuditPageState extends State<AuditPage> {
                 Text('ຕ່າງ ${diff > 0 ? '+' : ''}${_s(diff)}',
                     style: const TextStyle(fontSize: 12, color: Colors.red)),
             ]),
+        ),
       ),
       if (_isOpen)
         Padding(
