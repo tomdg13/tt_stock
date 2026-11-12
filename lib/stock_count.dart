@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'screens.dart' show BarcodeScanPage;
+import 'dart:convert' as cv;
 import 'dart:io' as io;
-import 'package:excel/excel.dart' as xl;
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:archive/archive.dart' as ar;
+import 'package:file_picker/file_picker.dart' as fp;
+import 'po_excel.dart' show sharePoXlsx;
 import 'product_images.dart' show productImageUrl;
 import 'crud.dart' show openEdit;
 import 'specs.dart' show crudSpec;
@@ -595,10 +596,6 @@ class _AuditPageState extends State<AuditPage> {
               icon: const Icon(Icons.refresh),
               tooltip: 'ໂຫຼດໃໝ່',
               onPressed: _busy ? null : _load),
-          IconButton(
-              icon: const Icon(Icons.file_download_outlined),
-              tooltip: 'Export Excel',
-              onPressed: _busy ? null : _exportXlsx),
           if (_isOpen)
             IconButton(
                 icon: const Icon(Icons.task_alt),
@@ -620,6 +617,10 @@ class _AuditPageState extends State<AuditPage> {
         onDestinationSelected: (i) {
           if (i == 0) {
             if (_isOpen) _scan();
+          } else if (i == 3) {
+            _exportXlsx();
+          } else if (i == 4) {
+            _importXlsx();
           } else {
             setState(() => _tab = i);
           }
@@ -630,6 +631,10 @@ class _AuditPageState extends State<AuditPage> {
           NavigationDestination(icon: Icon(Icons.view_list), label: 'ລາຍການ'),
           NavigationDestination(
               icon: Icon(Icons.table_chart), label: 'ຕາຕະລາງ'),
+          NavigationDestination(
+              icon: Icon(Icons.table_view_outlined), label: 'Excel'),
+          NavigationDestination(
+              icon: Icon(Icons.upload_file_outlined), label: 'ອັບໂຫຼດ'),
         ],
       ),
       body: _busy && _lines.isEmpty
@@ -735,37 +740,209 @@ class _AuditPageState extends State<AuditPage> {
 
   Future<void> _exportXlsx() async {
     try {
-      final book = xl.Excel.createExcel();
-      final sh = book[book.getDefaultSheet()!];
-      sh.appendRow([
-        xl.TextCellValue('productId'),
-        xl.TextCellValue('ລາຍການ'),
-        xl.TextCellValue('ທີ່ເກັບ'),
-        xl.TextCellValue('ໜ່ວຍ'),
-        xl.TextCellValue('ໃນລະບົບ'),
-        xl.TextCellValue('ນັບໄດ້'),
-      ]);
+      String hf(String s) => s.replaceAll('&', '&&');
+      final created = '${_h['createdAt'] ?? ''}';
+      final date = created.length >= 10 ? created.substring(0, 10) : '';
+      final cn = hf('${_h['countNo'] ?? ''}');
+      final br = hf('${_h['branchName'] ?? ''}');
+      final rows = <List<Object>>[
+        [
+          'productId',
+          'ທີ່ເກັບ',
+          'brand',
+          'model',
+          'image',
+          'ລາຍການ',
+          'barcode',
+          'ໜ່ວຍ',
+          'ໃນລະບົບ',
+          'ນັບໄດ້',
+        ],
+      ];
       for (final r in _lines) {
         final inf = _info['${r['productId']}'] ?? const <String, dynamic>{};
+        final sys = num0(r['systemQty']);
         final c = r['countedQty'] == null ? null : num0(r['countedQty']);
-        sh.appendRow([
-          xl.IntCellValue(int.tryParse('${r['productId']}') ?? 0),
-          xl.TextCellValue(pick(r, ['productName'])),
-          xl.TextCellValue(pick(inf, ['binCode'])),
-          xl.TextCellValue(pick(r, ['unit'])),
-          xl.DoubleCellValue(num0(r['systemQty']).toDouble()),
-          c == null ? null : xl.DoubleCellValue(c.toDouble()),
+        rows.add([
+          int.tryParse('${r['productId']}') ?? 0,
+          pick(inf, ['binCode']),
+          pick(inf, ['brandName']),
+          pick(inf, ['modelName']),
+          '',
+          pick(r, ['productName']),
+          pick(inf, ['barcode']),
+          pick(r, ['unit']),
+          sys % 1 == 0 ? sys.toInt() : sys,
+          c == null ? '' : (c % 1 == 0 ? c.toInt() : c),
         ]);
       }
-      final bytes = book.encode();
-      if (bytes == null) throw 'encode failed';
-      final dir = await getTemporaryDirectory();
-      final name = '${_h['countNo'] ?? 'count'}.xlsx';
-      final file = io.File('${dir.path}/$name');
-      await file.writeAsBytes(bytes);
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
+      await sharePoXlsx(
+        fileName: '${_h['countNo'] ?? 'count'}.xlsx',
+        rows: rows,
+        boldRows: {0},
+        widths: [10, 9, 11.3, 14, 10, 70, 12, 8, 12, 12],
+        pageHeader: '&L Lao Development Bank&C&Bນັບສະຕັອກ $cn&B&R$br • $date',
+        pageFooter:
+            '&Lຜູ້ນັບ: ______________   ຜູ້ກວດ: ______________&Cໜ້າ &P / &N&R&D',
+      );
     } catch (e) {
       _snack('Export ບໍ່ສຳເລັດ: $e');
+    }
+  }
+
+  String _un(String s) => s
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&apos;', "'")
+      .replaceAll('&amp;', '&');
+
+  Map<int, String> _readCounts(List<int> bytes) {
+    final z = ar.ZipDecoder().decodeBytes(bytes);
+    String? txt(bool Function(String) test) {
+      for (final f in z.files) {
+        if (test(f.name)) return cv.utf8.decode(f.content as List<int>);
+      }
+      return null;
+    }
+
+    final tRe = RegExp(r'<t[^>]*>(.*?)</t>', dotAll: true);
+    final ss = <String>[];
+    final sx = txt((n) => n == 'xl/sharedStrings.xml');
+    if (sx != null) {
+      for (final m in RegExp(r'<si>(.*?)</si>', dotAll: true).allMatches(sx)) {
+        ss.add(_un(tRe.allMatches(m.group(1)!).map((e) => e.group(1)!).join()));
+      }
+    }
+    final sheet = txt((n) => n == 'xl/worksheets/sheet1.xml') ??
+        txt((n) => n.startsWith('xl/worksheets/sheet') && n.endsWith('.xml'));
+    if (sheet == null) throw 'ບໍ່ພົບ sheet ໃນໄຟລ໌';
+
+    final grid = <Map<String, String>>[];
+    for (final rm in RegExp(r'<row\b[^>]*?(?:/>|>(.*?)</row>)', dotAll: true)
+        .allMatches(sheet)) {
+      final cells = <String, String>{};
+      for (final cm in RegExp(r'<c\b([^>]*?)(?:/>|>(.*?)</c>)', dotAll: true)
+          .allMatches(rm.group(1) ?? '')) {
+        final at = cm.group(1)!;
+        final body = cm.group(2) ?? '';
+        final ref = RegExp(r'r="([A-Z]+)\d+"').firstMatch(at)?.group(1);
+        if (ref == null) continue;
+        final t = RegExp(r'\bt="(\w+)"').firstMatch(at)?.group(1);
+        final vRaw =
+            RegExp(r'<v>(.*?)</v>', dotAll: true).firstMatch(body)?.group(1);
+        String v;
+        if (t == 's') {
+          final i = int.tryParse(vRaw ?? '');
+          v = (i != null && i < ss.length) ? ss[i] : '';
+        } else if (t == 'inlineStr') {
+          v = _un(tRe.allMatches(body).map((e) => e.group(1)!).join());
+        } else {
+          v = _un(vRaw ?? '');
+        }
+        cells[ref] = v.trim();
+      }
+      grid.add(cells);
+    }
+
+    String? idCol;
+    String? qtyCol;
+    var start = 0;
+    for (var i = 0; i < grid.length; i++) {
+      String? a;
+      String? b;
+      for (final e in grid[i].entries) {
+        if (e.value == 'productId') a = e.key;
+        if (e.value == 'ນັບໄດ້') b = e.key;
+      }
+      if (a != null && b != null) {
+        idCol = a;
+        qtyCol = b;
+        start = i + 1;
+        break;
+      }
+    }
+    if (idCol == null || qtyCol == null) {
+      throw 'ບໍ່ພົບຫົວຕາຕະລາງ productId / ນັບໄດ້';
+    }
+    final out = <int, String>{};
+    for (var i = start; i < grid.length; i++) {
+      final raw = grid[i][idCol] ?? '';
+      final pid = int.tryParse(raw) ?? double.tryParse(raw)?.toInt();
+      if (pid != null) out[pid] = grid[i][qtyCol] ?? '';
+    }
+    return out;
+  }
+
+  Future<void> _importXlsx() async {
+    if (!_isOpen) {
+      _snack('ການນັບປິດແລ້ວ ນຳເຂົ້າບໍ່ໄດ້');
+      return;
+    }
+    try {
+      final r = await fp.FilePicker.pickFiles(
+          type: fp.FileType.custom, allowedExtensions: ['xlsx']);
+      if (r.isEmpty) return;
+      final pf = r.first;
+      final path = pf.path;
+      if (path == null) throw 'ອ່ານໄຟລ໌ບໍ່ໄດ້';
+      final bytes = await io.File(path).readAsBytes();
+      final ups = _readCounts(bytes);
+      final byId = <int, Map<String, dynamic>>{
+        for (final x in _lines) (int.tryParse('${x['productId']}') ?? -1): x
+      };
+      final todo = <MapEntry<Map<String, dynamic>, num>>[];
+      var bad = 0, unknown = 0, same = 0;
+      for (final e in ups.entries) {
+        if (e.value.isEmpty) continue;
+        final row = byId[e.key];
+        if (row == null) {
+          unknown++;
+          continue;
+        }
+        final n = num.tryParse(e.value.replaceAll(',', ''));
+        if (n == null || n < 0) {
+          bad++;
+          continue;
+        }
+        if (row['countedQty'] != null && num0(row['countedQty']) == n) {
+          same++;
+          continue;
+        }
+        todo.add(MapEntry(row, n));
+      }
+      if (!mounted) return;
+      if (todo.isEmpty) {
+        _snack('ບໍ່ມີລາຍການໃໝ່ (ບໍ່ປ່ຽນ $same • ຜິດ $bad • ບໍ່ພົບ $unknown)');
+        return;
+      }
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('ອັບໂຫຼດຈຳນວນນັບ'),
+          content: Text(
+              'ຈະບັນທຶກ ${todo.length} ລາຍການ\nບໍ່ປ່ຽນ $same • ຜິດ $bad • ບໍ່ພົບ $unknown'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('ຍົກເລີກ')),
+            FilledButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('ຢືນຢັນ')),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      setState(() => _busy = true);
+      for (final e in todo) {
+        await _setQty(e.key, e.value);
+      }
+      if (!mounted) return;
+      setState(() => _busy = false);
+      _snack('ບັນທຶກແລ້ວ ${todo.length} ລາຍການ');
+    } catch (e) {
+      if (mounted) setState(() => _busy = false);
+      _snack('ອັບໂຫຼດບໍ່ສຳເລັດ: $e');
     }
   }
 

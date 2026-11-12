@@ -71,13 +71,19 @@ Future<void> sharePoXlsx({
   Set<int> hiddenCols = const {},
   List<XlImage> images = const [],
   Map<int, double> rowHeights = const {},
+  String? pageHeader,
+  String? pageFooter,
 }) async {
   final pics = images.isNotEmpty;
-  debugPrint('[XLSX] sharePoXlsx file=$fileName rows=${rows.length} images=${images.length}');
+  debugPrint(
+      '[XLSX] sharePoXlsx file=$fileName rows=${rows.length} images=${images.length}');
   final sb = StringBuffer();
   sb.write('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>');
   sb.write(
       '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">');
+  if (pageHeader != null || pageFooter != null) {
+    sb.write('<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>');
+  }
   if (widths.isNotEmpty) {
     sb.write('<cols>');
     for (var i = 0; i < widths.length; i++) {
@@ -112,6 +118,16 @@ Future<void> sharePoXlsx({
     sb.write('</row>');
   }
   sb.write('</sheetData>');
+  if (pageHeader != null || pageFooter != null) {
+    sb.write(
+        '<pageMargins left="0.4" right="0.4" top="0.9" bottom="0.9" header="0.4" footer="0.4"/>');
+    sb.write(
+        '<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>');
+    sb.write('<headerFooter>');
+    if (pageHeader != null) sb.write('<oddHeader>${_esc(pageHeader)}</oddHeader>');
+    if (pageFooter != null) sb.write('<oddFooter>${_esc(pageFooter)}</oddFooter>');
+    sb.write('</headerFooter>');
+  }
   if (pics) sb.write('<drawing r:id="rId1"/>');
   sb.write('</worksheet>');
 
