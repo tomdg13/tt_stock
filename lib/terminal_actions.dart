@@ -217,7 +217,8 @@ class _TerminalInfoPageState extends State<TerminalInfoPage> {
           final canManage = Api.can('ATM_MANAGE');
           final inUse =
               state.toLowerCase() == kInUse.toLowerCase() && atm.isNotEmpty;
-          Widget act(IconData icon, String label, VoidCallback? onTap) => Expanded(
+          Widget act(IconData icon, String label, VoidCallback? onTap) =>
+              Expanded(
                 child: InkWell(
                   onTap: onTap,
                   child: Padding(
@@ -238,50 +239,55 @@ class _TerminalInfoPageState extends State<TerminalInfoPage> {
           return Column(children: [
             Expanded(
               child: RefreshIndicator(
-            onRefresh: () async => _reload(),
-            child: ListView(padding: const EdgeInsets.all(16), children: [
-              AppCard(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        typeThumb(c, pick(m, ['typeImage', 'imageFile']),
-                            size: 40),
-                        const SizedBox(width: 8),
-                        Expanded(
-                            child: Text(_barcode,
-                                style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700))),
-                        if (state.isNotEmpty) Tag(state, kindOf(state)),
-                      ]),
-                      const SizedBox(height: 8),
-                      _kv(c, 'ປະເພດ', pick(m, ['typeName', 'typeId'])),
-                      _kv(
-                          c,
-                          'Brand',
-                          pick(_atmInfo,
-                              ['atmType', 'atmBrand', 'brandName', 'brand'])),
-                      _kv(
-                          c,
-                          'Model',
-                          pick(_atmInfo, [
-                            'atmVersion',
-                            'atm_version',
-                            'version',
-                            'atmModel',
-                            'modelName',
-                            'model'
-                          ])),
-                      _kv(c, 'Serial',
-                          pick(m, ['serial', 'serialNo', 'serialNumber'])),
-                      _kv(c, 'ຕູ້ ATM', atm),
-                      _kv(c, 'ສະຖານທີ່', pick(m, ['atmLocation', 'location'])),
-                    ]),
-              ),
-              const SizedBox(height: 12),
-              AppCard(title: 'ລາຍລະອຽດທັງໝົດ', child: DataView(m)),
-            ]),
+                onRefresh: () async => _reload(),
+                child: ListView(padding: const EdgeInsets.all(16), children: [
+                  AppCard(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            typeThumb(c, pick(m, ['typeImage', 'imageFile']),
+                                size: 40),
+                            const SizedBox(width: 8),
+                            Expanded(
+                                child: Text(_barcode,
+                                    style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700))),
+                            if (state.isNotEmpty) Tag(state, kindOf(state)),
+                          ]),
+                          const SizedBox(height: 8),
+                          _kv(c, 'ປະເພດ', pick(m, ['typeName', 'typeId'])),
+                          _kv(
+                              c,
+                              'Brand',
+                              pick(_atmInfo, [
+                                'atmType',
+                                'atmBrand',
+                                'brandName',
+                                'brand'
+                              ])),
+                          _kv(
+                              c,
+                              'Model',
+                              pick(_atmInfo, [
+                                'atmVersion',
+                                'atm_version',
+                                'version',
+                                'atmModel',
+                                'modelName',
+                                'model'
+                              ])),
+                          _kv(c, 'Serial',
+                              pick(m, ['serial', 'serialNo', 'serialNumber'])),
+                          _kv(c, 'ຕູ້ ATM', atm),
+                          _kv(c, 'ສະຖານທີ່',
+                              pick(m, ['atmLocation', 'location'])),
+                        ]),
+                  ),
+                  const SizedBox(height: 12),
+                  AppCard(title: 'ລາຍລະອຽດທັງໝົດ', child: DataView(m)),
+                ]),
               ),
             ),
             Material(
@@ -289,21 +295,41 @@ class _TerminalInfoPageState extends State<TerminalInfoPage> {
               color: Theme.of(context).colorScheme.surface,
               child: SafeArea(
                 child: Row(children: [
-                  act(Icons.memory, 'ອາໄຫຼ່',
-                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => TerminalPartsPage(_barcode)))),
-                  act(Icons.history, 'ປະຫວັດ',
-                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryPage(barcode: _barcode)))),
-                  act(Icons.build_circle_outlined, 'ສ້ອມ/ປ່ຽນ',
-                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryPage(barcode: _barcode, initialFilter: 'status')))),
+                  act(
+                      Icons.memory,
+                      'ອາໄຫຼ່',
+                      () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => TerminalPartsPage(_barcode)))),
+                  act(
+                      Icons.history,
+                      'ປະຫວັດ',
+                      () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => HistoryPage(barcode: _barcode)))),
+                  act(
+                      Icons.build_circle_outlined,
+                      'ສ້ອມ/ປ່ຽນ',
+                      () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => HistoryPage(
+                                  barcode: _barcode,
+                                  initialFilter: 'status')))),
                   if (canManage) ...[
-                    act(Icons.build_outlined, 'ສ້ອມ',
+                    act(
+                        Icons.build_outlined,
+                        'ສ້ອມ',
                         _busy
                             ? null
                             : () async {
                                 await Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                        builder: (_) => FixTerminalPage(m, onChanged: () {
+                                        builder: (_) =>
+                                            FixTerminalPage(m, onChanged: () {
                                               widget.onChanged?.call();
                                               _reload();
                                             })));
@@ -874,7 +900,8 @@ class _PickProductPageState extends State<PickProductPage> {
   bool get _hasBranch => widget.branchId != null;
 
   Future<dynamic> _load() async {
-    debugPrint('[PICK] NEW PickProductPage branchId=${widget.branchId} -> GET /products?limit=500 + stock call below');
+    debugPrint(
+        '[PICK] NEW PickProductPage branchId=${widget.branchId} -> GET /products?limit=500 + stock call below');
     if (_hasBranch && widget.pickerMode) {
       try {
         final bal = asList(await Api.get(
@@ -888,15 +915,21 @@ class _PickProductPageState extends State<PickProductPage> {
     } else if (_hasBranch) {
       try {
         final cp = await Api.get(
-            '/repair/parts?barcode=${Uri.encodeQueryComponent(pick(widget.terminal, ['barcode']))}&atmId=${Uri.encodeQueryComponent(pick(widget.atm, ['atmId']))}&branchId=${Uri.encodeQueryComponent('${widget.branchId}')}');
+            '/repair/parts?barcode=${Uri.encodeQueryComponent(pick(widget.terminal, [
+              'barcode'
+            ]))}&atmId=${Uri.encodeQueryComponent(pick(widget.atm, [
+              'atmId'
+            ]))}&branchId=${Uri.encodeQueryComponent('${widget.branchId}')}');
         _branchStock.clear();
-        for (final e in (cp is Map ? asList(cp['parts']) : <Map<String, dynamic>>[])) {
+        for (final e
+            in (cp is Map ? asList(cp['parts']) : <Map<String, dynamic>>[])) {
           _branchStock['${e['id']}'] = num0(e['stock']);
         }
       } catch (_) {}
     }
     return Api.get('/products?limit=500');
   }
+
   void _reload() => setState(() {
         _f = _load();
       });
@@ -1109,7 +1142,9 @@ class _PickProductPageState extends State<PickProductPage> {
     final pid = pick(m, ['id', 'productId']);
     final branchQty = _branchStock[pid] ?? 0;
     final soldOut = _hasBranch && branchQty <= 0;
-    final stock = _hasBranch ? '${fmtNum(branchQty.toDouble())}' : pick(m, ['stock', 'qty']);
+    final stock = _hasBranch
+        ? '${fmtNum(branchQty.toDouble())}'
+        : pick(m, ['stock', 'qty']);
     return cardBox(
       context,
       margin: const EdgeInsets.only(bottom: 8),

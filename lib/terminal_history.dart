@@ -16,7 +16,8 @@ class _Ev {
 class HistoryPage extends StatefulWidget {
   final String? atmId, barcode;
   final String initialFilter;
-  const HistoryPage({super.key, this.atmId, this.barcode, this.initialFilter = 'all'});
+  const HistoryPage(
+      {super.key, this.atmId, this.barcode, this.initialFilter = 'all'});
   @override
   State<HistoryPage> createState() => _HistoryPageState();
 }
@@ -35,7 +36,8 @@ class _HistoryPageState extends State<HistoryPage> {
     final a = action.toUpperCase();
     final q = RegExp(r'X(\d+)$').firstMatch(a);
     final name = product.isEmpty ? '' : ': $product';
-    if (a.startsWith('MA PART')) return 'ໃຊ້ອາໄຫຼ່$name${q == null ? '' : ' × ${q.group(1)}'}';
+    if (a.startsWith('MA PART'))
+      return 'ໃຊ້ອາໄຫຼ່$name${q == null ? '' : ' × ${q.group(1)}'}';
     if (a.startsWith('INSTALL')) return 'ຕິດຕັ້ງອາໄຫຼ່$name';
     if (a.startsWith('REMOVE')) return 'ເອົາອາໄຫຼ່ອອກ$name';
     return product.isEmpty ? action : '$action$name';
@@ -45,28 +47,37 @@ class _HistoryPageState extends State<HistoryPage> {
     final enc = Uri.encodeComponent(_id);
     final results = await Future.wait<dynamic>([
       Api.get(_byAtm ? '/atms/$enc' : '/terminals/$enc'),
-      Api.get('/install/log?${_byAtm ? 'atmId' : 'barcode'}=$enc&limit=300').catchError((_) => <dynamic>[]),
+      Api.get('/install/log?${_byAtm ? 'atmId' : 'barcode'}=$enc&limit=300')
+          .catchError((_) => <dynamic>[]),
     ]);
     final base = results[0];
-    final acts = base is Map ? asList(base['activities']) : <Map<String, dynamic>>[];
+    final acts =
+        base is Map ? asList(base['activities']) : <Map<String, dynamic>>[];
     final logs = asList(results[1]);
     final ev = <_Ev>[];
     for (final a in acts) {
       final st = pick(a, ['status']);
       final bc = pick(a, ['tidBarcode', 'barcode']);
       final atm = pick(a, ['atmId']);
-      final title = _byAtm ? '$st  ·  $bc' : (atm.isEmpty ? st : '$st  ·  ATM $atm');
+      final title =
+          _byAtm ? '$st  ·  $bc' : (atm.isEmpty ? st : '$st  ·  ATM $atm');
       final remark = pick(a, ['remark', 'equipmentList']).trim();
-      ev.add(_Ev(DateTime.tryParse(pick(a, ['activityDate'])), 'status', title, remark));
+      ev.add(_Ev(DateTime.tryParse(pick(a, ['activityDate'])), 'status', title,
+          remark));
     }
     for (final l in logs) {
       final action = pick(l, ['action']);
       final up = action.toUpperCase();
-      if (!(up.startsWith('MA PART') || up.startsWith('INSTALL') || up.startsWith('REMOVE'))) continue;
-      final sub = [if (_byAtm) pick(l, ['barcode']), pick(l, ['serialNo']), pick(l, ['userName'])]
-          .where((e) => e.isNotEmpty)
-          .join(' · ');
-      ev.add(_Ev(DateTime.tryParse(pick(l, ['logDate'])), 'part', _partTitle(action, pick(l, ['productName'])), sub));
+      if (!(up.startsWith('MA PART') ||
+          up.startsWith('INSTALL') ||
+          up.startsWith('REMOVE'))) continue;
+      final sub = [
+        if (_byAtm) pick(l, ['barcode']),
+        pick(l, ['serialNo']),
+        pick(l, ['userName'])
+      ].where((e) => e.isNotEmpty).join(' · ');
+      ev.add(_Ev(DateTime.tryParse(pick(l, ['logDate'])), 'part',
+          _partTitle(action, pick(l, ['productName'])), sub));
     }
     final zero = DateTime.fromMillisecondsSinceEpoch(0);
     ev.sort((a, b) => (b.at ?? zero).compareTo(a.at ?? zero));
@@ -112,13 +123,17 @@ class _HistoryPageState extends State<HistoryPage> {
                 return const Center(child: CircularProgressIndicator());
               }
               if (s.hasError) return ErrorView(s.error!, _reload);
-              final items = (s.data ?? []).where((e) => _filter == 'all' || e.kind == _filter).toList();
+              final items = (s.data ?? [])
+                  .where((e) => _filter == 'all' || e.kind == _filter)
+                  .toList();
               return RefreshIndicator(
                 onRefresh: () async => _reload(),
                 child: items.isEmpty
                     ? ListView(children: [
                         const SizedBox(height: 120),
-                        Center(child: Text('ຍັງບໍ່ມີປະຫວັດ', style: TextStyle(color: p.mut))),
+                        Center(
+                            child: Text('ຍັງບໍ່ມີປະຫວັດ',
+                                style: TextStyle(color: p.mut))),
                       ])
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
@@ -129,14 +144,22 @@ class _HistoryPageState extends State<HistoryPage> {
                             context,
                             margin: const EdgeInsets.only(bottom: 8),
                             child: ListTile(
-                              leading: Icon(e.kind == 'part' ? Icons.build_outlined : Icons.swap_horiz),
-                              title: Text(e.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                              leading: Icon(e.kind == 'part'
+                                  ? Icons.build_outlined
+                                  : Icons.swap_horiz),
+                              title: Text(e.title,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600)),
                               subtitle: e.sub.isEmpty
                                   ? null
-                                  : Text(e.sub, maxLines: 4, overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(color: p.mut, fontSize: 13)),
+                                  : Text(e.sub,
+                                      maxLines: 4,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                          color: p.mut, fontSize: 13)),
                               trailing: Text(_fmt(e.at),
-                                  textAlign: TextAlign.right, style: TextStyle(color: p.mut, fontSize: 12)),
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(color: p.mut, fontSize: 12)),
                             ),
                           );
                         },

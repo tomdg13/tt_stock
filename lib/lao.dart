@@ -58,13 +58,16 @@ const menuGroups = <MenuGroup>[
   MenuGroup('ທຸລະກຳ (Transaction)', [
     MenuItemDef('recv', 'ຮັບເຂົ້າ', Icons.download_outlined, ['RECEIVE']),
     MenuItemDef('issue', 'ເອົາອອກ', Icons.upload_outlined, ['ISSUE']),
-    MenuItemDef('trf', 'ໂອນສາຂາ', Icons.swap_horiz, ['TRANSFER_SEND', 'TRANSFER_RECEIVE']),
-    MenuItemDef('req', 'ຂໍອາໄຫຼ່', Icons.move_to_inbox_outlined, ['REQUEST_SEND', 'REQUEST_APPROVE']),
+    MenuItemDef('trf', 'ໂອນສາຂາ', Icons.swap_horiz,
+        ['TRANSFER_SEND', 'TRANSFER_RECEIVE']),
+    MenuItemDef('req', 'ຂໍອາໄຫຼ່', Icons.move_to_inbox_outlined,
+        ['REQUEST_SEND', 'REQUEST_APPROVE']),
     MenuItemDef('hist', 'ປະຫວັດ', Icons.history, ['REPORT_VIEW']),
   ]),
   MenuGroup('ຈັດຊື້ (Purchasing)', [
     MenuItemDef('plans', 'ແຜນຈັດຊື້', Icons.assignment_outlined, ['PO_MANAGE']),
-    MenuItemDef('vendors', 'Vendor', Icons.local_shipping_outlined, ['PO_MANAGE']),
+    MenuItemDef(
+        'vendors', 'Vendor', Icons.local_shipping_outlined, ['PO_MANAGE']),
   ]),
   MenuGroup('ສິນຄ້າ (Product)', [
     MenuItemDef('prod', 'ສິນຄ້າ', Icons.sell_outlined, ['STOCK_VIEW']),
@@ -74,14 +77,18 @@ const menuGroups = <MenuGroup>[
   ]),
   MenuGroup('ຕູ້ ATM (ATM)', [
     MenuItemDef('atms', 'ຕູ້ ATM', Icons.atm, ['STOCK_VIEW', 'ATM_MANAGE']),
-    MenuItemDef('terms', 'Terminal', Icons.memory, ['STOCK_VIEW', 'ATM_MANAGE']),
-    MenuItemDef('actrep', 'Activity Report', Icons.fact_check_outlined, ['STOCK_VIEW', 'REPORT_VIEW', 'ATM_MANAGE']),
-    MenuItemDef('ttypes', 'ປະເພດ Terminal', Icons.category_outlined, ['STOCK_VIEW']),
+    MenuItemDef(
+        'terms', 'Terminal', Icons.memory, ['STOCK_VIEW', 'ATM_MANAGE']),
+    MenuItemDef('actrep', 'Activity Report', Icons.fact_check_outlined,
+        ['STOCK_VIEW', 'REPORT_VIEW', 'ATM_MANAGE']),
+    MenuItemDef(
+        'ttypes', 'ປະເພດ Terminal', Icons.category_outlined, ['STOCK_VIEW']),
   ]),
   MenuGroup('ຜູ້ໃຊ້ ແລະ ສາຂາ (Admin)', [
     MenuItemDef('users', 'ຜູ້ໃຊ້', Icons.group_outlined, ['USER_MANAGE']),
     MenuItemDef('roles', 'ບົດບາດ (Role)', Icons.badge_outlined),
-    MenuItemDef('funcs', 'ຟັງຊັນ (Function)', Icons.key_outlined, ['ROLE_MANAGE']),
+    MenuItemDef(
+        'funcs', 'ຟັງຊັນ (Function)', Icons.key_outlined, ['ROLE_MANAGE']),
     MenuItemDef('branches', 'ສາຂາ', Icons.apartment_outlined),
   ]),
 ];
@@ -121,7 +128,8 @@ const permLabels = {
 class PermPage {
   final String label;
   final List<String> view, edit, del;
-  const PermPage(this.label, {this.view = const [], this.edit = const [], this.del = const []});
+  const PermPage(this.label,
+      {this.view = const [], this.edit = const [], this.del = const []});
 }
 
 const permPages = <PermPage>[
@@ -134,12 +142,18 @@ const permPages = <PermPage>[
   PermPage('ຂໍອາໄຫຼ່ (ສົ່ງຄຳຂໍ)', edit: ['REQUEST_SEND']),
   PermPage('ຂໍອາໄຫຼ່ (ອະນຸມັດ)', edit: ['REQUEST_APPROVE']),
   PermPage('ນັບສະຕັອກ', edit: ['STOCK_COUNT']),
-  PermPage('ສິນຄ້າ / BRAND / MODEL / ປະເພດ', edit: ['PRODUCT_MANAGE'], del: ['PRODUCT_MANAGE']),
+  PermPage('ສິນຄ້າ / BRAND / MODEL / ປະເພດ',
+      edit: ['PRODUCT_MANAGE'], del: ['PRODUCT_MANAGE']),
   PermPage('Serial', edit: ['SERIAL_MANAGE'], del: ['SERIAL_MANAGE']),
   PermPage('ບ່ອນເກັບ', edit: ['BIN_MANAGE'], del: ['BIN_MANAGE']),
-  PermPage('ແຜນຈັດຊື້ / Vendor', view: ['PO_MANAGE'], edit: ['PO_MANAGE'], del: ['PO_MANAGE']),
-  PermPage('ຕູ້ ATM / Terminal / ສ້ອມ', view: ['ATM_MANAGE'], edit: ['ATM_MANAGE'], del: ['ATM_MANAGE']),
-  PermPage('ສາຂາ', view: ['BRANCH_MANAGE'], edit: ['BRANCH_MANAGE'], del: ['BRANCH_MANAGE']),
-  PermPage('ຜູ້ໃຊ້', view: ['USER_MANAGE'], edit: ['USER_MANAGE'], del: ['USER_MANAGE']),
-  PermPage('ບົດບາດ / ຟັງຊັນ', view: ['ROLE_MANAGE'], edit: ['ROLE_MANAGE'], del: ['ROLE_MANAGE']),
+  PermPage('ແຜນຈັດຊື້ / Vendor',
+      view: ['PO_MANAGE'], edit: ['PO_MANAGE'], del: ['PO_MANAGE']),
+  PermPage('ຕູ້ ATM / Terminal / ສ້ອມ',
+      view: ['ATM_MANAGE'], edit: ['ATM_MANAGE'], del: ['ATM_MANAGE']),
+  PermPage('ສາຂາ',
+      view: ['BRANCH_MANAGE'], edit: ['BRANCH_MANAGE'], del: ['BRANCH_MANAGE']),
+  PermPage('ຜູ້ໃຊ້',
+      view: ['USER_MANAGE'], edit: ['USER_MANAGE'], del: ['USER_MANAGE']),
+  PermPage('ບົດບາດ / ຟັງຊັນ',
+      view: ['ROLE_MANAGE'], edit: ['ROLE_MANAGE'], del: ['ROLE_MANAGE']),
 ];

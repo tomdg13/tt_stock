@@ -116,12 +116,7 @@ Future<void> exportBudgetXlsx(Map<String, dynamic> d,
     final t = thumbs[u];
     if (t != null) {
       images.add(XlImage(
-          row: rows.length,
-          col: 1,
-          key: u,
-          bytes: t.bytes,
-          w: t.w,
-          h: t.h));
+          row: rows.length, col: 1, key: u, bytes: t.bytes, w: t.w, h: t.h));
       heights[rows.length] = 40.0;
     }
     add(<Object>[
@@ -141,8 +136,21 @@ Future<void> exportBudgetXlsx(Map<String, dynamic> d,
     ]);
   }
 
-  add(<Object>['', '', 'ລວມ', '', '', '', '', '', '', '', '', '', _m(num0(d['totalAmount']))],
-      b: true);
+  add(<Object>[
+    '',
+    '',
+    'ລວມ',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    _m(num0(d['totalAmount']))
+  ], b: true);
 
   final widths = <double>[16, 12, 36, 17, 14, 10, 14, 12, 14, 12, 14, 14, 16];
 

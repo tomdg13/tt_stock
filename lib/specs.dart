@@ -25,20 +25,23 @@ Future<void> _branchAccess(BuildContext c, Row_ row) async {
       return;
     }
     final cur = await Api.get('/branches/$id/branch-perms');
-    final see = cur is Map && cur['seeIds'] is List ? cur['seeIds'] as List : [];
-    final req = cur is Map && cur['reqIds'] is List ? cur['reqIds'] as List : [];
+    final see =
+        cur is Map && cur['seeIds'] is List ? cur['seeIds'] as List : [];
+    final req =
+        cur is Map && cur['reqIds'] is List ? cur['reqIds'] as List : [];
     final list = asList(await Api.get('/branches'));
     final all = <MapEntry<dynamic, String>>[
       for (final b in list)
-        if (('${b['id']}' == '$id') == false) MapEntry(b['id'], pick(b, ['name']))
+        if (('${b['id']}' == '$id') == false)
+          MapEntry(b['id'], pick(b, ['name']))
     ];
     final hq = <String>{
       for (final b in list)
         if ('${b['isHq']}' == '1') '${b['id']}'
     };
     if (c.mounted == false) return;
-    final res =
-        await pickBranchPerms(c, pick(row, ['name', 'code']), all, hq, see, req);
+    final res = await pickBranchPerms(
+        c, pick(row, ['name', 'code']), all, hq, see, req);
     if (res == null) return;
     await Api.put('/branches/$id/branch-perms',
         {'seeIds': res.seeIds, 'reqIds': res.reqIds});

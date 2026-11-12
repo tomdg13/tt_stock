@@ -158,8 +158,8 @@ class _PurchasePlanPageState extends State<PurchasePlanPage> {
               return Padding(
                   padding: const EdgeInsets.all(32),
                   child: Center(
-                      child: Text('ບໍ່ມີຂໍ້ມູນ',
-                          style: TextStyle(color: p.mut))));
+                      child:
+                          Text('ບໍ່ມີຂໍ້ມູນ', style: TextStyle(color: p.mut))));
             }
             final toBuy = items
                 .where((m) => (num.tryParse(pick(m, [buyKey])) ?? 0) > 0)
@@ -192,13 +192,23 @@ class _PurchasePlanPageState extends State<PurchasePlanPage> {
                                             fontWeight: FontWeight.w700)),
                                     const SizedBox(height: 4),
                                     Text(
-                                      'ໃຊ້ທັງໝົດ ${pick(m, ['totalUsed'])} · ໃຊ້ $_weeks ອາທິດ ${pick(m, ['used'])} · ສະຕັອກ ${pick(m, ['stock'])} $unit',
+                                      'ໃຊ້ທັງໝົດ ${pick(m, [
+                                            'totalUsed'
+                                          ])} · ໃຊ້ $_weeks ອາທິດ ${pick(m, [
+                                            'used'
+                                          ])} · ສະຕັອກ ${pick(m, [
+                                            'stock'
+                                          ])} $unit',
                                       style:
                                           TextStyle(color: p.mut, fontSize: 13),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      'ຄາດ: ອາທິດ ${pick(m, ['weekNeed'])} · ເດືອນ ${pick(m, ['monthNeed'])} · ປີ ${pick(m, ['yearNeed'])}',
+                                      'ຄາດ: ອາທິດ ${pick(m, [
+                                            'weekNeed'
+                                          ])} · ເດືອນ ${pick(m, [
+                                            'monthNeed'
+                                          ])} · ປີ ${pick(m, ['yearNeed'])}',
                                       style:
                                           TextStyle(color: p.mut, fontSize: 13),
                                     ),

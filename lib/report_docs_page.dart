@@ -8,7 +8,15 @@ import 'api.dart';
 import 'product_images.dart';
 
 const List<String> _ext = [
-  'pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx', 'xls', 'xlsx'
+  'pdf',
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx'
 ];
 
 MediaType _mt(String n) {
@@ -23,8 +31,7 @@ MediaType _mt(String n) {
     'docx':
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'xls': 'application/vnd.ms-excel',
-    'xlsx':
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   };
   return MediaType.parse(m[e] ?? 'application/octet-stream');
 }
@@ -356,7 +363,8 @@ class _AddDocSheetState extends State<_AddDocSheet> {
               const SizedBox(height: 12),
               TextField(
                   controller: _topic,
-                  decoration: const InputDecoration(labelText: 'ຫົວຂໍ້ (Topic)')),
+                  decoration:
+                      const InputDecoration(labelText: 'ຫົວຂໍ້ (Topic)')),
               const SizedBox(height: 12),
               OutlinedButton.icon(
                   onPressed: _busy ? null : _pick,
@@ -372,8 +380,9 @@ class _AddDocSheetState extends State<_AddDocSheet> {
                   subtitle: Text(_size(_files[i].bytes.length)),
                   trailing: IconButton(
                       icon: const Icon(Icons.close),
-                      onPressed:
-                          _busy ? null : () => setState(() => _files.removeAt(i))),
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() => _files.removeAt(i))),
                 ),
               if (_error.isNotEmpty)
                 Padding(

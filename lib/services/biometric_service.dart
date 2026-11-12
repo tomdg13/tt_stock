@@ -56,7 +56,8 @@ class BiometricService {
     _log('disabled');
   }
 
-  static Future<({String phone, String pin})?> authenticateAndGetCredentials() async {
+  static Future<({String phone, String pin})?>
+      authenticateAndGetCredentials() async {
     try {
       _log('authenticate() start');
       final ok = await _auth.authenticate(

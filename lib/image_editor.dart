@@ -62,11 +62,10 @@ Future<Uint8List> _removeBackgroundMlKit(Uint8List bytes) async {
     await f.writeAsBytes(bytes);
     log('temp file written: ${f.path} (${await f.length()} bytes)');
     log('calling ML Kit processImage (60s timeout)...');
-    final r = await seg
-        .processImage(InputImage.fromFilePath(f.path))
-        .timeout(const Duration(seconds: 20),
-            onTimeout: () => throw Exception(
-                'ML Kit timeout 60s (model not downloaded / no Google Play services?)'));
+    final r = await seg.processImage(InputImage.fromFilePath(f.path)).timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => throw Exception(
+            'ML Kit timeout 60s (model not downloaded / no Google Play services?)'));
     log('ML Kit returned after ${sw.elapsedMilliseconds} ms: '
         'foregroundBitmap=${r.foregroundBitmap?.length} bytes, subjects=${r.subjects.length}');
     final fgBytes = r.foregroundBitmap;
@@ -304,13 +303,20 @@ class _ImageEditorPageState extends State<ImageEditorPage> {
           child: Container(
             color: const Color(0xFF22252E),
             padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-              _btn(Icons.crop_rotate, 'ຕັດ / ໝຸນ', () => _run(() => _crop(_cur))),
-              _btn(Icons.auto_fix_high, 'ລຶບພື້ນຫຼັງ',
-                  () => _run(() => _removeBackground(_cur))),
-              _btn(Icons.undo, 'ຍ້ອນກັບ',
-                  _hist.length > 1 ? () => setState(() => _hist.removeLast()) : null),
-            ]),
+            child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _btn(Icons.crop_rotate, 'ຕັດ / ໝຸນ',
+                      () => _run(() => _crop(_cur))),
+                  _btn(Icons.auto_fix_high, 'ລຶບພື້ນຫຼັງ',
+                      () => _run(() => _removeBackground(_cur))),
+                  _btn(
+                      Icons.undo,
+                      'ຍ້ອນກັບ',
+                      _hist.length > 1
+                          ? () => setState(() => _hist.removeLast())
+                          : null),
+                ]),
           ),
         ),
       ]),

@@ -66,7 +66,8 @@ class _ProductPickerState extends State<_ProductPicker> {
   final _q = TextEditingController();
   late Future<dynamic> _f = _load();
   Future<dynamic> _load() {
-    debugPrint('[PICK] OLD bottom-sheet picker (_ProductPicker) -> GET /products?limit=30&active=1');
+    debugPrint(
+        '[PICK] OLD bottom-sheet picker (_ProductPicker) -> GET /products?limit=30&active=1');
     return Api.get(
         '/products?limit=30&active=1&q=${Uri.encodeQueryComponent(_q.text.trim())}');
   }
@@ -117,7 +118,8 @@ class _ProductPickerState extends State<_ProductPicker> {
                 return ListView.builder(
                   itemCount: items.length,
                   itemBuilder: (_, i) => ListTile(
-                    leading: _pickThumb(context, pick(items[i], ['imageUrl', 'image', 'photo'])),
+                    leading: _pickThumb(context,
+                        pick(items[i], ['imageUrl', 'image', 'photo'])),
                     title: Text(pick(items[i], ['name', 'productName', 'id'])),
                     subtitle: Text(
                         pick(items[i], ['brandName', 'typeName', 'code']),
@@ -165,7 +167,8 @@ class _LineEditorState extends State<LineEditor> {
             child: TextFormField(
               key: ValueKey('cost-${identityHashCode(l)}'),
               initialValue: l.cost > 0 ? '${l.cost}' : '',
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                   labelText: 'ລາຄາຕໍ່ໜ່ວຍ', isDense: true),
               onChanged: (v) => setState(() {
@@ -216,75 +219,89 @@ class _LineEditorState extends State<LineEditor> {
           child: Column(children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Builder(builder: (_) {
-              final u = productImageUrl(pick(lines[i].product,
-                  ['imageUrl', 'image', 'photo', 'imageFile']));
-              final ph = Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                      color: p.bd, borderRadius: BorderRadius.circular(8)),
-                  child: Icon(Icons.image_outlined, color: p.mut));
-              if (u.isEmpty) return ph;
-              return ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(u,
-                      width: 40,
-                      height: 40,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => ph));
-            }),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(pick(lines[i].product, ['name', 'productName', 'id']),
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      Text(pick(lines[i].product, ['brandName', 'typeName']),
-                          style: TextStyle(color: p.mut, fontSize: 12)),
-                    ]),
-                  ),
-                ]),
-                const SizedBox(height: 6),
-                Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                  IconButton(
-                      icon: const Icon(Icons.remove_circle_outline),
-                      onPressed: lines[i].qty > 1
-                          ? () => setState(() {
-                                lines[i].qty--;
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Builder(builder: (_) {
+                            final u = productImageUrl(pick(lines[i].product,
+                                ['imageUrl', 'image', 'photo', 'imageFile']));
+                            final ph = Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                    color: p.bd,
+                                    borderRadius: BorderRadius.circular(8)),
+                                child:
+                                    Icon(Icons.image_outlined, color: p.mut));
+                            if (u.isEmpty) return ph;
+                            return ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(u,
+                                    width: 40,
+                                    height: 40,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => ph));
+                          }),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                      pick(lines[i].product,
+                                          ['name', 'productName', 'id']),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600)),
+                                  Text(
+                                      pick(lines[i].product,
+                                          ['brandName', 'typeName']),
+                                      style: TextStyle(
+                                          color: p.mut, fontSize: 12)),
+                                ]),
+                          ),
+                        ]),
+                    const SizedBox(height: 6),
+                    Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                      IconButton(
+                          icon: const Icon(Icons.remove_circle_outline),
+                          onPressed: lines[i].qty > 1
+                              ? () => setState(() {
+                                    lines[i].qty--;
+                                    _qc(lines[i]).text = '${lines[i].qty}';
+                                  })
+                              : null),
+                      SizedBox(
+                        width: 72,
+                        child: TextField(
+                          controller: _qc(lines[i]),
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          decoration: const InputDecoration(isDense: true),
+                          onChanged: (v) {
+                            final n = int.tryParse(v.trim());
+                            if (n != null && n > 0) {
+                              setState(() => lines[i].qty = n);
+                            }
+                          },
+                        ),
+                      ),
+                      IconButton(
+                          icon: const Icon(Icons.add_circle_outline),
+                          onPressed: () => setState(() {
+                                lines[i].qty++;
                                 _qc(lines[i]).text = '${lines[i].qty}';
-                              })
-                          : null),
-                  SizedBox(
-                    width: 72,
-                    child: TextField(
-                      controller: _qc(lines[i]),
-                      keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                      decoration: const InputDecoration(isDense: true),
-                      onChanged: (v) {
-                        final n = int.tryParse(v.trim());
-                        if (n != null && n > 0) {
-                          setState(() => lines[i].qty = n);
-                        }
-                      },
-                    ),
-                  ),
-                  IconButton(
-                      icon: const Icon(Icons.add_circle_outline),
-                      onPressed: () => setState(() {
-                            lines[i].qty++;
-                            _qc(lines[i]).text = '${lines[i].qty}';
-                          })),
-                  IconButton(
-                      icon: Icon(Icons.delete_outline, color: p.bad),
-                      onPressed: () => setState(() {
-                            lines.removeAt(i);
-                          })),
-                ]),
-              ]),
+                              })),
+                      IconButton(
+                          icon: Icon(Icons.delete_outline, color: p.bad),
+                          onPressed: () => setState(() {
+                                lines.removeAt(i);
+                              })),
+                    ]),
+                  ]),
             ),
             if (widget.showCost) _costRow(lines[i]),
           ]),
@@ -776,11 +793,17 @@ class _StockFormPageState extends State<StockFormPage> {
       final body = {
         'branchId': _branchId,
         'items': [
-          for (final l in _lines) {'productId': l.product['id'], 'qty': l.qty, if (!widget.issue && l.cost > 0) 'unitCost': l.cost}
+          for (final l in _lines)
+            {
+              'productId': l.product['id'],
+              'qty': l.qty,
+              if (!widget.issue && l.cost > 0) 'unitCost': l.cost
+            }
         ],
         if (_note.text.trim().isNotEmpty) 'note': _note.text.trim(),
         if (_ref.text.trim().isNotEmpty) 'refNo': _ref.text.trim(),
-        if (!widget.issue && _invNo.text.trim().isNotEmpty) 'invoiceNo': _invNo.text.trim(),
+        if (!widget.issue && _invNo.text.trim().isNotEmpty)
+          'invoiceNo': _invNo.text.trim(),
         if (!widget.issue) 'currency': _currency,
         if (!widget.issue && _total() > 0) 'totalAmount': _total(),
         if (widget.issue) 'reason': _reason,
@@ -1039,7 +1062,8 @@ class _StockFormPageState extends State<StockFormPage> {
             if (_lines.any((l) => l.cost > 0))
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text('ລວມເງິນ: ${_total().toStringAsFixed(2)} $_currency',
+                child: Text(
+                    'ລວມເງິນ: ${_total().toStringAsFixed(2)} $_currency',
                     style: const TextStyle(fontWeight: FontWeight.w700)),
               ),
           ],
@@ -1196,8 +1220,8 @@ class _TransferScreenState extends State<TransferScreen> {
     });
     try {
       // NOTE: body field names are inferred; check against POST /stock/transfers.
-      final bal = asList(
-          await Api.get('/stock/balances?branchId=$_from&limit=2000'));
+      final bal =
+          asList(await Api.get('/stock/balances?branchId=$_from&limit=2000'));
       final have = <String, num>{
         for (final b in bal)
           pick(b, ['productId']): num0(pick(b, ['qtyOnHand', 'qty']))
@@ -1205,7 +1229,10 @@ class _TransferScreenState extends State<TransferScreen> {
       for (final l in _lines) {
         final h = have['${l.product['id']}'] ?? 0;
         if (l.qty > h) {
-          throw 'ສະຕັອກບໍ່ພໍ: ${pick(l.product, ['name', 'productName'])} (ເຫຼືອ ${fmtNum(h.toDouble())})';
+          throw 'ສະຕັອກບໍ່ພໍ: ${pick(l.product, [
+                'name',
+                'productName'
+              ])} (ເຫຼືອ ${fmtNum(h.toDouble())})';
         }
       }
       await Api.post('/stock/transfers', {
@@ -1284,16 +1311,16 @@ class _TransferScreenState extends State<TransferScreen> {
             ]),
           ),
         if (widget.showList)
-        AppCard(
-          title: 'ໃບໂອນ',
-          child: futureBlock(_list, _reload, (d) {
-            final rows = asList(d);
-            if (rows.isEmpty)
-              return Text('ຍັງບໍ່ມີລາຍການ', style: TextStyle(color: p.mut));
-            return Column(
-                children: [for (final t in rows) _transferRow(context, t)]);
-          }),
-        ),
+          AppCard(
+            title: 'ໃບໂອນ',
+            child: futureBlock(_list, _reload, (d) {
+              final rows = asList(d);
+              if (rows.isEmpty)
+                return Text('ຍັງບໍ່ມີລາຍການ', style: TextStyle(color: p.mut));
+              return Column(
+                  children: [for (final t in rows) _transferRow(context, t)]);
+            }),
+          ),
       ]),
     );
   }
@@ -1309,7 +1336,7 @@ class _TransferScreenState extends State<TransferScreen> {
     if (ok == true) _reload();
   }
 
-    // _trfNavTap marker
+  // _trfNavTap marker
   Map<String, String> _img = {};
 
   Future<void> _loadImgs() async {
@@ -1319,7 +1346,8 @@ class _TransferScreenState extends State<TransferScreen> {
       setState(() {
         _img = {
           for (final m in d)
-            pick(m, ['id']): pick(m, ['imageUrl', 'image', 'photo', 'imageFile'])
+            pick(m, ['id']):
+                pick(m, ['imageUrl', 'image', 'photo', 'imageFile'])
         };
       });
     } catch (_) {}
@@ -1368,7 +1396,9 @@ class _TransferScreenState extends State<TransferScreen> {
               if (i == 0) {
                 _detailAdd(t);
               } else if (i == 1) {
-                shareTransferPdf(t, {for (final e in _img.entries) e.key: productImageUrl(e.value)}).catchError((e) {
+                shareTransferPdf(t, {
+                  for (final e in _img.entries) e.key: productImageUrl(e.value)
+                }).catchError((e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context)
                         .showSnackBar(SnackBar(content: Text('$e')));
@@ -1398,7 +1428,15 @@ class _TransferScreenState extends State<TransferScreen> {
             Row(children: [
               Expanded(
                   child: Text(
-                      '${pick(t, ['fromName', 'fromBranchName', 'fromBranchId'])} → ${pick(t, ['toName', 'toBranchName', 'toBranchId'])}',
+                      '${pick(t, [
+                            'fromName',
+                            'fromBranchName',
+                            'fromBranchId'
+                          ])} → ${pick(t, [
+                            'toName',
+                            'toBranchName',
+                            'toBranchId'
+                          ])}',
                       style: const TextStyle(
                           fontWeight: FontWeight.w700, fontSize: 16))),
               Tag(info?[0] ?? st, info?[1] ?? kindOf(st)),
@@ -1415,26 +1453,30 @@ class _TransferScreenState extends State<TransferScreen> {
                   onTap: () => _openProduct('${e.value['productId']}',
                       pick(e.value, ['productName', 'name', 'productId'])),
                   child: Row(children: [
-                  SizedBox(
-                      width: 22,
-                      child: Text('${e.key + 1}',
-                          style: TextStyle(color: p.mut, fontSize: 13))),
-                  _trfThumb('${e.value['productId']}'),
-                  const SizedBox(width: 12),
-                  Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                        Text(pick(e.value, ['productName', 'name', 'productId']),
-                            style: const TextStyle(fontWeight: FontWeight.w600)),
-                        if (pick(e.value, ['poNo']).isNotEmpty)
-                          Text(pick(e.value, ['poNo']),
-                              style: TextStyle(color: p.mut, fontSize: 12)),
-                      ])),
-                  Text('× ${fmtNum(num0(e.value['qty'] ?? e.value['quantity']).toDouble())}',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 15)),
-                ]),
+                    SizedBox(
+                        width: 22,
+                        child: Text('${e.key + 1}',
+                            style: TextStyle(color: p.mut, fontSize: 13))),
+                    _trfThumb('${e.value['productId']}'),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                          Text(
+                              pick(e.value,
+                                  ['productName', 'name', 'productId']),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600)),
+                          if (pick(e.value, ['poNo']).isNotEmpty)
+                            Text(pick(e.value, ['poNo']),
+                                style: TextStyle(color: p.mut, fontSize: 12)),
+                        ])),
+                    Text(
+                        '× ${fmtNum(num0(e.value['qty'] ?? e.value['quantity']).toDouble())}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 15)),
+                  ]),
                 ),
               ),
           ]),
@@ -1443,7 +1485,7 @@ class _TransferScreenState extends State<TransferScreen> {
     );
   }
 
-Widget _transferRow(BuildContext context, Map<String, dynamic> t) {
+  Widget _transferRow(BuildContext context, Map<String, dynamic> t) {
     final p = pal(context);
     final st = pick(t, ['status', 'state']);
     final info = transferStatus[st];
@@ -1465,7 +1507,8 @@ Widget _transferRow(BuildContext context, Map<String, dynamic> t) {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         InkWell(
           onTap: () => _openTrf(t),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Expanded(
                   child: Text(pick(t, ['transferNo', 'ref', 'docNo', 'id']),
@@ -1474,7 +1517,15 @@ Widget _transferRow(BuildContext context, Map<String, dynamic> t) {
               const Icon(Icons.chevron_right, size: 20),
             ]),
             Text(
-                '${pick(t, ['fromName', 'fromBranchName', 'fromBranchId'])} → ${pick(t, ['toName', 'toBranchName', 'toBranchId'])} · ${items.length} ລາຍການ',
+                '${pick(t, [
+                      'fromName',
+                      'fromBranchName',
+                      'fromBranchId'
+                    ])} → ${pick(t, [
+                      'toName',
+                      'toBranchName',
+                      'toBranchId'
+                    ])} · ${items.length} ລາຍການ',
                 style: TextStyle(color: p.mut, fontSize: 13)),
           ]),
         ),
@@ -1496,7 +1547,6 @@ Widget _transferRow(BuildContext context, Map<String, dynamic> t) {
     );
   }
 }
-
 
 /// Add products to a transfer that is still in transit.
 class _TrfAddPage extends StatefulWidget {
@@ -1561,7 +1611,6 @@ class _TrfAddPageState extends State<_TrfAddPage> {
   }
 }
 
-
 /// Documents (PDF / images / Office files) of one transfer. Upload as many times as needed.
 class TransferDocsPage extends StatefulWidget {
   final String trfId, ref;
@@ -1575,7 +1624,17 @@ class _TransferDocsPageState extends State<TransferDocsPage> {
   bool _loading = true, _busy = false;
   String? _error;
 
-  static const _ext = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx', 'xls', 'xlsx'];
+  static const _ext = [
+    'pdf',
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+    'doc',
+    'docx',
+    'xls',
+    'xlsx'
+  ];
 
   @override
   void initState() {
@@ -1597,15 +1656,25 @@ class _TransferDocsPageState extends State<TransferDocsPage> {
   MediaType _mt(String name) {
     final e = name.toLowerCase().split('.').last;
     switch (e) {
-      case 'pdf': return MediaType('application', 'pdf');
+      case 'pdf':
+        return MediaType('application', 'pdf');
       case 'jpg':
-      case 'jpeg': return MediaType('image', 'jpeg');
-      case 'png': return MediaType('image', 'png');
-      case 'webp': return MediaType('image', 'webp');
-      case 'doc': return MediaType('application', 'msword');
-      case 'docx': return MediaType('application', 'vnd.openxmlformats-officedocument.wordprocessingml.document');
-      case 'xls': return MediaType('application', 'vnd.ms-excel');
-      default: return MediaType('application', 'vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      case 'jpeg':
+        return MediaType('image', 'jpeg');
+      case 'png':
+        return MediaType('image', 'png');
+      case 'webp':
+        return MediaType('image', 'webp');
+      case 'doc':
+        return MediaType('application', 'msword');
+      case 'docx':
+        return MediaType('application',
+            'vnd.openxmlformats-officedocument.wordprocessingml.document');
+      case 'xls':
+        return MediaType('application', 'vnd.ms-excel');
+      default:
+        return MediaType('application',
+            'vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     }
   }
 
@@ -1621,9 +1690,11 @@ class _TransferDocsPageState extends State<TransferDocsPage> {
       final base = Api.baseUrl.replaceAll(RegExp(r'/+$'), '');
       final req = http.MultipartRequest(
           'POST', Uri.parse('$base/stock/transfers/${widget.trfId}/docs'));
-      if (Api.token != null) req.headers['Authorization'] = 'Bearer ${Api.token}';
+      if (Api.token != null)
+        req.headers['Authorization'] = 'Bearer ${Api.token}';
       for (final f in files) {
-        req.files.add(http.MultipartFile.fromBytes('files', await f.readAsBytes(),
+        req.files.add(http.MultipartFile.fromBytes(
+            'files', await f.readAsBytes(),
             filename: f.name, contentType: _mt(f.name)));
       }
       final res = await http.Response.fromStream(
@@ -1678,8 +1749,10 @@ class _TransferDocsPageState extends State<TransferDocsPage> {
     );
     if (ok != true) return;
     try {
-      await Api.delete('/stock/transfers/${widget.trfId}/docs/${pick(d, ['id'])}');
-      if (mounted) setState(() => _docs.removeWhere((x) => '${x['id']}' == '${d['id']}'));
+      await Api.delete(
+          '/stock/transfers/${widget.trfId}/docs/${pick(d, ['id'])}');
+      if (mounted)
+        setState(() => _docs.removeWhere((x) => '${x['id']}' == '${d['id']}'));
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     }
@@ -1705,10 +1778,9 @@ class _TransferDocsPageState extends State<TransferDocsPage> {
                             style: TextStyle(color: p.mut)))),
               for (final d in _docs)
                 ListTile(
-                  leading: Icon(
-                      pick(d, ['mime']).startsWith('image')
-                          ? Icons.image_outlined
-                          : Icons.description_outlined),
+                  leading: Icon(pick(d, ['mime']).startsWith('image')
+                      ? Icons.image_outlined
+                      : Icons.description_outlined),
                   title: Text(pick(d, ['name'])),
                   onTap: () => _open(d),
                   trailing: IconButton(

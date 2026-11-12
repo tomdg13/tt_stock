@@ -26,7 +26,8 @@ class ReceiveHome extends StatefulWidget {
 
 class _ReceiveHomeState extends State<ReceiveHome> {
   bool _adding = false;
-  late Future<dynamic> _recent = Api.get('/stock/movements?type=purchase_in&limit=500');
+  late Future<dynamic> _recent =
+      Api.get('/stock/movements?type=purchase_in&limit=500');
 
   // key names tried in order (adjust if your API uses other names)
   static const _poKeys = ['poNo', 'poNumber', 'po', 'poCode', 'refNo'];
@@ -158,8 +159,8 @@ class _ReceiveHomeState extends State<ReceiveHome> {
         setState(() {
           _recent = Future.value(d);
         });
-        final match = _group(asList(d)).where(
-            (x) => g.po.isNotEmpty ? x.po == g.po : x.grn == g.grn);
+        final match = _group(asList(d))
+            .where((x) => g.po.isNotEmpty ? x.po == g.po : x.grn == g.grn);
         if (match.isNotEmpty) _openPo(match.first);
       } catch (_) {
         if (mounted) _reload();
@@ -2309,7 +2310,6 @@ String _lakFmt(Object? v) {
   }
   return (n < 0 ? '-' : '') + b.toString();
 }
-
 
 /// Add products to an existing receipt, using the same LineEditor as the receive form.
 class _AddLinesPage extends StatefulWidget {

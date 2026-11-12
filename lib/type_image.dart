@@ -12,19 +12,26 @@ import 'theme.dart';
 
 String terminalTypeImageUrl(String file) {
   if (file.isEmpty) return '';
-  if (file.startsWith('/') || file.startsWith('http')) return productImageUrl(file);
+  if (file.startsWith('/') || file.startsWith('http'))
+    return productImageUrl(file);
   return productImageUrl('/uploads/terminal-types/$file');
 }
 
 /// Type picture, or a plain icon when the type has none.
-Widget typeThumb(BuildContext context, String file, {double size = 44, IconData icon = Icons.memory}) {
+Widget typeThumb(BuildContext context, String file,
+    {double size = 44, IconData icon = Icons.memory}) {
   final p = pal(context);
-  final ph = SizedBox(width: size, height: size, child: Icon(icon, color: p.mut));
+  final ph =
+      SizedBox(width: size, height: size, child: Icon(icon, color: p.mut));
   final url = terminalTypeImageUrl(file);
   if (url.isEmpty) return ph;
   return ClipRRect(
     borderRadius: BorderRadius.circular(8),
-    child: Image.network(url, width: size, height: size, fit: BoxFit.cover, errorBuilder: (_, __, ___) => ph),
+    child: Image.network(url,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => ph),
   );
 }
 
@@ -36,17 +43,22 @@ class TypeImageController {
 
   Future<void> apply(String typeId) async {
     final base = Api.baseUrl.replaceAll(RegExp(r'/+$'), '');
-    final uri = Uri.parse('$base/terminal-types/${Uri.encodeComponent(typeId)}/image');
+    final uri =
+        Uri.parse('$base/terminal-types/${Uri.encodeComponent(typeId)}/image');
     final img = picked;
     if (img != null) {
       final req = http.MultipartRequest('POST', uri);
-      if (Api.token != null) req.headers['Authorization'] = 'Bearer ${Api.token}';
+      if (Api.token != null)
+        req.headers['Authorization'] = 'Bearer ${Api.token}';
       final t = img.type.split('/');
       req.files.add(http.MultipartFile.fromBytes('image', img.bytes,
           filename: img.name, contentType: MediaType(t[0], t[1])));
-      apiLog('-> POST $uri  multipart field=image file=[${img.name} ${img.type} ${img.bytes.length}B]');
-      final res = await http.Response.fromStream(await req.send().timeout(const Duration(seconds: 60)));
-      apiLog('<- ${res.statusCode} POST $uri\n      ${apiClip(utf8.decode(res.bodyBytes, allowMalformed: true))}');
+      apiLog(
+          '-> POST $uri  multipart field=image file=[${img.name} ${img.type} ${img.bytes.length}B]');
+      final res = await http.Response.fromStream(
+          await req.send().timeout(const Duration(seconds: 60)));
+      apiLog(
+          '<- ${res.statusCode} POST $uri\n      ${apiClip(utf8.decode(res.bodyBytes, allowMalformed: true))}');
       if (res.statusCode >= 400) {
         var msg = 'Error ${res.statusCode}';
         try {
@@ -67,17 +79,20 @@ class TypeImageController {
 class TypeImageEditor extends StatefulWidget {
   final String existingFile;
   final TypeImageController controller;
-  const TypeImageEditor({super.key, required this.existingFile, required this.controller});
+  const TypeImageEditor(
+      {super.key, required this.existingFile, required this.controller});
   @override
   State<TypeImageEditor> createState() => _TypeImageEditorState();
 }
 
 class _TypeImageEditorState extends State<TypeImageEditor> {
   Future<void> _pick() async {
-    final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 80);
+    final x = await ImagePicker().pickImage(
+        source: ImageSource.gallery, maxWidth: 1600, imageQuality: 80);
     if (x == null) return;
     final bytes = await x.readAsBytes();
-    widget.controller.picked = PendingImage(x.name.isEmpty ? 'image.jpg' : x.name, bytes, x.mimeType);
+    widget.controller.picked =
+        PendingImage(x.name.isEmpty ? 'image.jpg' : x.name, bytes, x.mimeType);
     widget.controller.removed = false;
     if (mounted) setState(() {});
   }
@@ -97,7 +112,9 @@ class _TypeImageEditorState extends State<TypeImageEditor> {
       preview = Image.memory(c.picked!.bytes, fit: BoxFit.cover);
     } else if (!c.removed && widget.existingFile.isNotEmpty) {
       preview = Image.network(terminalTypeImageUrl(widget.existingFile),
-          fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined)));
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) =>
+              const Center(child: Icon(Icons.broken_image_outlined)));
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('ຮູບປະເພດ', style: TextStyle(color: p.mut, fontSize: 14)),
@@ -119,7 +136,9 @@ class _TypeImageEditorState extends State<TypeImageEditor> {
                     customBorder: const CircleBorder(),
                     onTap: _remove,
                     child: const Padding(
-                        padding: EdgeInsets.all(3), child: Icon(Icons.close, size: 16, color: Colors.white)),
+                        padding: EdgeInsets.all(3),
+                        child:
+                            Icon(Icons.close, size: 16, color: Colors.white)),
                   ),
                 ),
               ),
@@ -132,16 +151,24 @@ class _TypeImageEditorState extends State<TypeImageEditor> {
             child: Container(
               width: 84,
               height: 84,
-              decoration: BoxDecoration(border: Border.all(color: p.bd), borderRadius: BorderRadius.circular(8)),
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.add_photo_alternate_outlined, color: p.mut),
-                Text('ເພີ່ມຮູບ', style: TextStyle(color: p.mut, fontSize: 12)),
-              ]),
+              decoration: BoxDecoration(
+                  border: Border.all(color: p.bd),
+                  borderRadius: BorderRadius.circular(8)),
+              child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add_photo_alternate_outlined, color: p.mut),
+                    Text('ເພີ່ມຮູບ',
+                        style: TextStyle(color: p.mut, fontSize: 12)),
+                  ]),
             ),
           ),
         const SizedBox(width: 12),
         if (preview != null)
-          OutlinedButton.icon(onPressed: _pick, icon: const Icon(Icons.swap_horiz), label: const Text('ປ່ຽນຮູບ')),
+          OutlinedButton.icon(
+              onPressed: _pick,
+              icon: const Icon(Icons.swap_horiz),
+              label: const Text('ປ່ຽນຮູບ')),
       ]),
     ]);
   }

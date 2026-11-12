@@ -115,13 +115,15 @@ class _TerminalPartsPageState extends State<TerminalPartsPage> {
                   c,
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
-                    leading: _thumb(pick(e, ['productId']), pick(e, ['productName'])),
+                    leading: _thumb(
+                        pick(e, ['productId']), pick(e, ['productName'])),
                     title: Text(pick(e, ['productName', 'productId']),
                         style: const TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text(
-                        [pick(e, ['serialNo']), pick(e, ['installedBy'])]
-                            .where((x) => x.isNotEmpty)
-                            .join(' · '),
+                        [
+                          pick(e, ['serialNo']),
+                          pick(e, ['installedBy'])
+                        ].where((x) => x.isNotEmpty).join(' · '),
                         style: TextStyle(color: p.mut, fontSize: 13)),
                     trailing: Text(_d(pick(e, ['installedAt'])),
                         textAlign: TextAlign.right,
@@ -137,7 +139,11 @@ class _TerminalPartsPageState extends State<TerminalPartsPage> {
                   child: ListTile(
                     leading: _thumb('', pick(e, ['productName'])),
                     title: Text(
-                        '${pick(e, ['productName']).isEmpty ? pick(e, ['action']) : pick(e, ['productName'])}${_qty(pick(e, ['action']))}',
+                        '${pick(e, ['productName']).isEmpty ? pick(e, [
+                                'action'
+                              ]) : pick(e, [
+                                'productName'
+                              ])}${_qty(pick(e, ['action']))}',
                         style: const TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text(pick(e, ['userName']),
                         style: TextStyle(color: p.mut, fontSize: 13)),

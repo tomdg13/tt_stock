@@ -124,8 +124,10 @@ Future<void> sharePoXlsx({
     sb.write(
         '<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>');
     sb.write('<headerFooter>');
-    if (pageHeader != null) sb.write('<oddHeader>${_esc(pageHeader)}</oddHeader>');
-    if (pageFooter != null) sb.write('<oddFooter>${_esc(pageFooter)}</oddFooter>');
+    if (pageHeader != null)
+      sb.write('<oddHeader>${_esc(pageHeader)}</oddHeader>');
+    if (pageFooter != null)
+      sb.write('<oddFooter>${_esc(pageFooter)}</oddFooter>');
     sb.write('</headerFooter>');
   }
   if (pics) sb.write('<drawing r:id="rId1"/>');

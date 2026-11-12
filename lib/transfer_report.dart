@@ -23,7 +23,8 @@ class _TransferReportPageState extends State<TransferReportPage> {
   }
 
   DateTime? _date(Map<String, dynamic> t) {
-    final s = pick(t, ['createdAt', 'created_at', 'date', 'sentAt', 'createdDate']);
+    final s =
+        pick(t, ['createdAt', 'created_at', 'date', 'sentAt', 'createdDate']);
     return s.length >= 10 ? DateTime.tryParse(s.substring(0, 10)) : null;
   }
 
@@ -36,7 +37,8 @@ class _TransferReportPageState extends State<TransferReportPage> {
     return its.fold<num>(0, (s, i) => s + num0(i['qty'] ?? i['quantity']));
   }
 
-  String _from(Map<String, dynamic> t) => pick(t, ['fromBranchName', 'fromBranchId']);
+  String _from(Map<String, dynamic> t) =>
+      pick(t, ['fromBranchName', 'fromBranchId']);
   String _to(Map<String, dynamic> t) => pick(t, ['toBranchName', 'toBranchId']);
 
   List<Map<String, dynamic>> _filter(List<Map<String, dynamic>> rows) {
@@ -84,8 +86,9 @@ class _TransferReportPageState extends State<TransferReportPage> {
             ..sort();
           final rows = _filter(all);
           final totalQty = rows.fold<num>(0, (s, t) => s + _qty(t));
-          final transit =
-              rows.where((t) => pick(t, ['status', 'state']) == 'in_transit').length;
+          final transit = rows
+              .where((t) => pick(t, ['status', 'state']) == 'in_transit')
+              .length;
           return ListView(padding: const EdgeInsets.all(16), children: [
             Row(children: [
               Expanded(
@@ -116,7 +119,8 @@ class _TransferReportPageState extends State<TransferReportPage> {
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'ສາຂາ'),
               items: [
-                const DropdownMenuItem<String?>(value: null, child: Text('ທຸກສາຂາ')),
+                const DropdownMenuItem<String?>(
+                    value: null, child: Text('ທຸກສາຂາ')),
                 for (final b in branches)
                   DropdownMenuItem<String?>(value: b, child: Text(b)),
               ],
@@ -127,11 +131,13 @@ class _TransferReportPageState extends State<TransferReportPage> {
               margin: EdgeInsets.zero,
               child: Padding(
                 padding: const EdgeInsets.all(12),
-                child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-                  _sum('ຈຳນວນໃບໂອນ', '${rows.length}'),
-                  _sum('ຈຳນວນອາໄຫຼ່ລວມ', fmtNum(totalQty.toDouble())),
-                  _sum('ລະຫວ່າງທາງ', '$transit'),
-                ]),
+                child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _sum('ຈຳນວນໃບໂອນ', '${rows.length}'),
+                      _sum('ຈຳນວນອາໄຫຼ່ລວມ', fmtNum(totalQty.toDouble())),
+                      _sum('ລະຫວ່າງທາງ', '$transit'),
+                    ]),
               ),
             ),
             const SizedBox(height: 8),
@@ -159,13 +165,17 @@ class _TransferReportPageState extends State<TransferReportPage> {
     final lines = its.isEmpty
         ? pick(t, ['productName'])
         : its
-            .map((i) =>
-                '${pick(i, ['productName', 'name', 'productId'])} × ${fmtNum(num0(i['qty'] ?? i['quantity']))}')
+            .map((i) => '${pick(i, [
+                      'productName',
+                      'name',
+                      'productId'
+                    ])} × ${fmtNum(num0(i['qty'] ?? i['quantity']))}')
             .join('\n');
     final d = _date(t);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.bd))),
+      decoration:
+          BoxDecoration(border: Border(bottom: BorderSide(color: p.bd))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(

@@ -168,11 +168,8 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
     final subStyle = theme.textTheme.bodySmall
         ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
 
-    final currencies = rows
-        .map((r) => r.currency)
-        .where((c) => c.isNotEmpty)
-        .toSet()
-        .toList();
+    final currencies =
+        rows.map((r) => r.currency).where((c) => c.isNotEmpty).toSet().toList();
     final multi = currencies.length > 1;
 
     Widget line(String a, String b, String c, String d,
@@ -187,14 +184,11 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
           children: [
             Expanded(flex: 3, child: Text(a, style: st)),
             Expanded(
-                flex: 2,
-                child: Text(b, style: st, textAlign: TextAlign.right)),
+                flex: 2, child: Text(b, style: st, textAlign: TextAlign.right)),
             Expanded(
-                flex: 2,
-                child: Text(c, style: st, textAlign: TextAlign.right)),
+                flex: 2, child: Text(c, style: st, textAlign: TextAlign.right)),
             Expanded(
-                flex: 2,
-                child: Text(d, style: st, textAlign: TextAlign.right)),
+                flex: 2, child: Text(d, style: st, textAlign: TextAlign.right)),
             if (onTap != null)
               Icon(open ? Icons.expand_more : Icons.chevron_right, size: 18)
             else
@@ -221,7 +215,8 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
         );
 
     Widget lineItem(BranchLineItem l) => Padding(
-          padding: const EdgeInsets.only(left: 36, right: 22, top: 6, bottom: 6),
+          padding:
+              const EdgeInsets.only(left: 36, right: 22, top: 6, bottom: 6),
           child: Row(
             children: [
               _thumb(theme, l.imageUrl),
@@ -319,18 +314,21 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
                   final us = ub == null ? <BranchLineItem>[] : ub(r);
                   final ugs = ug == null ? <BranchPoItem>[] : ug(r);
                   final w = <Widget>[];
-                  w.add(section('ຊື້ເຂົ້າ (PO)',
+                  w.add(section(
+                      'ຊື້ເຂົ້າ (PO)',
                       '${_fmt(r.priceBuy)} ${r.currency}',
                       Icons.download_outlined));
                   if (items.isEmpty) {
-                    w.add(child(const BranchPoItem(po: '-', sub: '', amount: '')));
+                    w.add(child(
+                        const BranchPoItem(po: '-', sub: '', amount: '')));
                   } else {
                     for (final it in items) {
                       w.add(child(it));
                     }
                   }
                   if (ub != null || ug != null) {
-                    w.add(section('ນຳໃຊ້ (ສ້ອມ)',
+                    w.add(section(
+                        'ນຳໃຊ້ (ສ້ອມ)',
                         '${_fmt(r.priceSale)} ${r.currency}',
                         Icons.build_outlined));
                     if (ug != null ? ugs.isEmpty : us.isEmpty) {

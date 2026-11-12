@@ -60,11 +60,12 @@ Future<List<MapEntry<String, double>>> matchProductPhoto(
       var f = _featCache[url];
       if (f == null) {
         try {
-          final res = await http.get(Uri.parse(url),
-              headers: Api.token == null
-                  ? <String, String>{}
-                  : {'Authorization': 'Bearer ${Api.token}'}).timeout(
-              const Duration(seconds: 15));
+          final res = await http
+              .get(Uri.parse(url),
+                  headers: Api.token == null
+                      ? <String, String>{}
+                      : {'Authorization': 'Bearer ${Api.token}'})
+              .timeout(const Duration(seconds: 15));
           if (res.statusCode == 200) {
             f = await compute(_photoFeature, res.bodyBytes);
             if (f != null) _featCache[url] = f;

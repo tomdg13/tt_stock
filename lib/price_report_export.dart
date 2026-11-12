@@ -262,7 +262,8 @@ Future<void> sharePriceReportXlsx(PriceReportData d) async {
 
   final lh = await loadLetterhead();
   const xlW = 1305;
-  debugPrint('[XLSX] letterhead ready: header ${lh.hw}x${lh.hh}, footer ${lh.fw}x${lh.fh}, po=${po.length} used=${us.length}');
+  debugPrint(
+      '[XLSX] letterhead ready: header ${lh.hw}x${lh.hh}, footer ${lh.fw}x${lh.fh}, po=${po.length} used=${us.length}');
   images.add(XlImage(
       row: 0,
       col: 0,
@@ -348,12 +349,40 @@ Future<void> sharePriceReportXlsx(PriceReportData d) async {
 
   add(<Object>[]);
   heights[rows.length] = 28.0;
-  add(<Object>['', 'ຜູ້ຈັດທຳ (Prepared by)', '', '', '', 'ຜູ້ອະນຸມັດ (Approved by)'], true);
+  add(<Object>[
+    '',
+    'ຜູ້ຈັດທຳ (Prepared by)',
+    '',
+    '',
+    '',
+    'ຜູ້ອະນຸມັດ (Approved by)'
+  ], true);
   heights[rows.length] = 54.0;
   add(<Object>[]);
-  add(<Object>['', '______________________', '', '', '', '______________________']);
-  add(<Object>['', 'ຊື່: ........................', '', '', '', 'ຊື່: ........................']);
-  add(<Object>['', 'ວັນທີ: ....../....../..........', '', '', '', 'ວັນທີ: ....../....../..........']);
+  add(<Object>[
+    '',
+    '______________________',
+    '',
+    '',
+    '',
+    '______________________'
+  ]);
+  add(<Object>[
+    '',
+    'ຊື່: ........................',
+    '',
+    '',
+    '',
+    'ຊື່: ........................'
+  ]);
+  add(<Object>[
+    '',
+    'ວັນທີ: ....../....../..........',
+    '',
+    '',
+    '',
+    'ວັນທີ: ....../....../..........'
+  ]);
   add(<Object>[]);
   images.add(XlImage(
       row: rows.length,
@@ -366,7 +395,8 @@ Future<void> sharePriceReportXlsx(PriceReportData d) async {
     heights[rows.length] = 40.0;
     add(<Object>[]);
   }
-  debugPrint('[XLSX] build done rows=${rows.length} images=${images.length} ldbImages=${images.where((e) => e.key.startsWith('ldb_')).length}');
+  debugPrint(
+      '[XLSX] build done rows=${rows.length} images=${images.length} ldbImages=${images.where((e) => e.key.startsWith('ldb_')).length}');
   await sharePoXlsx(
     fileName: 'PriceReport_${_stamp()}.xlsx',
     rows: rows,
@@ -377,7 +407,8 @@ Future<void> sharePriceReportXlsx(PriceReportData d) async {
   );
 }
 
-pw.Widget _cell(String t, {bool bold = false, bool right = false}) => pw.Padding(
+pw.Widget _cell(String t, {bool bold = false, bool right = false}) =>
+    pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 2),
       child: _txt(t, size: 8, bold: bold, right: right),
     );
@@ -441,7 +472,8 @@ pw.Widget _heading(String t) => pw.Padding(
 pw.Widget _sigBox(String lao, String en, String nameLine, String dateLine) =>
     pw.SizedBox(
       width: 200,
-      child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+      child:
+          pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
         _txt(lao, size: 10, bold: true),
         pw.Text(en, style: pw.TextStyle(fontSize: 8)),
         pw.SizedBox(height: 46),
@@ -467,8 +499,8 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
 
   final fBase = await PdfGoogleFonts.notoSansRegular();
   final fBold = await PdfGoogleFonts.notoSansBold();
-  final doc = pw.Document(
-      theme: pw.ThemeData.withFont(base: fBase, bold: fBold));
+  final doc =
+      pw.Document(theme: pw.ThemeData.withFont(base: fBase, bold: fBold));
 
   double tb = 0;
   double tu = 0;
@@ -552,7 +584,8 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
 
   final lh = await loadLetterhead();
   final pageW = PdfPageFormat.a4.width;
-  debugPrint('[PDF] page width=$pageW headerH=${(pageW * lh.headerRatio).toStringAsFixed(1)} footerH=${(pageW * lh.footerRatio).toStringAsFixed(1)}');
+  debugPrint(
+      '[PDF] page width=$pageW headerH=${(pageW * lh.headerRatio).toStringAsFixed(1)} footerH=${(pageW * lh.footerRatio).toStringAsFixed(1)}');
   doc.addPage(pw.MultiPage(
     pageTheme: pw.PageTheme(
       pageFormat: PdfPageFormat.a4,
@@ -581,7 +614,16 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
       if (poData.isNotEmpty) _heading('ຊື້ເຂົ້າ (PO)'),
       if (poData.isNotEmpty)
         _table(
-            ['', 'Branch', 'PO', 'Date', 'Item', 'Qty', 'Unit LAK', 'Amount LAK'],
+            [
+              '',
+              'Branch',
+              'PO',
+              'Date',
+              'Item',
+              'Qty',
+              'Unit LAK',
+              'Amount LAK'
+            ],
             poData,
             lineWidths,
             {5, 6, 7},
@@ -590,7 +632,17 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
       if (usData.isNotEmpty) _heading('ນຳໃຊ້ (ສ້ອມ)'),
       if (usData.isNotEmpty)
         _table(
-            ['', 'Branch', 'ATM ID', 'PO', 'Date', 'Part', 'Qty', 'Unit LAK', 'Amount LAK'],
+            [
+              '',
+              'Branch',
+              'ATM ID',
+              'PO',
+              'Date',
+              'Part',
+              'Qty',
+              'Unit LAK',
+              'Amount LAK'
+            ],
             usData,
             <int, pw.TableColumnWidth>{
               0: const pw.FixedColumnWidth(34),
@@ -612,10 +664,14 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
         child: pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              _sigBox('ຜູ້ຈັດທຳ', 'Prepared by',
+              _sigBox(
+                  'ຜູ້ຈັດທຳ',
+                  'Prepared by',
                   'ຊື່: ..............................',
                   'ວັນທີ: ......../......../............'),
-              _sigBox('ຜູ້ອະນຸມັດ', 'Approved by',
+              _sigBox(
+                  'ຜູ້ອະນຸມັດ',
+                  'Approved by',
                   'ຊື່: ..............................',
                   'ວັນທີ: ......../......../............'),
             ]),
@@ -628,7 +684,6 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
   await Printing.sharePdf(
       bytes: bytes, filename: 'PriceReport_${_stamp()}.pdf');
 }
-
 
 /// PDF of one stock transfer: letterhead, header info, item table, signatures.
 Future<void> shareTransferPdf(
@@ -675,11 +730,27 @@ Future<void> shareTransferPdf(
   }
 
   final texts = <String>{
-    'ໃບໂອນອາໄຫຼ່', 'ເລກທີ', 'ວັນທີ', 'ຈາກສາຂາ', 'ໄປສາຂາ',
-    'ລາຍການ', 'ສິນຄ້າ', 'ຈຳນວນ', 'ລວມ', 'ຜູ້ສົ່ງ', 'ຜູ້ຮັບ',
-    'ວັນທີ / Date', 'ລາຍເຊັນ',
-    'ເລກທີ: ', 'ວັນທີ: ', 'ຈາກສາຂາ: ', 'ໄປສາຂາ: ',
-    no, from, to, date,
+    'ໃບໂອນອາໄຫຼ່',
+    'ເລກທີ',
+    'ວັນທີ',
+    'ຈາກສາຂາ',
+    'ໄປສາຂາ',
+    'ລາຍການ',
+    'ສິນຄ້າ',
+    'ຈຳນວນ',
+    'ລວມ',
+    'ຜູ້ສົ່ງ',
+    'ຜູ້ຮັບ',
+    'ວັນທີ / Date',
+    'ລາຍເຊັນ',
+    'ເລກທີ: ',
+    'ວັນທີ: ',
+    'ຈາກສາຂາ: ',
+    'ໄປສາຂາ: ',
+    no,
+    from,
+    to,
+    date,
     for (final r in data) ...r,
   };
   await _prepLao(texts);
@@ -694,8 +765,8 @@ Future<void> shareTransferPdf(
 
   final fBase = await PdfGoogleFonts.notoSansRegular();
   final fBold = await PdfGoogleFonts.notoSansBold();
-  final doc = pw.Document(
-      theme: pw.ThemeData.withFont(base: fBase, bold: fBold));
+  final doc =
+      pw.Document(theme: pw.ThemeData.withFont(base: fBase, bold: fBold));
   final lh = await loadLetterhead();
   final pageW = PdfPageFormat.a4.width;
 
@@ -792,7 +863,8 @@ Future<void> shareTransferPdf(
         ],
       ),
       pw.SizedBox(height: 40),
-      pw.Row(children: [sign('ຜູ້ສົ່ງ'), pw.SizedBox(width: 40), sign('ຜູ້ຮັບ')]),
+      pw.Row(
+          children: [sign('ຜູ້ສົ່ງ'), pw.SizedBox(width: 40), sign('ຜູ້ຮັບ')]),
     ],
   ));
 

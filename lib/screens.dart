@@ -76,13 +76,23 @@ class _LoginScreenState extends State<LoginScreen> {
     final cred = await BiometricService.authenticateAndGetCredentials();
     debugPrint('BIO: cred=${cred == null ? "NULL" : "phone=${cred.phone}"}');
     if (cred == null) return;
-    if (mounted) setState(() { _busy = true; _error = null; });
+    if (mounted)
+      setState(() {
+        _busy = true;
+        _error = null;
+      });
     try {
       await Api.login(cred.phone, cred.pin);
     } catch (e) {
-      if (mounted) setState(() { _error = '$e'; });
+      if (mounted)
+        setState(() {
+          _error = '$e';
+        });
     } finally {
-      if (mounted) setState(() { _busy = false; });
+      if (mounted)
+        setState(() {
+          _busy = false;
+        });
     }
   }
 
@@ -518,9 +528,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 snap.data == true ? 'ເປີດ' : 'ປິດ',
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
-                  color: snap.data == true
-                      ? const Color(0xFF0B6E66)
-                      : Colors.grey,
+                  color:
+                      snap.data == true ? const Color(0xFF0B6E66) : Colors.grey,
                 ),
               ),
               onTap: _toggleBio,

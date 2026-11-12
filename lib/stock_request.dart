@@ -22,8 +22,7 @@ Widget _statusChip(String st) {
         color: c.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10)),
     child: Text(label,
-        style:
-            TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
+        style: TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
   );
 }
 
@@ -91,7 +90,8 @@ class _StockRequestsPageState extends State<StockRequestsPage> {
     final items =
         r['items'] is List ? asList(r['items']) : <Map<String, dynamic>>[];
     final lines = items
-        .map((i) => '${pick(i, ['productName', 'productId'])} × ${pick(i, ['qty'])}')
+        .map((i) =>
+            '${pick(i, ['productName', 'productId'])} × ${pick(i, ['qty'])}')
         .join('\n');
     final note = pick(r, ['note']);
     final canSend = Api.can('REQUEST_APPROVE');
@@ -152,7 +152,8 @@ class _StockRequestsPageState extends State<StockRequestsPage> {
                       child: Text('ຍັງບໍ່ມີລາຍການ',
                           style: TextStyle(color: pal(context).mut)));
                 }
-                return Column(children: [for (final r in rows) _card(r, inbox)]);
+                return Column(
+                    children: [for (final r in rows) _card(r, inbox)]);
               }),
             ]),
       );
@@ -292,8 +293,7 @@ class _StockRequestFormState extends State<StockRequestForm> {
   @override
   Widget build(BuildContext context) {
     final p = pal(context);
-    final supList =
-        _sups;
+    final supList = _sups;
     return Scaffold(
       appBar: AppBar(title: const Text('ຂໍອາໄຫຼ່ຈາກສາຂາອື່ນ')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
@@ -308,7 +308,10 @@ class _StockRequestFormState extends State<StockRequestForm> {
           }),
           const SizedBox(height: 12),
         ],
-        branchDropdown(supList.isEmpty ? 'ຂໍຈາກສາຂາ (ຍັງບໍ່ມີສິດຂໍ)' : 'ຂໍຈາກສາຂາ', supList, _sup, (v) {
+        branchDropdown(
+            supList.isEmpty ? 'ຂໍຈາກສາຂາ (ຍັງບໍ່ມີສິດຂໍ)' : 'ຂໍຈາກສາຂາ',
+            supList,
+            _sup, (v) {
           setState(() {
             _sup = v;
           });
@@ -335,7 +338,8 @@ class BranchRequestsBar extends StatelessWidget {
   const BranchRequestsBar({super.key});
   @override
   Widget build(BuildContext context) {
-    if (Api.can('REQUEST_SEND') == false && Api.can('REQUEST_APPROVE') == false) {
+    if (Api.can('REQUEST_SEND') == false &&
+        Api.can('REQUEST_APPROVE') == false) {
       return const SizedBox.shrink();
     }
     return Padding(
@@ -483,12 +487,8 @@ class BranchAccessResult {
   BranchAccessResult(this.seeIds, this.reqIds);
 }
 
-Future<BranchAccessResult?> pickBranchAccess(
-    BuildContext context,
-    String title,
-    List<MapEntry<dynamic, String>> all,
-    List<dynamic> see,
-    List<dynamic> req) {
+Future<BranchAccessResult?> pickBranchAccess(BuildContext context, String title,
+    List<MapEntry<dynamic, String>> all, List<dynamic> see, List<dynamic> req) {
   final seeSet = <String>{for (final x in see) '$x'};
   final reqSet = <String>{for (final x in req) '$x'};
   return showDialog<BranchAccessResult>(
@@ -496,7 +496,15 @@ Future<BranchAccessResult?> pickBranchAccess(
     builder: (c) => StatefulBuilder(
       builder: (c, setS) {
         return AlertDialog(
-          title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)), const SizedBox(height: 4), const Text('ກຳນົດສິດ: ເບິ່ງຂໍ້ມູນ ແລະ ຂໍອາໄຫຼ່', style: TextStyle(fontSize: 13))]),
+          title:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                style:
+                    const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            const Text('ກຳນົດສິດ: ເບິ່ງຂໍ້ມູນ ແລະ ຂໍອາໄຫຼ່',
+                style: TextStyle(fontSize: 13))
+          ]),
           content: SizedBox(
             width: double.maxFinite,
             child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -579,18 +587,16 @@ Future<BranchAccessResult?> pickBranchAccess(
   );
 }
 
-Future<List<dynamic>?> pickRequestBranches(
-    BuildContext context,
-    String title,
-    List<MapEntry<dynamic, String>> all,
-    List<dynamic> req) {
+Future<List<dynamic>?> pickRequestBranches(BuildContext context, String title,
+    List<MapEntry<dynamic, String>> all, List<dynamic> req) {
   final sel = <String>{for (final x in req) '$x'};
   return showDialog<List<dynamic>>(
     context: context,
     builder: (c) => StatefulBuilder(
       builder: (c, setS) {
         return AlertDialog(
-          title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          title:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title,
                 style:
                     const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
@@ -649,7 +655,8 @@ Future<BranchAccessResult?> pickBranchPerms(
     builder: (c) => StatefulBuilder(
       builder: (c, setS) {
         return AlertDialog(
-          title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          title:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title,
                 style:
                     const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
@@ -754,7 +761,8 @@ class _BranchRequestInfoState extends State<BranchRequestInfo> {
 
   Future<List<String>> _load() async {
     final list = await loadBranches();
-    final self = list.where((b) => '${b['id']}' == '${widget.branchId}').toList();
+    final self =
+        list.where((b) => '${b['id']}' == '${widget.branchId}').toList();
     if (self.isNotEmpty && '${self.first['isHq']}' == '1') {
       return ['ທຸກສາຂາ'];
     }

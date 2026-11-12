@@ -99,13 +99,16 @@ Future<LdbLetterhead> loadLetterhead() async {
       (await rootBundle.load('assets/ldb/ldb_footer.png')).buffer.asUint8List();
   final hImg = img.decodePng(hb);
   final fImg = img.decodePng(fb);
-  debugPrint('[LH] header bytes=${hb.length} decoded=${hImg == null ? 'NULL' : '${hImg.width}x${hImg.height}'}');
-  debugPrint('[LH] footer bytes=${fb.length} decoded=${fImg == null ? 'NULL' : '${fImg.width}x${fImg.height}'}');
+  debugPrint(
+      '[LH] header bytes=${hb.length} decoded=${hImg == null ? 'NULL' : '${hImg.width}x${hImg.height}'}');
+  debugPrint(
+      '[LH] footer bytes=${fb.length} decoded=${fImg == null ? 'NULL' : '${fImg.width}x${fImg.height}'}');
   if (hImg == null || fImg == null) {
     throw Exception('Cannot read assets/ldb images');
   }
   final a = await _addrPng(ldbAddressLao, ldbAddressEn);
-  debugPrint('[LH] address lao=${ldbAddressLao.length} chars en=${ldbAddressEn.length} chars textPng=${a == null ? 'none' : a.length}');
+  debugPrint(
+      '[LH] address lao=${ldbAddressLao.length} chars en=${ldbAddressEn.length} chars textPng=${a == null ? 'none' : a.length}');
   if (a != null) {
     final t = img.decodePng(a);
     if (t != null) {
@@ -132,7 +135,8 @@ Future<LdbLetterhead> loadLetterhead() async {
     fw: fImg.width,
     fh: fImg.height,
   );
-  debugPrint('[LH] ready header ${r.hw}x${r.hh} footer ${r.fw}x${r.fh} headerJpg=${r.headerJpg.length} footerJpg=${r.footerJpg.length}');
+  debugPrint(
+      '[LH] ready header ${r.hw}x${r.hh} footer ${r.fw}x${r.fh} headerJpg=${r.headerJpg.length} footerJpg=${r.footerJpg.length}');
   _cache = r;
   return r;
 }

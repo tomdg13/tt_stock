@@ -14,7 +14,8 @@ void apiLog(String m) {
   if (kDebugMode) debugPrint('[API] $m');
 }
 
-String apiClip(String s, [int n = 800]) => s.length <= n ? s : '${s.substring(0, n)}... (${s.length} chars)';
+String apiClip(String s, [int n = 800]) =>
+    s.length <= n ? s : '${s.substring(0, n)}... (${s.length} chars)';
 
 class ApiException implements Exception {
   final int status;
@@ -76,7 +77,8 @@ class Api {
     final enc = body == null ? null : jsonEncode(body);
     final sw = Stopwatch()..start();
     final hide = path.startsWith('/auth'); // never print PIN / token
-    apiLog('-> $method $uri${enc == null ? '' : '\n      body: ${hide ? '<hidden>' : apiClip(enc)}'}');
+    apiLog(
+        '-> $method $uri${enc == null ? '' : '\n      body: ${hide ? '<hidden>' : apiClip(enc)}'}');
     http.Response res;
     try {
       Future<http.Response> req;
@@ -100,10 +102,12 @@ class Api {
           0, 'Cannot reach the server. Check your network and server URL.');
     }
 
-    apiLog('<- ${res.statusCode} $method $path (${sw.elapsedMilliseconds} ms)\n      ${hide ? '<hidden>' : apiClip(utf8.decode(res.bodyBytes, allowMalformed: true))}');
+    apiLog(
+        '<- ${res.statusCode} $method $path (${sw.elapsedMilliseconds} ms)\n      ${hide ? '<hidden>' : apiClip(utf8.decode(res.bodyBytes, allowMalformed: true))}');
     dynamic data;
     try {
-      data = res.bodyBytes.isEmpty ? null : jsonDecode(utf8.decode(res.bodyBytes));
+      data =
+          res.bodyBytes.isEmpty ? null : jsonDecode(utf8.decode(res.bodyBytes));
     } catch (_) {
       data = null;
     }
@@ -132,7 +136,8 @@ class Api {
 
   static Future<void> login(String phone, String pin) async {
     final d = await _send('POST', '/auth/login', {'phone': phone, 'pin': pin});
-    final t = d is Map ? (d['token'] ?? d['accessToken'] ?? d['access_token']) : null;
+    final t =
+        d is Map ? (d['token'] ?? d['accessToken'] ?? d['access_token']) : null;
     if (t == null) throw ApiException(0, 'Login response has no token.');
     token = t.toString();
     user = d['user'] is Map ? Map<String, dynamic>.from(d['user']) : null;

@@ -30,6 +30,7 @@ class _UsageReportPageState extends State<UsageReportPage> {
   String? _branch;
   String _q = '';
   final _qc = TextEditingController();
+
   /// Search by photo: take or import a picture, crop it, then pick from the most similar products.
   Future<void> _imageSearch(List<Map<String, dynamic>> all) async {
     final src = await showModalBottomSheet<ImageSource>(
@@ -126,7 +127,6 @@ class _UsageReportPageState extends State<UsageReportPage> {
     }
   }
 
-
   /// Take a photo with the camera and upload it to this product.
   Future<void> _uploadPhoto(String productId) async {
     final shot = await ImagePicker().pickImage(
@@ -210,6 +210,7 @@ class _UsageReportPageState extends State<UsageReportPage> {
       _toast('ບໍ່ພົບຊື່ສິນຄ້າໃນຮູບ');
     }
   }
+
   late Future<List<Map<String, dynamic>>> _future;
   Map<String, String> _imgs = {};
 
@@ -364,66 +365,66 @@ class _UsageReportPageState extends State<UsageReportPage> {
                             row: r,
                             from: _usD(_range.start),
                             to: _usD(_range.end)))),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                        border: Border(bottom: BorderSide(color: p.bd))),
-                    child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          GestureDetector(
-                            onTap: () => _uploadPhoto('${r['productId']}'),
-                            child: Stack(children: [
-                              _thumb(context, _imgs['${r['productId']}'] ?? ''),
-                              Positioned(
-                                right: 0,
-                                bottom: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: const BoxDecoration(
-                                      color: Colors.black54,
-                                      borderRadius: BorderRadius.only(
-                                          topLeft: Radius.circular(8),
-                                          bottomRight: Radius.circular(8))),
-                                  child: const Icon(Icons.photo_camera,
-                                      size: 14, color: Colors.white),
-                                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(color: p.bd))),
+                  child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        GestureDetector(
+                          onTap: () => _uploadPhoto('${r['productId']}'),
+                          child: Stack(children: [
+                            _thumb(context, _imgs['${r['productId']}'] ?? ''),
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: const BoxDecoration(
+                                    color: Colors.black54,
+                                    borderRadius: BorderRadius.only(
+                                        topLeft: Radius.circular(8),
+                                        bottomRight: Radius.circular(8))),
+                                child: const Icon(Icons.photo_camera,
+                                    size: 14, color: Colors.white),
                               ),
-                            ]),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(pick(r, ['productName']),
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600)),
-                                  Text(
-                                      '${pick(r, ['branchName'])}  ${pick(r, ['unit'])}',
-                                      style: TextStyle(
-                                          color: p.mut, fontSize: 12)),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        _cell('ຍອດຕົ້ນ',
-                                            _usS(num0(r['opening'])), null),
-                                        _cell('ນຳເຂົ້າ',
-                                            _usS(num0(r['qtyIn'])),
-                                            Colors.green),
-                                        _cell('ເອົາອອກ',
-                                            _usS(num0(r['qtyOut'])),
-                                            Colors.red),
-                                        _cell('ຍອດທ້າຍ',
-                                            _usS(num0(r['closing'])), null),
-                                        const Icon(Icons.chevron_right),
-                                      ]),
-                                ]),
-                          ),
-                        ]),
-                  ),
+                            ),
+                          ]),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(pick(r, ['productName']),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600)),
+                                Text(
+                                    '${pick(r, ['branchName'])}  ${pick(r, [
+                                          'unit'
+                                        ])}',
+                                    style:
+                                        TextStyle(color: p.mut, fontSize: 12)),
+                                const SizedBox(height: 4),
+                                Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      _cell('ຍອດຕົ້ນ', _usS(num0(r['opening'])),
+                                          null),
+                                      _cell('ນຳເຂົ້າ', _usS(num0(r['qtyIn'])),
+                                          Colors.green),
+                                      _cell('ເອົາອອກ', _usS(num0(r['qtyOut'])),
+                                          Colors.red),
+                                      _cell('ຍອດທ້າຍ', _usS(num0(r['closing'])),
+                                          null),
+                                      const Icon(Icons.chevron_right),
+                                    ]),
+                              ]),
+                        ),
+                      ]),
+                ),
               ),
           ]);
         },
@@ -454,8 +455,8 @@ class _UsageReportPageState extends State<UsageReportPage> {
 
   Widget _cell(String label, String value, Color? c) => Column(children: [
         Text(value,
-            style: TextStyle(
-                fontSize: 15, fontWeight: FontWeight.bold, color: c)),
+            style:
+                TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: c)),
         Text(label, style: const TextStyle(fontSize: 11)),
       ]);
 }
@@ -483,8 +484,11 @@ class _UsageCardPageState extends State<UsageCardPage> {
 
   Future<List<Map<String, dynamic>>> _load() async {
     final r = widget.row;
-    final d = await Api.get(
-        '/stock/movements?branchId=${pick(r, ['branchId'])}&productId=${pick(r, ['productId'])}&from=${widget.from}&to=${widget.to}&limit=2000');
+    final d = await Api.get('/stock/movements?branchId=${pick(r, [
+          'branchId'
+        ])}&productId=${pick(r, [
+          'productId'
+        ])}&from=${widget.from}&to=${widget.to}&limit=2000');
     final list = _usList(d);
     String key(Map<String, dynamic> m) =>
         '${pick(m, ['movementDate'])}|${pick(m, ['id']).padLeft(12, '0')}';
@@ -529,7 +533,9 @@ class _UsageCardPageState extends State<UsageCardPage> {
                             style:
                                 const TextStyle(fontWeight: FontWeight.w600)),
                         Text(
-                            '${dt.length >= 10 ? dt.substring(0, 10) : dt}  ${pick(m, ['refNo'])}',
+                            '${dt.length >= 10 ? dt.substring(0, 10) : dt}  ${pick(m, [
+                                  'refNo'
+                                ])}',
                             style: TextStyle(color: p.mut, fontSize: 12)),
                       ]),
                 ),
@@ -596,8 +602,8 @@ class _UsageCardPageState extends State<UsageCardPage> {
 
   Widget _c(String label, String value, Color? c) => Column(children: [
         Text(value,
-            style: TextStyle(
-                fontSize: 16, fontWeight: FontWeight.bold, color: c)),
+            style:
+                TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c)),
         Text(label, style: const TextStyle(fontSize: 11)),
       ]);
 }

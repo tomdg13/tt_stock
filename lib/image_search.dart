@@ -51,7 +51,8 @@ Future<String?> searchByBarcode(BuildContext context) async {
       context, MaterialPageRoute(builder: (_) => const BarcodeScanPage()));
   if (code == null || code.isEmpty) return null;
   try {
-    final d = await Api.get('/products/by-barcode/${Uri.encodeComponent(code)}');
+    final d =
+        await Api.get('/products/by-barcode/${Uri.encodeComponent(code)}');
     final m = d is Map
         ? Map<String, dynamic>.from(d['data'] is Map ? d['data'] : d)
         : <String, dynamic>{};

@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'budget_page.dart';
+import 'widgets.dart';
 
 String _money(num v) {
   final s = v.round().abs().toString();
@@ -45,9 +46,109 @@ class _BudgetListPageState extends State<BudgetListPage> {
   void _reload() => setState(() => _f = _load());
 
   Future<void> _open([Map<String, dynamic>? plan]) async {
-    await Navigator.push(context,
-        MaterialPageRoute(builder: (_) => BudgetPage(plan: plan)));
+    await Navigator.push(
+        context, MaterialPageRoute(builder: (_) => BudgetPage(plan: plan)));
     if (mounted) _reload();
+  }
+
+  // settings are chosen once, when the budget is created
+  Future<Map<String, dynamic>?> _newSettings() async {
+    List<Map<String, dynamic>> branches = [];
+    try {
+      branches = await loadBranches();
+    } catch (_) {}
+    if (!mounted) return null;
+    final name = TextEditingController();
+    final thisYear = DateTime.now().year;
+    dynamic branchId;
+    int fm = 10;
+    int toYear = thisYear + 2;
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('ສ້າງງົບປະມານ'),
+          content: SingleChildScrollView(
+            child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: name,
+                    decoration: const InputDecoration(labelText: 'ຊື່ງົບປະມານ'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<dynamic>(
+                    initialValue: branchId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'ສາຂາ'),
+                    items: [
+                      const DropdownMenuItem<dynamic>(
+                          value: null, child: Text('ທຸກສາຂາ')),
+                      for (final b in branches)
+                        DropdownMenuItem<dynamic>(
+                            value: b['id'], child: Text(pick(b, ['name']))),
+                    ],
+                    onChanged: (v) => setD(() => branchId = v),
+                  ),
+                  const SizedBox(height: 12),
+                  SegmentedButton<int>(
+                    segments: const [
+                      ButtonSegment(value: 10, label: Text('ຕຸລາ - ກັນຍາ')),
+                      ButtonSegment(value: 1, label: Text('ມັງກອນ - ທັນວາ')),
+                    ],
+                    selected: {fm},
+                    onSelectionChanged: (s) => setD(() => fm = s.first),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: toYear,
+                    decoration: const InputDecoration(labelText: 'ຮອດສິ້ນປີ'),
+                    items: [
+                      for (var y = thisYear; y <= thisYear + 6; y++)
+                        DropdownMenuItem<int>(value: y, child: Text('$y')),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) setD(() => toYear = v);
+                    },
+                  ),
+                ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('ຍົກເລີກ')),
+            FilledButton(
+              onPressed: () {
+                final n = name.text.trim();
+                if (n.isEmpty) return;
+                var bn = '';
+                for (final b in branches) {
+                  if ('${b['id']}' == '$branchId') bn = pick(b, ['name']);
+                }
+                Navigator.pop(ctx, {
+                  'id': null,
+                  'name': n,
+                  'fm': fm,
+                  'toYear': toYear,
+                  'pct': 0,
+                  'branchId': branchId,
+                  'branchName': bn,
+                  'poIds': '',
+                  'auditIds': '',
+                });
+              },
+              child: const Text('ສ້າງ'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _create() async {
+    final s = await _newSettings();
+    if (s != null) _open(s);
   }
 
   Future<void> _delete(Map<String, dynamic> p) async {
@@ -89,8 +190,7 @@ class _BudgetListPageState extends State<BudgetListPage> {
         onTap: () => _open(p),
         title: Text('${p['name'] ?? ''}',
             style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(
-            '${branch.isEmpty ? 'ທຸກສາຂາ' : branch}  •  '
+        subtitle: Text('${branch.isEmpty ? 'ທຸກສາຂາ' : branch}  •  '
             '${fm == 10 ? 'ຕຸລາ - ກັນຍາ' : 'ມັງກອນ - ທັນວາ'}\n'
             'ຮອດ ${p['toYear']}  •  ເຜື່ອ ${_num(p['pct']).toInt()}%'
             '${date.isEmpty ? '' : '  •  $date'}'),
@@ -116,7 +216,7 @@ class _BudgetListPageState extends State<BudgetListPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('ງົບປະມານອາໄຫຼ່')),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _open(),
+        onPressed: _create,
         icon: const Icon(Icons.add),
         label: const Text('ສ້າງງົບປະມານ'),
       ),
@@ -134,11 +234,10 @@ class _BudgetListPageState extends State<BudgetListPage> {
             if (snap.hasError) {
               return ListView(padding: const EdgeInsets.all(16), children: [
                 Text('${snap.error}',
-                    style: TextStyle(
-                        color: Theme.of(context).colorScheme.error)),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error)),
                 const SizedBox(height: 8),
-                FilledButton(
-                    onPressed: _reload, child: const Text('ລອງໃໝ່')),
+                FilledButton(onPressed: _reload, child: const Text('ລອງໃໝ່')),
               ]);
             }
             final rows = snap.data ?? [];

@@ -16,10 +16,11 @@ double _n(Map<String, dynamic> r, String k) =>
 String _fmt(double v) {
   final neg = v < 0;
   final a = v.abs();
-  final s = a == a.roundToDouble() ? a.round().toString() : a.toStringAsFixed(2);
+  final s =
+      a == a.roundToDouble() ? a.round().toString() : a.toStringAsFixed(2);
   final parts = s.split('.');
-  parts[0] = parts[0]
-      .replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
+  parts[0] =
+      parts[0].replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
   return (neg ? '-' : '') + parts.join('.');
 }
 
@@ -154,7 +155,8 @@ class _StockDrillState extends State<StockDrill> {
             ),
             const Text('  ›  '),
             InkWell(
-              onTap: _model == null ? null : () => setState(() => _model = null),
+              onTap:
+                  _model == null ? null : () => setState(() => _model = null),
               child: Text(_brand!, style: bold),
             ),
             if (_model != null) ...[
@@ -273,8 +275,8 @@ class _StockDrillState extends State<StockDrill> {
       DataRow(cells: [
         const DataCell(Text('ລວມ', style: bold)),
         DataCell(Text('${allP.length}', style: bold)),
-        DataCell(Text(_fmt(all.values.fold(0.0, (a, b) => a + b)),
-            style: bold)),
+        DataCell(
+            Text(_fmt(all.values.fold(0.0, (a, b) => a + b)), style: bold)),
         DataCell(Text('${allLow.length}',
             style: TextStyle(
                 fontWeight: FontWeight.w700,
@@ -362,7 +364,6 @@ class _StockDrillState extends State<StockDrill> {
   }
 }
 
-
 // ------------------------------------------------------------ Stock report
 class StockReport extends StatefulWidget {
   const StockReport({super.key});
@@ -421,9 +422,8 @@ class _StockReportState extends State<StockReport> {
     }
   }
 
-  String get _groupLabel => _dBrand != null
-      ? 'ຮຸ່ນ'
-      : (_dBranch != null ? 'Brand' : _byLabels[_by]!);
+  String get _groupLabel =>
+      _dBrand != null ? 'ຮຸ່ນ' : (_dBranch != null ? 'Brand' : _byLabels[_by]!);
 
   bool get _canDrill =>
       _dBrand != null ||
@@ -486,8 +486,8 @@ class _StockReportState extends State<StockReport> {
         .showSnackBar(const SnackBar(content: Text('ຄັດລອກ CSV ແລ້ວ')));
   }
 
-  Widget _dd(String label, List<String> items, String? val,
-      ValueChanged<String?> on) {
+  Widget _dd(
+      String label, List<String> items, String? val, ValueChanged<String?> on) {
     return DropdownButton<String?>(
       isExpanded: true,
       value: items.contains(val) ? val : null,
@@ -850,7 +850,10 @@ class _StockReportState extends State<StockReport> {
                         child: Text('ຍັງບໍ່ມີລາຍການ',
                             style: TextStyle(color: p.mut)))
                     : (_dModel != null
-                        ? (_showTerm ? _ModelTerminals(brand: _dBrand ?? "", model: _dModel!) : _itemView(p, rows))
+                        ? (_showTerm
+                            ? _ModelTerminals(
+                                brand: _dBrand ?? "", model: _dModel!)
+                            : _itemView(p, rows))
                         : _groupView(p, rows)),
               ),
             ]);
@@ -988,8 +991,7 @@ class _ModelTerminalsState extends State<_ModelTerminals> {
                               context,
                               MaterialPageRoute(
                                   builder: (_) => _TypeTerminalsPage(
-                                      path: '$_path › $t',
-                                      items: byType[t]!))),
+                                      path: '$_path › $t', items: byType[t]!))),
                           cells: [
                             DataCell(Text(t, style: bold)),
                             DataCell(Text('${byType[t]!.length}')),
@@ -1077,8 +1079,8 @@ class _TypeTerminalsPageState extends State<_TypeTerminalsPage> {
                         margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
                           title: Text(pick(t, ['barcode']),
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w700)),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700)),
                           subtitle: Text([
                             pick(t, ['serial']),
                             pick(t, ['state', 'status'])
@@ -1125,9 +1127,8 @@ class _TerminalPartsPageState extends State<_TerminalPartsPage> {
           up.startsWith('REMOVE');
     }).toList();
     final zero = DateTime.fromMillisecondsSinceEpoch(0);
-    rows.sort((a, b) =>
-        (DateTime.tryParse(pick(b, ['logDate'])) ?? zero)
-            .compareTo(DateTime.tryParse(pick(a, ['logDate'])) ?? zero));
+    rows.sort((a, b) => (DateTime.tryParse(pick(b, ['logDate'])) ?? zero)
+        .compareTo(DateTime.tryParse(pick(a, ['logDate'])) ?? zero));
     return rows;
   }
 
@@ -1210,7 +1211,9 @@ class _TerminalPartsPageState extends State<_TerminalPartsPage> {
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(
                       [
-                        '${_actionLabel(pick(l, ['action']))}${_qty(pick(l, ['action']))}',
+                        '${_actionLabel(pick(l, ['action']))}${_qty(pick(l, [
+                              'action'
+                            ]))}',
                         pick(l, ['serialNo']),
                         pick(l, ['userName']),
                       ].where((e) => e.isNotEmpty).join(' · '),

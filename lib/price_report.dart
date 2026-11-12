@@ -237,11 +237,13 @@ class _PriceReportPageState extends State<PriceReportPage> {
             po: pick(x, ['poNo']).isEmpty
                 ? 'ບໍ່ມີ PO'
                 : 'PO ${pick(x, ['poNo'])}',
-            sub:
-                '${pick(x, ['grnNo'])} · ${pick(x, ['receiptDate']).split('T').first}',
+            sub: '${pick(x, [
+                  'grnNo'
+                ])} · ${pick(x, ['receiptDate']).split('T').first}',
             amount: '${_k(x['total'])} ${pick(x, ['currency'])}',
             lines: [
-              for (final e in _items.where((e) => '${e['grnId']}' == '${x['id']}'))
+              for (final e
+                  in _items.where((e) => '${e['grnId']}' == '${x['id']}'))
                 BranchLineItem(
                     name: pick(e, ['name']),
                     sub: '${_k(e['unitCost'])} × ${pick(e, ['qty'])}',
@@ -282,8 +284,7 @@ class _PriceReportPageState extends State<PriceReportPage> {
           for (final x in xs)
             BranchLineItem(
                 name: pick(x, ['productName']),
-                sub:
-                    '${pick(x, ['createdAt']).split('T').first} · ${_po(x)}',
+                sub: '${pick(x, ['createdAt']).split('T').first} · ${_po(x)}',
                 amount: '${_k(x['amount'])} ${pick(x, ['currency'])}',
                 qty: '-${pick(x, ['qty'])}',
                 imageUrl: _imgFor(x, 'productName')),
@@ -305,8 +306,9 @@ class _PriceReportPageState extends State<PriceReportPage> {
             name: pick(x, ['atmId']).isEmpty
                 ? pick(x, ['productName'])
                 : 'ATM ${pick(x, ['atmId'])}',
-            sub:
-                '${pick(x, ['productName'])} · ${pick(x, ['createdAt']).split('T').first} · ${_po(x)}',
+            sub: '${pick(x, [
+                  'productName'
+                ])} · ${pick(x, ['createdAt']).split('T').first} · ${_po(x)}',
             amount: '${_k(x['amount'])} ${pick(x, ['currency'])}',
             qty: '-${pick(x, ['qty'])}',
             imageUrl: _imgFor(x, 'productName')),
@@ -320,7 +322,8 @@ class _PriceReportPageState extends State<PriceReportPage> {
         name = pick(b, ['name', 'branchName', 'id']);
       }
     }
-    debugPrint('[DOCS] open page branch=$_branchId from=${_d(_range.start)} to=${_d(_range.end)}');
+    debugPrint(
+        '[DOCS] open page branch=$_branchId from=${_d(_range.start)} to=${_d(_range.end)}');
     Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => ReportDocsPage(
             branchId: _branchId == null ? 0 : (int.tryParse('$_branchId') ?? 0),
@@ -474,7 +477,8 @@ class _PriceReportPageState extends State<PriceReportPage> {
                 key: ValueKey('t-${_range.start}-${_range.end}-$_branchId'),
                 rows: rows,
                 children: _posFor,
-                used: _usedFor, usedGroups: _usedGroupsFor);
+                used: _usedFor,
+                usedGroups: _usedGroupsFor);
           },
         ),
       ]),

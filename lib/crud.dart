@@ -1,6 +1,7 @@
 import 'dart:math';
 // ignore_for_file: camel_case_types
-import 'plan_import.dart'; import 'stock_request.dart';
+import 'plan_import.dart';
+import 'stock_request.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -248,8 +249,10 @@ class _CrudPageState extends State<CrudPage> {
             if (sp.path == '/plans') ...[
               OutlinedButton.icon(
                 onPressed: () async {
-                  final ok = await Navigator.push<bool>(context,
-                      MaterialPageRoute(builder: (_) => const PlanImportPage()));
+                  final ok = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const PlanImportPage()));
                   if (ok == true) _reload();
                 },
                 icon: const Icon(Icons.upload_file, size: 18),
@@ -264,7 +267,8 @@ class _CrudPageState extends State<CrudPage> {
             ),
           ]),
         ),
-      if (sp.path == '/branches') const BranchRequestsBar(), Expanded(
+      if (sp.path == '/branches') const BranchRequestsBar(),
+      Expanded(
         child: ListPage(
           title: sp.title,
           path: sp.listPath ?? sp.path,
@@ -772,8 +776,7 @@ class _CrudFormState extends State<CrudForm> {
                             ? Icons.visibility_off_outlined
                             : Icons.visibility_outlined),
                         tooltip: 'ສະແດງ/ເຊື່ອມ PIN',
-                        onPressed: () =>
-                            setState(() => _showPin = !_showPin),
+                        onPressed: () => setState(() => _showPin = !_showPin),
                       ),
                       IconButton(
                         icon: const Icon(Icons.casino_outlined),
