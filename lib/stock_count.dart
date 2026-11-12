@@ -738,8 +738,114 @@ class _AuditPageState extends State<AuditPage> {
     );
   }
 
+  static List<String> _sortKeys = ['bin', 'brand', 'name'];
+  static const _sortOpts = <String, String>{
+    '': '— ບໍ່ໃຊ້ —',
+    'bin': 'ທີ່ເກັບ (location)',
+    'brand': 'Brand',
+    'model': 'Model',
+    'name': 'ລາຍການ',
+    'unit': 'ໜ່ວຍ',
+    'id': 'productId',
+  };
+
+  Future<List<String>?> _askSort() {
+    final cur = [..._sortKeys, '', '', ''].take(3).toList();
+    return showDialog<List<String>>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setS) => AlertDialog(
+          title: const Text('ລຽງລຳດັບກ່ອນ Export'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            for (var i = 0; i < 3; i++)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: DropdownButtonFormField<String>(
+                  initialValue: cur[i],
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                      labelText: i == 0 ? 'ລຽງຕາມ' : 'ແລ້ວຕາມ'),
+                  items: [
+                    for (final e in _sortOpts.entries)
+                      DropdownMenuItem(value: e.key, child: Text(e.value)),
+                  ],
+                  onChanged: (v) => setS(() => cur[i] = v ?? ''),
+                ),
+              ),
+          ]),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c),
+                child: const Text('ຍົກເລີກ')),
+            FilledButton(
+                onPressed: () {
+                  final keys = <String>[];
+                  for (final k in cur) {
+                    if (k.isNotEmpty && !keys.contains(k)) keys.add(k);
+                  }
+                  _sortKeys = keys;
+                  Navigator.pop(c, keys);
+                },
+                child: const Text('Export')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _sorted(List<String> keys) {
+    String val(Map<String, dynamic> r, String k) {
+      final inf = _info['${r['productId']}'] ?? const <String, dynamic>{};
+      switch (k) {
+        case 'bin':
+          return pick(inf, ['binCode']);
+        case 'brand':
+          return pick(inf, ['brandName']);
+        case 'model':
+          return pick(inf, ['modelName']);
+        case 'name':
+          return pick(r, ['productName']);
+        case 'unit':
+          return pick(r, ['unit']);
+        default:
+          return '${r['productId']}';
+      }
+    }
+
+    int nat(String a, String b) {
+      final re = RegExp(r'\d+|\D+');
+      final x = re.allMatches(a.toLowerCase()).map((m) => m.group(0)!).toList();
+      final y = re.allMatches(b.toLowerCase()).map((m) => m.group(0)!).toList();
+      for (var i = 0; i < x.length && i < y.length; i++) {
+        final pn = int.tryParse(x[i]);
+        final qn = int.tryParse(y[i]);
+        final c = (pn != null && qn != null)
+            ? pn.compareTo(qn)
+            : x[i].compareTo(y[i]);
+        if (c != 0) return c;
+      }
+      return x.length.compareTo(y.length);
+    }
+
+    final ents = _lines.asMap().entries.toList();
+    ents.sort((a, b) {
+      for (final k in keys) {
+        final x = val(a.value, k);
+        final y = val(b.value, k);
+        if (x.isEmpty != y.isEmpty) return x.isEmpty ? 1 : -1;
+        final c = nat(x, y);
+        if (c != 0) return c;
+      }
+      return a.key.compareTo(b.key);
+    });
+    return [for (final e in ents) e.value];
+  }
+
   Future<void> _exportXlsx() async {
     try {
+      final keys = await _askSort();
+      if (keys == null) return;
+      final lines = _sorted(keys);
       String hf(String s) => s.replaceAll('&', '&&');
       final created = '${_h['createdAt'] ?? ''}';
       final date = created.length >= 10 ? created.substring(0, 10) : '';
@@ -759,7 +865,7 @@ class _AuditPageState extends State<AuditPage> {
           'ນັບໄດ້',
         ],
       ];
-      for (final r in _lines) {
+      for (final r in lines) {
         final inf = _info['${r['productId']}'] ?? const <String, dynamic>{};
         final sys = num0(r['systemQty']);
         final c = r['countedQty'] == null ? null : num0(r['countedQty']);
