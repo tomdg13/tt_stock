@@ -370,6 +370,7 @@ class _PoPageState extends State<_PoPage> {
         builder: (c) => Dialog(
           child: InteractiveViewer(
             child: Image.network(url,
+                webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => const Padding(
                     padding: EdgeInsets.all(40),
@@ -380,6 +381,7 @@ class _PoPageState extends State<_PoPage> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Image.network(url,
+            webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
             width: 48,
             height: 48,
             fit: BoxFit.cover,
@@ -495,6 +497,51 @@ class _PoPageState extends State<_PoPage> {
     }
   }
 
+  String _dateText(Map<String, dynamic> m) {
+    final d = pick(m, ['receiptDate', 'movementDate', 'createdAt', 'date']);
+    return d.length >= 10 ? d.substring(0, 10) : d;
+  }
+
+  Future<void> _editDate() async {
+    final g = widget.group;
+    final first = g.items.first;
+    final grnId = pick(first, ['grnId']);
+    void toast(String t) =>
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
+    if (grnId.isEmpty) {
+      toast('ບໍ່ພົບລະຫັດ GRN');
+      return;
+    }
+    final cur = DateTime.tryParse(_dateText(first)) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: cur,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null || !mounted) return;
+    final ds =
+        '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+    final fr = num0(pick(first, ['freightCost'])).toDouble();
+    final total = g.amount + fr;
+    try {
+      final inv = pick(first, ['invoiceDate']);
+      await Api.put('/imports/receipts/$grnId', {
+        'poNo': pick(first, ['poNo']),
+        'invoiceNo': pick(first, ['invoiceNo']),
+        'invoiceDate': inv.length >= 10 ? inv.substring(0, 10) : inv,
+        'currency': pick(first, ['currency']),
+        'freightCost': fr.toString(),
+        'totalAmount': total.toStringAsFixed(2),
+        'receiptDate': ds,
+      });
+      toast('ບັນທຶກແລ້ວ ກະລຸນາຣີເຟຣຊເພື່ອກວດວັນທີ');
+    } catch (e) {
+      debugPrint('[PO] edit date failed: $e');
+      toast('ບັນທຶກບໍ່ສຳເລັດ: $e');
+    }
+  }
+
   Widget _itemRow(Map<String, dynamic> m) {
     final p = pal(context);
     final qty = num0(pick(m, ['qtyChange', 'qty', 'quantity', 'delta']));
@@ -580,6 +627,16 @@ class _PoPageState extends State<_PoPage> {
                       tooltip: 'ແກ້ໄຂຄ່າຂົນສົ່ງ',
                       visualDensity: VisualDensity.compact,
                       onPressed: _editFreight),
+                ]),
+                Row(children: [
+                  Expanded(
+                      child: Text('ວັນທີຮັບເຂົ້າ: ${_dateText(g.items.first)}',
+                          style: TextStyle(color: p.mut, fontSize: 13))),
+                  IconButton(
+                      icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+                      tooltip: 'ແກ້ໄຂວັນທີ',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _editDate),
                 ]),
                 if (pick(g.items.first, ['totalAmount']).isNotEmpty)
                   Text(
