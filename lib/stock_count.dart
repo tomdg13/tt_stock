@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'screens.dart' show BarcodeScanPage;
+import 'dart:io' as io;
+import 'package:excel/excel.dart' as xl;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'product_images.dart' show productImageUrl;
 import 'crud.dart' show openEdit;
 import 'specs.dart' show crudSpec;
@@ -591,6 +595,10 @@ class _AuditPageState extends State<AuditPage> {
               icon: const Icon(Icons.refresh),
               tooltip: 'ໂຫຼດໃໝ່',
               onPressed: _busy ? null : _load),
+          IconButton(
+              icon: const Icon(Icons.file_download_outlined),
+              tooltip: 'Export Excel',
+              onPressed: _busy ? null : _exportXlsx),
           if (_isOpen)
             IconButton(
                 icon: const Icon(Icons.task_alt),
@@ -723,6 +731,42 @@ class _AuditPageState extends State<AuditPage> {
                   ),
                 ]),
     );
+  }
+
+  Future<void> _exportXlsx() async {
+    try {
+      final book = xl.Excel.createExcel();
+      final sh = book[book.getDefaultSheet()!];
+      sh.appendRow([
+        xl.TextCellValue('productId'),
+        xl.TextCellValue('ລາຍການ'),
+        xl.TextCellValue('ທີ່ເກັບ'),
+        xl.TextCellValue('ໜ່ວຍ'),
+        xl.TextCellValue('ໃນລະບົບ'),
+        xl.TextCellValue('ນັບໄດ້'),
+      ]);
+      for (final r in _lines) {
+        final inf = _info['${r['productId']}'] ?? const <String, dynamic>{};
+        final c = r['countedQty'] == null ? null : num0(r['countedQty']);
+        sh.appendRow([
+          xl.IntCellValue(int.tryParse('${r['productId']}') ?? 0),
+          xl.TextCellValue(pick(r, ['productName'])),
+          xl.TextCellValue(pick(inf, ['binCode'])),
+          xl.TextCellValue(pick(r, ['unit'])),
+          xl.DoubleCellValue(num0(r['systemQty']).toDouble()),
+          c == null ? null : xl.DoubleCellValue(c.toDouble()),
+        ]);
+      }
+      final bytes = book.encode();
+      if (bytes == null) throw 'encode failed';
+      final dir = await getTemporaryDirectory();
+      final name = '${_h['countNo'] ?? 'count'}.xlsx';
+      final file = io.File('${dir.path}/$name');
+      await file.writeAsBytes(bytes);
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
+    } catch (e) {
+      _snack('Export ບໍ່ສຳເລັດ: $e');
+    }
   }
 
   Widget _table(List<Map<String, dynamic>> rows) {
