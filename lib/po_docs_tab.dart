@@ -1,12 +1,17 @@
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'api.dart';
-import 'purchase_orders.dart' show uploadPoDocuments, kPoDocExt;
+import 'purchase_orders.dart'
+    show uploadPoDocuments, uploadPoDocumentBytes, kPoDocExt;
 import 'theme.dart';
 import 'widgets.dart';
 
-/// "ເອກະສານ" tab of a PO: upload files, and see / open / delete the attached ones.
+/// "ເອກະສານ" tab of a PO: upload files (button, or drag & drop on web / desktop),
+/// and see / open / delete the attached ones.
 /// Uses the existing endpoints (no server change needed):
 ///   GET    /purchase-orders/:id                      -> { ..., documents: [...] }
 ///   POST   /purchase-orders/:id/documents            (multipart field "files")
@@ -24,7 +29,15 @@ class _PoDocsTabState extends State<PoDocsTab> {
   List<Map<String, dynamic>> _docs = [];
   bool _loading = true;
   bool _busy = false;
+  bool _dragging = false;
   String? _error;
+
+  /// Drag & drop only makes sense with a mouse: web and desktop.
+  bool get _dropSupported =>
+      kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.macOS ||
+      defaultTargetPlatform == TargetPlatform.linux;
 
   @override
   void initState() {
@@ -117,6 +130,14 @@ class _PoDocsTabState extends State<PoDocsTab> {
         v.startsWith('/') ? '$base$v' : '$base/uploads/purchase-orders/$v');
   }
 
+  /// Same file types as the PO form's file chooser.
+  bool _allowed(String name) {
+    final i = name.lastIndexOf('.');
+    if (i < 0) return false;
+    final ext = name.substring(i + 1).toLowerCase();
+    return kPoDocExt.any((e) => e.toLowerCase().replaceFirst('.', '') == ext);
+  }
+
   // ---------------------------------------------------------------- actions
   Future<void> _upload() async {
     if (_poId.isEmpty || _busy) return;
@@ -133,6 +154,33 @@ class _PoDocsTabState extends State<PoDocsTab> {
       await uploadPoDocuments(_poId, List<PlatformFile>.from(files));
       await _load(silent: true);
       if (mounted) _snack('ອັບໂຫຼດແລ້ວ');
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Upload files that were dropped on the tab (name + bytes).
+  Future<void> _uploadDropped(
+      List<MapEntry<String, List<int>>> ok, int skipped) async {
+    if (_poId.isEmpty || _busy) return;
+    if (ok.isEmpty) {
+      if (mounted) setState(() => _error = 'ປະເພດໄຟລ໌ນີ້ບໍ່ຮອງຮັບ');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await uploadPoDocumentBytes(_poId, ok);
+      await _load(silent: true);
+      if (mounted) {
+        _snack(skipped > 0
+            ? 'ອັບໂຫຼດແລ້ວ (ຂ້າມ $skipped ໄຟລ໌ທີ່ບໍ່ຮອງຮັບ)'
+            : 'ອັບໂຫຼດແລ້ວ');
+      }
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {
@@ -201,6 +249,26 @@ class _PoDocsTabState extends State<PoDocsTab> {
     );
   }
 
+  Widget _dropZone(Pal p) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final c = _dragging ? primary : p.mut;
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 12),
+      decoration: BoxDecoration(
+        color: _dragging ? primary.withAlpha(30) : null,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c, width: _dragging ? 2 : 1),
+      ),
+      child: Column(children: [
+        Icon(Icons.cloud_upload_outlined, size: 32, color: c),
+        const SizedBox(height: 6),
+        Text(_dragging ? 'ປ່ອຍໄຟລ໌ບ່ອນນີ້' : 'ລາກໄຟລ໌ມາວາງບ່ອນນີ້',
+            style: TextStyle(color: c)),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = pal(context);
@@ -209,7 +277,7 @@ class _PoDocsTabState extends State<PoDocsTab> {
       return ErrorView(_error ?? 'ບໍ່ພົບ PO', () => _load());
     }
     final canWrite = Api.can('RECEIVE');
-    return RefreshIndicator(
+    final body = RefreshIndicator(
       onRefresh: () => _load(silent: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -226,6 +294,7 @@ class _PoDocsTabState extends State<PoDocsTab> {
                   : const Icon(Icons.upload_file_outlined),
               label: Text(_busy ? 'ກຳລັງອັບໂຫຼດ…' : 'ອັບໂຫຼດເອກະສານ'),
             ),
+          if (canWrite && _dropSupported) _dropZone(p),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -246,6 +315,25 @@ class _PoDocsTabState extends State<PoDocsTab> {
           ),
         ],
       ),
+    );
+    if (!canWrite || !_dropSupported) return body;
+    return DropTarget(
+      onDragEntered: (_) => setState(() => _dragging = true),
+      onDragExited: (_) => setState(() => _dragging = false),
+      onDragDone: (detail) async {
+        if (mounted) setState(() => _dragging = false);
+        final ok = <MapEntry<String, List<int>>>[];
+        var skipped = 0;
+        for (final x in detail.files) {
+          if (_allowed(x.name)) {
+            ok.add(MapEntry(x.name, await x.readAsBytes()));
+          } else {
+            skipped++;
+          }
+        }
+        await _uploadDropped(ok, skipped);
+      },
+      child: body,
     );
   }
 }

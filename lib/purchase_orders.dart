@@ -62,6 +62,37 @@ String _size(num b) {
   return '$b B';
 }
 
+/// Same as uploadPoDocuments, but takes (file name, bytes) pairs. Used for drag & drop.
+Future<void> uploadPoDocumentBytes(
+    String poId, List<MapEntry<String, List<int>>> files) async {
+  final base = Api.baseUrl.replaceAll(RegExp(r'/+$'), '');
+  final uri =
+      Uri.parse('$base/purchase-orders/${Uri.encodeComponent(poId)}/documents');
+  for (var i = 0; i < files.length; i += 10) {
+    final req = http.MultipartRequest('POST', uri);
+    if (Api.token != null) req.headers['Authorization'] = 'Bearer ${Api.token}';
+    for (final f in files.skip(i).take(10)) {
+      req.files.add(http.MultipartFile.fromBytes('files', f.value,
+          filename: f.key, contentType: _mt(f.key)));
+    }
+    if (req.files.isEmpty) continue;
+    final res = await http.Response.fromStream(
+        await req.send().timeout(const Duration(seconds: 120)));
+    if (res.statusCode >= 400) {
+      var msg = 'Error ${res.statusCode}';
+      try {
+        final d = jsonDecode(utf8.decode(res.bodyBytes));
+        if (d is Map && d['message'] != null) {
+          msg = d['message'] is List
+              ? (d['message'] as List).join('\n')
+              : '${d['message']}';
+        }
+      } catch (_) {}
+      throw Exception(msg);
+    }
+  }
+}
+
 Future<void> uploadPoDocuments(String poId, List<PlatformFile> files) async {
   final base = Api.baseUrl.replaceAll(RegExp(r'/+$'), '');
   final uri =
