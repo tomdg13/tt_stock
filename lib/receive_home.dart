@@ -1,3 +1,4 @@
+import 'po_docs_tab.dart';
 import "po_actual_ui.dart";
 import "po_excel.dart";
 import 'product_images.dart';
@@ -429,6 +430,42 @@ class _PoPageState extends State<_PoPage> {
     if (ok == true && mounted) Navigator.pop(context, true);
   }
 
+  Future<void> _removeLine(Map<String, dynamic> m) async {
+    void toast(String t) =>
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
+    final itemId = pick(m, ['itemId']);
+    if (itemId.isEmpty) {
+      toast('ບໍ່ພົບ itemId ຂອງລາຍການ');
+      return;
+    }
+    final name = pick(m, ['productName', 'name']);
+    final qty = pick(m, ['qtyChange', 'qty', 'quantity', 'delta']);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('ລຶບລາຍການ?'),
+        content: Text('$name\nຈຳນວນ +$qty ຈະຖືກຫັກອອກຈາກ stock'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('ຍົກເລີກ')),
+          FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('ລຶບ')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await Api.delete('/imports/items/$itemId');
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) toast('ລຶບບໍ່ສຳເລັດ: $e');
+    }
+  }
+
   Future<void> _editFreight() async {
     final g = widget.group;
     final first = g.items.first;
@@ -663,18 +700,33 @@ class _PoPageState extends State<_PoPage> {
                   ),
                 ),
                 for (final m in g.items)
-                  InkWell(
-                    onTap: () async {
-                      final r = await widget.onItem(m);
-                      if (r == true && mounted) Navigator.pop(context);
-                    },
-                    child: _itemRow(m),
-                  ),
+                  Row(children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final r = await widget.onItem(m);
+                          if (r == true && mounted) Navigator.pop(context);
+                        },
+                        child: _itemRow(m),
+                      ),
+                    ),
+                    if (Api.can('RECEIVE'))
+                      IconButton(
+                        tooltip: 'ລຶບລາຍການ',
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints:
+                            const BoxConstraints(minWidth: 36, minHeight: 36),
+                        icon: Icon(Icons.delete_outline,
+                            size: 20, color: Colors.red.shade300),
+                        onPressed: () => _removeLine(m),
+                      ),
+                  ]),
               ],
             )
           : _tab == 1
               ? _PoFormTab(poNo: g.po)
-              : _PoPayTab(poNo: g.po, currency: g.currency),
+              : PoDocsTab(poNo: g.po),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) {
@@ -696,7 +748,7 @@ class _PoPageState extends State<_PoPage> {
           NavigationDestination(
               icon: Icon(Icons.info_outline), label: 'ຂໍ້ມູນ PO'),
           NavigationDestination(
-              icon: Icon(Icons.payments_outlined), label: 'ຊຳລະເງິນ'),
+              icon: Icon(Icons.folder_open_outlined), label: 'ເອກະສານ'),
           NavigationDestination(
               icon: Icon(Icons.download_outlined), label: "Excel"),
           NavigationDestination(

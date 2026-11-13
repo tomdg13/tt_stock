@@ -14,7 +14,7 @@ import 'product_images.dart' show productImageUrl;
 import 'theme.dart';
 import 'widgets.dart';
 
-const _kDocExt = [
+const kPoDocExt = [
   'pdf',
   'jpg',
   'jpeg',
@@ -290,7 +290,7 @@ class _PoFormPageState extends State<PoFormPage> {
   Future<void> _pickFiles() async {
     final files = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: _kDocExt,
+      allowedExtensions: kPoDocExt,
     );
     if (files.isEmpty || !mounted) return;
     final added = <_PendingDoc>[];
