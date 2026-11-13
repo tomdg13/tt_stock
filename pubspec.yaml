@@ -31,6 +31,7 @@ dependencies:
   pdf: ^3.13.1
   cupertino_icons: ^2.0.0
   web: ^1.1.2
+  desktop_drop: ^0.8.0
 
 dev_dependencies:
   flutter_test:
