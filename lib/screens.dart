@@ -1453,6 +1453,9 @@ class DashMenuScreen extends StatelessWidget {
             () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const StockCountPage()))),
     ];
+    if (MediaQuery.of(context).size.width <= 0) {
+      return const SizedBox.shrink();
+    }
     final wide = MediaQuery.of(context).size.width >= 600;
     return GridView(
       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(

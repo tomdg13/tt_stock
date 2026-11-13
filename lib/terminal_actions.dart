@@ -5,6 +5,7 @@ import 'terminal_parts_page.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'api.dart';
+import 'stock_request.dart';
 import 'crud.dart';
 import 'specs.dart';
 import 'terminal_history.dart';
@@ -330,8 +331,9 @@ class _TerminalInfoPageState extends State<TerminalInfoPage> {
                                 await Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                        builder: (_) =>
-                                            FixTerminalPage(m, onChanged: () {
+                                        builder: (_) => StockRequestsPage(
+                                            terminal: m,
+                                            onChanged: () {
                                               widget.onChanged?.call();
                                               _reload();
                                             })));
@@ -569,6 +571,15 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
       if (!mounted) return;
       setState(() {
         _branches = b;
+        // default = HQ (isHq == 1 or code HQ); user can still change it
+        if (_branchId == null) {
+          for (final x in b) {
+            if ('${x['isHq']}' == '1' || '${x['code']}' == 'HQ') {
+              _branchId = x['id'];
+              break;
+            }
+          }
+        }
         if (_branchId == null && b.length == 1) _branchId = b.first['id'];
       });
     }).catchError((_) {});
@@ -717,7 +728,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
       widget.onChanged?.call();
       if (!mounted) return;
       toastMsg(context, 'ບັນທຶກການສ້ອມແລ້ວ');
-      Navigator.pop(context);
+      Navigator.pop(context, true);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {
@@ -765,7 +776,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text("ເລືອກສາຂາກ່ອນ ຈຶ່ງຈະເພີ່ມອາໄຫຼ່ໄດ້",
-                    style: TextStyle(color: p.bad, fontSize: 12),
+                    style: TextStyle(color: p.mut, fontSize: 12),
                     textAlign: TextAlign.center),
               ),
             Row(children: [
@@ -773,7 +784,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
                 child: FilledButton.icon(
                   icon: const Icon(Icons.qr_code_scanner),
                   label: const Text('ສະແກນ'),
-                  onPressed: _busy ? null : _scanPart,
+                  onPressed: (_busy || _branchId == null) ? null : _scanPart,
                 ),
               ),
               const SizedBox(width: 8),
@@ -781,7 +792,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.add),
                   label: const Text('ເລືອກຈາກສິນຄ້າ'),
-                  onPressed: _busy ? null : _addPart,
+                  onPressed: (_busy || _branchId == null) ? null : _addPart,
                 ),
               ),
             ]),
@@ -797,8 +808,9 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('ຕິດຕັ້ງຄືນເຂົ້າຕູ້ຫຼັງສ້ອມ'),
-              subtitle:
-                  const Text('ເປີດ = Ready ແລ້ວ In Use  ·  ປິດ = ປະໄວ້ MA'),
+              subtitle: Text(_reinstall
+                  ? 'ຫຼັງບັນທຶກ: ໃຊ້ງານໃນຕູ້ (In Use)'
+                  : 'ຫຼັງບັນທຶກ: ລໍຖ້າ MA'),
               value: _reinstall,
               onChanged: (v) => setState(() => _reinstall = v),
             ),
@@ -860,6 +872,11 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
         IconButton(
           icon: const Icon(Icons.add_circle_outline),
           onPressed: () {
+            final sn = num.tryParse(stock);
+            if (sn != null && q + 1 > sn) {
+              toastMsg(context, 'ສະຕັອກບໍ່ພໍ (ມີ $stock)');
+              return;
+            }
             setState(() => _qty[id] = q + 1);
             _loadCost(id);
           },

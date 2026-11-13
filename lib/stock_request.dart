@@ -1,7 +1,9 @@
+import 'request_parts_box.dart';
 import 'main_shell.dart';
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'terminal_actions.dart';
 import 'pages.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -28,7 +30,9 @@ Widget _statusChip(String st) {
 }
 
 class StockRequestsPage extends StatefulWidget {
-  const StockRequestsPage({super.key});
+  final Map<String, dynamic>? terminal;
+  final VoidCallback? onChanged;
+  const StockRequestsPage({super.key, this.terminal, this.onChanged});
   @override
   State<StockRequestsPage> createState() => _StockRequestsPageState();
 }
@@ -162,18 +166,34 @@ class _StockRequestsPageState extends State<StockRequestsPage> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: widget.terminal != null ? 3 : 2,
+      initialIndex: widget.terminal != null ? 2 : 0,
       child: Scaffold(
         bottomNavigationBar: const ShellBar(),
         appBar: AppBar(
           title: const Text('ຂໍອາໄຫຼ່ລະຫວ່າງສາຂາ'),
-          bottom: const TabBar(tabs: [
-            Tab(text: 'ຄຳຂໍທີ່ເຂົ້າມາ'),
-            Tab(text: 'ຄຳຂໍຂອງຂ້ອຍ'),
+          bottom: TabBar(tabs: [
+            const Tab(text: 'ຄຳຂໍທີ່ເຂົ້າມາ'),
+            const Tab(text: 'ຄຳຂໍຂອງຂ້ອຍ'),
+            if (widget.terminal != null) const Tab(text: 'ການສ້ອມ'),
           ]),
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () async {
+            if (widget.terminal != null) {
+              final saved = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => FixTerminalPage(widget.terminal!,
+                          onChanged: widget.onChanged)));
+              if (saved == true && context.mounted) {
+                Navigator.pop(context);
+                return;
+              }
+              _reload();
+              return;
+            }
+            debugPrint("[REQ] FAB tapped -> open StockRequestForm");
             final ok = await Navigator.push<bool>(context,
                 MaterialPageRoute(builder: (_) => const StockRequestForm()));
             if (ok == true) _reload();
@@ -181,7 +201,12 @@ class _StockRequestsPageState extends State<StockRequestsPage> {
           icon: const Icon(Icons.add),
           label: const Text('ຂໍອາໄຫຼ່'),
         ),
-        body: TabBarView(children: [_tab(true), _tab(false)]),
+        body: TabBarView(children: [
+          _tab(true),
+          _tab(false),
+          if (widget.terminal != null)
+            TerminalRepairTab('${widget.terminal!['barcode'] ?? ''}'),
+        ]),
       ),
     );
   }
@@ -207,7 +232,9 @@ class _StockRequestFormState extends State<StockRequestForm> {
   @override
   void initState() {
     super.initState();
-    _req = Api.user?['branchId'];
+    debugPrint(
+        "[REQ] StockRequestForm initState sup=${widget.supBranchId} userBranch=${Api.user?["branchId"]}");
+    _req = Api.user?["branchId"];
     _sup = widget.supBranchId;
     _loadAllowed();
     loadBranches().then((b) {
@@ -320,7 +347,7 @@ class _StockRequestFormState extends State<StockRequestForm> {
           });
         }),
         const SizedBox(height: 12),
-        LineEditor(_lines),
+        RequestPartsBox(_lines),
         const SizedBox(height: 12),
         TextField(
           controller: _note,
@@ -809,6 +836,89 @@ class _BranchRequestInfoState extends State<BranchRequestInfo> {
             ),
         ]);
       }),
+    );
+  }
+}
+
+/// Repairs of one terminal = stock movements whose refNo is "MA <barcode> @<atm>".
+class TerminalRepairTab extends StatefulWidget {
+  final String barcode;
+  const TerminalRepairTab(this.barcode, {super.key});
+  @override
+  State<TerminalRepairTab> createState() => _TerminalRepairTabState();
+}
+
+class _TerminalRepairTabState extends State<TerminalRepairTab> {
+  late Future<List<Map<String, dynamic>>> _f = _load();
+
+  Future<List<Map<String, dynamic>>> _load() async {
+    var d = await Api.get('/stock/movements');
+    if (d is Map && d['data'] is List) d = d['data'];
+    final out = <Map<String, dynamic>>[];
+    if (d is List) {
+      for (final e in d) {
+        if (e is! Map) continue;
+        final ref = '${e['refNo'] ?? ''}';
+        if (ref.startsWith('MA ${widget.barcode} ') ||
+            ref == 'MA ${widget.barcode}') {
+          out.add(Map<String, dynamic>.from(e));
+        }
+      }
+    }
+    return out;
+  }
+
+  void _reload() => setState(() {
+        _f = _load();
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    final mut = Theme.of(context).hintColor;
+    return RefreshIndicator(
+      onRefresh: () async => _reload(),
+      child: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _f,
+        builder: (c, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snap.hasError) {
+            return ListView(padding: const EdgeInsets.all(24), children: [
+              Text('${snap.error}'),
+              TextButton(onPressed: _reload, child: const Text('ລອງໃໝ່')),
+            ]);
+          }
+          final rows = snap.data ?? [];
+          if (rows.isEmpty) {
+            return ListView(padding: const EdgeInsets.all(24), children: [
+              Text('ຍັງບໍ່ມີການສ້ອມ', style: TextStyle(color: mut)),
+            ]);
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+            itemCount: rows.length,
+            itemBuilder: (_, i) {
+              final r = rows[i];
+              final date = '${r['movementDate'] ?? ''}';
+              final qty = '${r['qtyChange'] ?? ''}';
+              return Card(
+                child: ListTile(
+                  title: Text('${r['productName'] ?? r['productId'] ?? ''}'),
+                  subtitle: Text([
+                    '${r['branchName'] ?? ''}',
+                    if (date.length >= 10) date.substring(0, 10),
+                    '${r['userName'] ?? ''}',
+                  ].where((e) => e.isNotEmpty).join('  ·  ')),
+                  trailing: Text(qty,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, color: Colors.red)),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
