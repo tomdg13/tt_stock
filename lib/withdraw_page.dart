@@ -37,9 +37,10 @@ class _WithdrawPageState extends State<WithdrawPage> {
       _msg('ກະລຸນາເລືອກສາຂາກ່ອນ');
       return;
     }
+    final nav = Navigator.of(context);
     while (mounted) {
-      final raw = await Navigator.push<String>(
-          context, MaterialPageRoute(builder: (_) => const ScanBarcodePage()));
+      final raw = await nav.push<String>(
+          MaterialPageRoute(builder: (_) => const ScanBarcodePage()));
       if (raw == null || raw.trim().isEmpty || !mounted) return;
       try {
         final r = await Api.get(
