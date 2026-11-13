@@ -1,3 +1,4 @@
+import 'main_shell.dart';
 import 'package:flutter/material.dart';
 
 import 'api.dart';
@@ -163,6 +164,7 @@ class _StockRequestsPageState extends State<StockRequestsPage> {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
+        bottomNavigationBar: const ShellBar(),
         appBar: AppBar(
           title: const Text('ຂໍອາໄຫຼ່ລະຫວ່າງສາຂາ'),
           bottom: const TabBar(tabs: [
@@ -295,6 +297,7 @@ class _StockRequestFormState extends State<StockRequestForm> {
     final p = pal(context);
     final supList = _sups;
     return Scaffold(
+      bottomNavigationBar: const ShellBar(),
       appBar: AppBar(title: const Text('ຂໍອາໄຫຼ່ຈາກສາຂາອື່ນ')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         if (Api.user?['branchId'] == null) ...[
