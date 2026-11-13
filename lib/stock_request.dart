@@ -849,35 +849,140 @@ class TerminalRepairTab extends StatefulWidget {
 }
 
 class _TerminalRepairTabState extends State<TerminalRepairTab> {
-  late Future<List<Map<String, dynamic>>> _f = _load();
+  late Future<Map<String, dynamic>> _f = _load();
 
-  Future<List<Map<String, dynamic>>> _load() async {
+  Future<Map<String, dynamic>> _load() async {
     var d = await Api.get('/stock/movements');
     if (d is Map && d['data'] is List) d = d['data'];
-    final out = <Map<String, dynamic>>[];
+    final rows = <Map<String, dynamic>>[];
     if (d is List) {
       for (final e in d) {
         if (e is! Map) continue;
         final ref = '${e['refNo'] ?? ''}';
         if (ref.startsWith('MA ${widget.barcode} ') ||
             ref == 'MA ${widget.barcode}') {
-          out.add(Map<String, dynamic>.from(e));
+          rows.add(Map<String, dynamic>.from(e));
         }
       }
     }
-    return out;
+    final imgs = <String, String>{};
+    try {
+      var p = await Api.get('/products?limit=500');
+      if (p is Map && p['data'] is List) p = p['data'];
+      if (p is List) {
+        for (final e in p) {
+          if (e is Map) imgs['${e['id']}'] = '${e['imageUrl'] ?? ''}';
+        }
+      }
+    } catch (_) {}
+    var term = <String, dynamic>{};
+    try {
+      final t =
+          await Api.get('/terminals/${Uri.encodeComponent(widget.barcode)}');
+      if (t is Map) term = Map<String, dynamic>.from(t);
+    } catch (_) {}
+    return {'rows': rows, 'imgs': imgs, 'term': term};
   }
 
   void _reload() => setState(() {
         _f = _load();
       });
 
+  String _url(String v) {
+    if (v.isEmpty || v.startsWith('data:') || v.startsWith('http')) return v;
+    final base = Api.baseUrl.replaceAll(RegExp(r'/+$'), '');
+    return '$base${v.startsWith('/') ? '' : '/'}$v';
+  }
+
+  String _dt(dynamic v, {bool time = true}) {
+    final d = DateTime.tryParse('$v')?.toLocal();
+    if (d == null) return '$v';
+    String t(int n) => n.toString().padLeft(2, '0');
+    final day = '${d.year}-${t(d.month)}-${t(d.day)}';
+    return time ? '$day ${t(d.hour)}:${t(d.minute)}' : day;
+  }
+
+  Color _stColor(String st) {
+    switch (st.toLowerCase()) {
+      case 'in use':
+        return Colors.green;
+      case 'ready':
+        return Colors.blue;
+      case 'ma':
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Widget _img(String url, double size, {double radius = 8}) {
+    final fb = Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+          color: Colors.black12, borderRadius: BorderRadius.circular(radius)),
+      child: Icon(Icons.settings_input_component_outlined,
+          size: size * 0.5, color: Colors.black45),
+    );
+    if (url.isEmpty) return fb;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: Image.network(url,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fb),
+    );
+  }
+
+  Widget _kv(String k, String v) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(
+              width: 96,
+              child: Text(k,
+                  style: TextStyle(color: Theme.of(context).hintColor))),
+          Expanded(child: Text(v.isEmpty ? '-' : v)),
+        ]),
+      );
+
+  void _detail(Map<String, dynamic> r, String img, Map<String, dynamic> term) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(child: _img(img, 160, radius: 12)),
+                const SizedBox(height: 12),
+                Text('${r['productName'] ?? r['productId'] ?? ''}',
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                _kv('ຈຳນວນ', '${r['qtyChange'] ?? ''}'),
+                _kv('ສາຂາ', '${r['branchName'] ?? ''}'),
+                _kv('ວັນທີ', _dt(r['movementDate'])),
+                _kv('ຜູ້ບັນທຶກ', '${r['userName'] ?? ''}'),
+                _kv('ອ້າງອີງ', '${r['refNo'] ?? ''}'),
+                _kv('ປະເພດ', '${r['movementType'] ?? ''}'),
+                _kv('ສະຖານະຫຼ້າສຸດ', '${term['state'] ?? ''}'),
+              ]),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final mut = Theme.of(context).hintColor;
     return RefreshIndicator(
       onRefresh: () async => _reload(),
-      child: FutureBuilder<List<Map<String, dynamic>>>(
+      child: FutureBuilder<Map<String, dynamic>>(
         future: _f,
         builder: (c, snap) {
           if (snap.connectionState != ConnectionState.done) {
@@ -889,34 +994,57 @@ class _TerminalRepairTabState extends State<TerminalRepairTab> {
               TextButton(onPressed: _reload, child: const Text('ລອງໃໝ່')),
             ]);
           }
-          final rows = snap.data ?? [];
-          if (rows.isEmpty) {
-            return ListView(padding: const EdgeInsets.all(24), children: [
-              Text('ຍັງບໍ່ມີການສ້ອມ', style: TextStyle(color: mut)),
-            ]);
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-            itemCount: rows.length,
-            itemBuilder: (_, i) {
-              final r = rows[i];
-              final date = '${r['movementDate'] ?? ''}';
-              final qty = '${r['qtyChange'] ?? ''}';
-              return Card(
-                child: ListTile(
-                  title: Text('${r['productName'] ?? r['productId'] ?? ''}'),
-                  subtitle: Text([
-                    '${r['branchName'] ?? ''}',
-                    if (date.length >= 10) date.substring(0, 10),
-                    '${r['userName'] ?? ''}',
-                  ].where((e) => e.isNotEmpty).join('  ·  ')),
-                  trailing: Text(qty,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, color: Colors.red)),
-                ),
-              );
-            },
-          );
+          final data = snap.data ?? {};
+          final rows = (data['rows'] as List).cast<Map<String, dynamic>>();
+          final imgs = (data['imgs'] as Map).cast<String, String>();
+          final term = (data['term'] as Map).cast<String, dynamic>();
+          final st = '${term['state'] ?? ''}';
+          return ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+              children: [
+                if (term.isNotEmpty)
+                  Card(
+                    child: ListTile(
+                      leading:
+                          Icon(Icons.circle, color: _stColor(st), size: 14),
+                      title: Text('ສະຖານະຫຼ້າສຸດ: $st',
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                      subtitle: Text([
+                        if ('${term['stateSince'] ?? ''}'.isNotEmpty)
+                          _dt(term['stateSince']),
+                        if ('${term['atmId'] ?? ''}'.isNotEmpty)
+                          'ຕູ້ ${term['atmId']}',
+                      ].join('  ·  ')),
+                    ),
+                  ),
+                if (rows.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child:
+                        Text('ຍັງບໍ່ມີການສ້ອມ', style: TextStyle(color: mut)),
+                  ),
+                for (final r in rows)
+                  Builder(builder: (_) {
+                    final img = _url(imgs['${r['productId']}'] ?? '');
+                    return Card(
+                      child: ListTile(
+                        leading: _img(img, 48),
+                        title:
+                            Text('${r['productName'] ?? r['productId'] ?? ''}'),
+                        subtitle: Text([
+                          '${r['branchName'] ?? ''}',
+                          _dt(r['movementDate'], time: false),
+                          '${r['userName'] ?? ''}',
+                        ].where((e) => e.isNotEmpty).join('  ·  ')),
+                        trailing: Text('${r['qtyChange'] ?? ''}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red)),
+                        onTap: () => _detail(r, img, term),
+                      ),
+                    );
+                  }),
+              ]);
         },
       ),
     );
