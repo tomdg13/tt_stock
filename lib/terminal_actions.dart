@@ -1,3 +1,4 @@
+import 'main_shell.dart';
 import 'product_images.dart';
 // Terminal info page with "Fix" and "Change terminal" actions.
 // New file: nothing existing is overwritten. Needs mobile_scanner (already in pubspec).
@@ -616,6 +617,10 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
   }
 
   Future<void> _addPart() async {
+    if (_branchId == null) {
+      toastMsg(context, "ກະລຸນາເລືອກສາຂາກ່ອນ");
+      return;
+    }
     await _atmLoad;
     if (!mounted) return;
     final row = await Navigator.push<Map<String, dynamic>>(
@@ -726,6 +731,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
     final p = pal(context);
     return Scaffold(
       appBar: AppBar(title: Text('ສ້ອມ · $_barcode')),
+      bottomNavigationBar: const ShellBar(),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         AppCard(
           title: 'ອາໄຫຼ່ທີ່ໃຊ້',
@@ -761,7 +767,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
                 child: FilledButton.icon(
                   icon: const Icon(Icons.qr_code_scanner),
                   label: const Text('ສະແກນ'),
-                  onPressed: _busy ? null : _scanPart,
+                  onPressed: (_busy || _branchId == null) ? null : _scanPart,
                 ),
               ),
               const SizedBox(width: 8),
@@ -769,7 +775,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.add),
                   label: const Text('ເລືອກຈາກສິນຄ້າ'),
-                  onPressed: _busy ? null : _addPart,
+                  onPressed: (_busy || _branchId == null) ? null : _addPart,
                 ),
               ),
             ]),
