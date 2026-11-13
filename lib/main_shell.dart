@@ -2,17 +2,12 @@ import 'package:flutter/material.dart';
 import 'pages.dart';
 import 'withdraw_list.dart';
 import 'stock_request.dart';
-import 'page_log.dart';
 
 /// Bottom bar for pushed pages. Opens each tab's page on top of the home menu.
 class ShellBar extends StatelessWidget {
   const ShellBar({super.key});
 
   void _go(BuildContext context, int i) {
-    if (i == 3) {
-      navLog('bottom bar -> ປຸ່ມໃໝ່ tapped');
-      return;
-    }
     final nav = Navigator.of(context);
     nav.popUntil((r) => r.isFirst);
     switch (i) {
@@ -50,11 +45,6 @@ class ShellBar extends StatelessWidget {
           icon: Icon(Icons.history_outlined),
           selectedIcon: Icon(Icons.history),
           label: 'ປະຫວັດ',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.add_circle_outline),
-          selectedIcon: Icon(Icons.add_circle),
-          label: 'ປຸ່ມໃໝ່',
         ),
       ],
     );
