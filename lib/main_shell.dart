@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'screens.dart';
+import 'stock_request.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -11,11 +13,10 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  // TODO: replace these with your real pages
   final List<Widget> _pages = const [
-    Center(child: Text('ລາຍການຂໍອາໄຫຼ່')),
-    Center(child: Text('ເບີກອາໄຫຼ່')),
-    Center(child: Text('ປະຫວັດ')),
+    StockRequestsPage(),
+    Center(child: Text('ເບີກອາໄຫຼ່')), // TODO tab 2
+    HistoryScreen(),
   ];
 
   @override
