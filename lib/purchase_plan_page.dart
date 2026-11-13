@@ -62,6 +62,7 @@ class _PurchasePlanPageState extends State<PurchasePlanPage> {
               width: 64,
               height: 64,
               child: Image.network(url,
+                  webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
                   fit: BoxFit.cover,
                   headers: Api.token == null
                       ? null

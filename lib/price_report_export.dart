@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart'
@@ -429,7 +428,7 @@ pw.Widget _table(List<String> head, List<List<String>> data,
   final off = hasImg ? 1 : 0;
   final rows = <pw.TableRow>[
     pw.TableRow(
-      decoration: pw.BoxDecoration(color: PdfColors.grey200),
+      decoration: const pw.BoxDecoration(color: PdfColors.grey200),
       children: [
         for (var i = 0; i < head.length; i++)
           _cell(head[i], bold: true, right: right.contains(i))
@@ -450,7 +449,7 @@ pw.Widget _table(List<String> head, List<List<String>> data,
   final f = foot;
   if (f != null) {
     rows.add(pw.TableRow(
-      decoration: pw.BoxDecoration(color: PdfColors.grey100),
+      decoration: const pw.BoxDecoration(color: PdfColors.grey100),
       children: [
         for (var i = 0; i < f.length; i++)
           _cell(f[i], bold: true, right: right.contains(i))
@@ -475,7 +474,7 @@ pw.Widget _sigBox(String lao, String en, String nameLine, String dateLine) =>
       child:
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
         _txt(lao, size: 10, bold: true),
-        pw.Text(en, style: pw.TextStyle(fontSize: 8)),
+        pw.Text(en, style: const pw.TextStyle(fontSize: 8)),
         pw.SizedBox(height: 46),
         pw.Container(height: 0.7, color: PdfColors.grey700),
         pw.SizedBox(height: 5),
@@ -819,7 +818,7 @@ Future<void> shareTransferPdf(
         },
         children: [
           pw.TableRow(
-            decoration: pw.BoxDecoration(color: PdfColors.grey200),
+            decoration: const pw.BoxDecoration(color: PdfColors.grey200),
             children: [
               _cell('No', bold: true),
               _cell('', bold: true),
@@ -846,7 +845,7 @@ Future<void> shareTransferPdf(
               ],
             ),
           pw.TableRow(
-            decoration: pw.BoxDecoration(color: PdfColors.grey100),
+            decoration: const pw.BoxDecoration(color: PdfColors.grey100),
             children: [
               _cell(''),
               _cell(''),

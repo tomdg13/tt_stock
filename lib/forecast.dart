@@ -2,8 +2,6 @@
 // Server: GET /stock/forecast?weeks=1|4&pct=15&branchId=
 import 'package:flutter/material.dart';
 import 'api.dart';
-import 'crud.dart';
-import 'pages.dart' show loadBranches;
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -131,7 +129,7 @@ class _ForecastPageState extends State<ForecastPage> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-                    child: Text('ຕ້ອງຊື້ ${toBuy} ລາຍການ ຈາກ ${items.length}',
+                    child: Text('ຕ້ອງຊື້ $toBuy ລາຍການ ຈາກ ${items.length}',
                         style: TextStyle(color: p.mut)),
                   ),
                   for (final m in items)
@@ -170,7 +168,7 @@ class _ForecastPageState extends State<ForecastPage> {
                               decoration: BoxDecoration(
                                 color:
                                     (suggest > 0 ? Colors.orange : Colors.green)
-                                        .withOpacity(0.15),
+                                        .withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(

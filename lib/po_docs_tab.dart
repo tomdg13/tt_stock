@@ -238,7 +238,9 @@ class _PoDocsTabState extends State<PoDocsTab> {
     if (ok != true) return;
     try {
       await Api.delete(
-          '/purchase-orders/${Uri.encodeComponent(_poId)}/documents/${pick(d, ['id'])}');
+          '/purchase-orders/${Uri.encodeComponent(_poId)}/documents/${pick(d, [
+            'id'
+          ])}');
       if (mounted) {
         setState(() => _docs.removeWhere((x) => '${x['id']}' == '${d['id']}'));
       }
@@ -440,8 +442,7 @@ class _PoDocsTabState extends State<PoDocsTab> {
           if (size.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(left: 8),
-              child:
-                  Text(size, style: TextStyle(color: p.mut, fontSize: 12.5)),
+              child: Text(size, style: TextStyle(color: p.mut, fontSize: 12.5)),
             ),
           _menu(d, canWrite, p),
         ]),
@@ -577,7 +578,8 @@ class _PoDocsTabState extends State<PoDocsTab> {
         fit: StackFit.expand,
         children: [
           body,
-          if (_dragging) Positioned.fill(child: IgnorePointer(child: _dropOverlay())),
+          if (_dragging)
+            Positioned.fill(child: IgnorePointer(child: _dropOverlay())),
         ],
       ),
     );

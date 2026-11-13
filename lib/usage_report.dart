@@ -6,7 +6,6 @@ import 'product_images.dart';
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'screens.dart' show BarcodeScanPage;
-import 'lao.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -231,7 +230,7 @@ class _UsageReportPageState extends State<UsageReportPage> {
       final pr = await Api.get('/products?limit=200');
       _imgs = {
         for (final m in _usList(pr))
-          '${pick(m, ['id', 'productId'])}':
+          pick(m, ['id', 'productId']):
               pick(m, ['imageUrl', 'image', 'photo', 'img', 'picture'])
       };
     } catch (e) {
@@ -446,6 +445,7 @@ class _UsageReportPageState extends State<UsageReportPage> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: Image.network(url,
+          webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
           width: 48,
           height: 48,
           fit: BoxFit.cover,
@@ -472,7 +472,7 @@ class UsageCardPage extends StatefulWidget {
 }
 
 class _UsageCardPageState extends State<UsageCardPage> {
-  late Future<List<Map<String, dynamic>>> _future = _load();
+  late final Future<List<Map<String, dynamic>>> _future = _load();
 
   static const _types = {
     'receive': 'ຮັບເຂົ້າ',
@@ -573,7 +573,7 @@ class _UsageCardPageState extends State<UsageCardPage> {
               ),
             ),
             const SizedBox(height: 8),
-            Row(children: const [
+            const Row(children: [
               Expanded(
                   child: Text('ທຸລະກຳ',
                       style: TextStyle(fontWeight: FontWeight.bold))),

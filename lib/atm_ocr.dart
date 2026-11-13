@@ -2,9 +2,9 @@
 // Needs:  flutter pub add google_mlkit_text_recognition   (image_picker is already in the project)
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'api.dart';
-import 'crud.dart';
 import 'widgets.dart';
 import 'screens.dart' show AtmIssueHub;
 
@@ -38,6 +38,11 @@ List<String> _candidates(String text) {
 }
 
 Future<void> openAtmFromPhoto(BuildContext context) async {
+  if (kIsWeb) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Photo scan works on the phone app only')));
+    return;
+  }
   final shot = await ImagePicker()
       .pickImage(source: ImageSource.camera, imageQuality: 90);
   if (shot == null || !context.mounted) return;

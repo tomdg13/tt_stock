@@ -1,12 +1,9 @@
 import 'transfer_home.dart';
-import 'package:flutter/foundation.dart';
 import 'services/biometric_service.dart';
 import 'image_search.dart';
 import 'receive_home.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'stock_drill.dart';
-import 'purchase_plan_page.dart';
-import 'budget_page.dart';
 import 'budget_list_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -76,23 +73,26 @@ class _LoginScreenState extends State<LoginScreen> {
     final cred = await BiometricService.authenticateAndGetCredentials();
     debugPrint('BIO: cred=${cred == null ? "NULL" : "phone=${cred.phone}"}');
     if (cred == null) return;
-    if (mounted)
+    if (mounted) {
       setState(() {
         _busy = true;
         _error = null;
       });
+    }
     try {
       await Api.login(cred.phone, cred.pin);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = '$e';
         });
+      }
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _busy = false;
         });
+      }
     }
   }
 
@@ -132,15 +132,17 @@ class _LoginScreenState extends State<LoginScreen> {
       await Api.login(ph, pn);
       if (saveBio) await BiometricService.enable(ph, pn);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = '$e';
         });
+      }
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _busy = false;
         });
+      }
     }
   }
 
@@ -1010,7 +1012,7 @@ class _AtmIssueHubState extends State<AtmIssueHub> {
                   label: const Text('ເພີ່ມ'),
                   onPressed: () async {
                     final ok = await Navigator.push<bool>(
-                        pc, MaterialPageRoute(builder: (_) => CrudForm(spec!)));
+                        pc, MaterialPageRoute(builder: (_) => CrudForm(spec)));
                     if (ok == true) sig.value++;
                   },
                 ),
@@ -1028,13 +1030,13 @@ class _AtmIssueHubState extends State<AtmIssueHub> {
                       final ok = await Navigator.push<bool>(
                           pc,
                           MaterialPageRoute(
-                              builder: (_) => CrudForm(spec!, row: m)));
+                              builder: (_) => CrudForm(spec, row: m)));
                       if (ok == true) sig.value++;
                     }
                   : null,
               onDelete: canEdit
                   ? (m) async {
-                      if (await confirmDelete(pc, spec!, m)) sig.value++;
+                      if (await confirmDelete(pc, spec, m)) sig.value++;
                     }
                   : null,
             ),
@@ -1149,9 +1151,10 @@ class _AtmIssueHubState extends State<AtmIssueHub> {
         if (typeId != null && ni is Map && '${ni['typeId']}' != typeId)
           'ປະເພດບໍ່ຕົງກັນ',
       ];
-      final note = warn.isEmpty ? '' : '\n⚠ ' + warn.join(', ');
-      if (!await _confirm('ປ່ຽນ $oldCode → $nc ໃນຕູ້ ${widget.atmId}?$note'))
+      final note = warn.isEmpty ? '' : '\n⚠ ${warn.join(', ')}';
+      if (!await _confirm('ປ່ຽນ $oldCode → $nc ໃນຕູ້ ${widget.atmId}?$note')) {
         return;
+      }
       await Api.post('/atms/${Uri.encodeComponent(widget.atmId)}/replace',
           {'oldBarcode': oldCode, 'newBarcode': nc});
       if (!mounted) return;
@@ -1450,11 +1453,14 @@ class DashMenuScreen extends StatelessWidget {
             () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const StockCountPage()))),
     ];
-    return GridView.count(
-      crossAxisCount: 5,
+    final wide = MediaQuery.of(context).size.width >= 600;
+    return GridView(
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: wide ? 150 : 80,
+        mainAxisExtent: 118,
+        mainAxisSpacing: 12,
+      ),
       padding: const EdgeInsets.fromLTRB(8, 24, 8, 8),
-      mainAxisSpacing: 12,
-      childAspectRatio: 0.62,
       children: [
         for (final it in items)
           InkWell(
@@ -1471,7 +1477,12 @@ class DashMenuScreen extends StatelessWidget {
                     color: cs.surface,
                     border: Border.all(color: cs.outlineVariant),
                   ),
-                  child: Icon(it.icon, size: 30, color: it.color),
+                  child: Icon(it.icon,
+                      size: 30,
+                      color: cs.brightness == Brightness.dark
+                          ? Color.alphaBlend(
+                              Colors.white.withValues(alpha: 0.28), it.color)
+                          : it.color),
                 ),
                 const SizedBox(height: 8),
                 Text(it.label,
@@ -1508,7 +1519,7 @@ class ReportsScreen extends StatelessWidget {
               Row(children: [
                 CircleAvatar(
                     radius: 23,
-                    backgroundColor: color.withOpacity(0.12),
+                    backgroundColor: color.withValues(alpha: 0.12),
                     child: Icon(icon, color: color)),
                 const SizedBox(width: 12),
                 Expanded(

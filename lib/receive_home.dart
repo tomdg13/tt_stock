@@ -6,17 +6,12 @@ import 'crud.dart' show CrudDetail;
 import 'specs.dart' show crudSpec;
 import 'package:flutter/material.dart';
 import 'api.dart';
-import 'stock_drill.dart';
 import 'purchase_orders.dart';
-import 'screens.dart' show BarcodeScanPage;
-import 'lao.dart';
 import 'theme.dart';
 import 'widgets.dart';
-import 'invoice_import.dart';
 
 // ------------------------------------------------------------- shared bits
 import 'pages.dart';
-import 'po_info.dart';
 
 /// ຮັບເຂົ້າ tab: recent receipts grouped by PO -> tap a PO to see its items.
 class ReceiveHome extends StatefulWidget {
@@ -401,10 +396,8 @@ class _PoPageState extends State<_PoPage> {
       final it = await Api.get('/po-actual/${last['id']}');
       final m = <String, double>{};
       for (final r in asList(it)) {
-        if (r is Map) {
-          final k = num0('${r['itemId']}').toInt();
-          m['$k'] = num0('${r['actualLak']}').toDouble();
-        }
+        final k = num0('${r['itemId']}').toInt();
+        m['$k'] = num0('${r['actualLak']}').toDouble();
       }
       final info =
           'ມູນຄ່ານຳໃຊ້ v${last['versionNo']}: ${_lakFmt(last['totalLak'])} LAK · ${last['uploadedByName'] ?? ''}';
@@ -1338,10 +1331,9 @@ class _PoPayTabState extends State<_PoPayTab> {
                             const InputDecoration(labelText: 'ຊື່ລາຍການ')),
                     const SizedBox(height: 12),
                     SegmentedButton<bool>(
-                      segments: [
-                        const ButtonSegment(value: true, label: Text('%')),
-                        const ButtonSegment(
-                            value: false, label: Text('ຈຳນວນເງິນ')),
+                      segments: const [
+                        ButtonSegment(value: true, label: Text('%')),
+                        ButtonSegment(value: false, label: Text('ຈຳນວນເງິນ')),
                       ],
                       selected: {isPct},
                       onSelectionChanged: (x) => setS(() => isPct = x.first),
@@ -2076,7 +2068,7 @@ class _PoPayTabState extends State<_PoPayTab> {
               backgroundColor: x['paid'] == true ? p.okbg : null,
               child: x['paid'] == true
                   ? Icon(Icons.check, size: 16, color: p.ok)
-                  : Text('${pick(x, ['seqNo'])}'),
+                  : Text(pick(x, ['seqNo'])),
             ),
             title: Text(
                 'ງວດ ${pick(x, ['seqNo'])} · ${_money(num0(x['amount']))} $cur',

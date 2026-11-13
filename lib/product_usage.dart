@@ -158,8 +158,8 @@ class _UsagePageState extends State<_UsagePage> {
                               Padding(
                                 padding: const EdgeInsets.only(top: 4),
                                 child: Text(v.sub,
-                                    style:
-                                        TextStyle(color: p.mut, fontSize: 12.5)),
+                                    style: TextStyle(
+                                        color: p.mut, fontSize: 12.5)),
                               ),
                           ],
                         ),

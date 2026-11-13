@@ -36,8 +36,9 @@ class _HistoryPageState extends State<HistoryPage> {
     final a = action.toUpperCase();
     final q = RegExp(r'X(\d+)$').firstMatch(a);
     final name = product.isEmpty ? '' : ': $product';
-    if (a.startsWith('MA PART'))
+    if (a.startsWith('MA PART')) {
       return 'ໃຊ້ອາໄຫຼ່$name${q == null ? '' : ' × ${q.group(1)}'}';
+    }
     if (a.startsWith('INSTALL')) return 'ຕິດຕັ້ງອາໄຫຼ່$name';
     if (a.startsWith('REMOVE')) return 'ເອົາອາໄຫຼ່ອອກ$name';
     return product.isEmpty ? action : '$action$name';
@@ -70,7 +71,9 @@ class _HistoryPageState extends State<HistoryPage> {
       final up = action.toUpperCase();
       if (!(up.startsWith('MA PART') ||
           up.startsWith('INSTALL') ||
-          up.startsWith('REMOVE'))) continue;
+          up.startsWith('REMOVE'))) {
+        continue;
+      }
       final sub = [
         if (_byAtm) pick(l, ['barcode']),
         pick(l, ['serialNo']),

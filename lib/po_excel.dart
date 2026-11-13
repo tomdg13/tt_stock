@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'file_download.dart';
 import 'package:archive/archive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -124,10 +125,12 @@ Future<void> sharePoXlsx({
     sb.write(
         '<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>');
     sb.write('<headerFooter>');
-    if (pageHeader != null)
+    if (pageHeader != null) {
       sb.write('<oddHeader>${_esc(pageHeader)}</oddHeader>');
-    if (pageFooter != null)
+    }
+    if (pageFooter != null) {
       sb.write('<oddFooter>${_esc(pageFooter)}</oddFooter>');
+    }
     sb.write('</headerFooter>');
   }
   if (pics) sb.write('<drawing r:id="rId1"/>');
@@ -189,6 +192,13 @@ Future<void> sharePoXlsx({
   }
   debugPrint('[XLSX] zip bytes=${bytes.length} parts=${partNames.join(', ')}');
 
+  const xlsxMime =
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  if (kIsWeb) {
+    await downloadBytes(bytes, fileName, xlsxMime);
+    debugPrint('[XLSX] web download $fileName size=${bytes.length}');
+    return;
+  }
   final dir = await getTemporaryDirectory();
   final file = File('${dir.path}/$fileName');
   await file.writeAsBytes(bytes, flush: true);

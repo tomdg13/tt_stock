@@ -1,5 +1,4 @@
 // Search products by photo: compares colour + layout of the photo with the product images.
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;

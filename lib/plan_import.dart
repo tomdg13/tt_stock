@@ -108,12 +108,13 @@ class _PlanImportPageState extends State<PlanImportPage> {
       try {
         final r = await Future.wait(
             [_list('/vendors'), _list('/brands'), _list('/branches')]);
-        if (mounted)
+        if (mounted) {
           setState(() {
             _vendors = r[0];
             _brands = r[1];
             _branches = r[2];
           });
+        }
       } catch (e) {
         if (mounted) setState(() => _error = '$e');
       }
@@ -148,8 +149,9 @@ class _PlanImportPageState extends State<PlanImportPage> {
         _po.text = '${d['suggestedPoNo'] ?? ''}';
       });
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() => _error = '$e'.replaceFirst('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -168,9 +170,9 @@ class _PlanImportPageState extends State<PlanImportPage> {
   Future<void> _save() async {
     final sel = _lines.where((l) => l.on).toList();
     String? err;
-    if (_brandId == null)
+    if (_brandId == null) {
       err = 'ເລືອກ BRAND';
-    else if (_branchId == null)
+    } else if (_branchId == null)
       err = 'ເລືອກສາຂາປາຍທາງ';
     else if (_currency == null)
       err = 'ເລືອກສະກຸນເງິນ';
@@ -219,8 +221,9 @@ class _PlanImportPageState extends State<PlanImportPage> {
           content: Text('ສ້າງແຜນ ${r['planNo']} ແລ້ວ (${r['items']} ລາຍການ)')));
       Navigator.pop(context, true);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() => _error = '$e'.replaceFirst('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -232,7 +235,7 @@ class _PlanImportPageState extends State<PlanImportPage> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DropdownButtonFormField<String>(
-        value: value,
+        initialValue: value,
         isExpanded: true,
         decoration: InputDecoration(
             labelText: label, border: const OutlineInputBorder()),
@@ -325,7 +328,7 @@ class _PlanImportPageState extends State<PlanImportPage> {
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: DropdownButtonFormField<String>(
-                value: _currency,
+                initialValue: _currency,
                 decoration: const InputDecoration(
                     labelText: 'ສະກຸນເງິນ', border: OutlineInputBorder()),
                 items: [

@@ -381,7 +381,8 @@ class _AuditPageState extends State<AuditPage> {
         context: context,
         builder: (c) => Dialog(
           child: InteractiveViewer(
-            child: Image.network(url, webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+            child: Image.network(url,
+                webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => const Padding(
                     padding: EdgeInsets.all(40),
@@ -391,7 +392,8 @@ class _AuditPageState extends State<AuditPage> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: Image.network(url, webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+        child: Image.network(url,
+            webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
             width: size,
             height: size,
             fit: BoxFit.cover,
@@ -1120,7 +1122,6 @@ class _AuditPageState extends State<AuditPage> {
       if (r.isEmpty) return;
       final pf = r.first;
       final bytes = await pf.readAsBytes();
-      if (bytes == null) throw 'ອ່ານໄຟລ໌ບໍ່ໄດ້';
       final ups = _readCounts(bytes);
       final byId = <int, Map<String, dynamic>>{
         for (final x in _lines) (int.tryParse('${x['productId']}') ?? -1): x
@@ -1250,29 +1251,29 @@ class _AuditPageState extends State<AuditPage> {
         title: Text(pick(r, ['productName'])),
         subtitle: sub.isEmpty ? null : Text(sub),
         trailing: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerRight,
-            child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('ໃນລະບົບ ${_s(sys)} $unit',
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.bold)),
-              Text(c == null ? 'ຍັງບໍ່ນັບ' : 'ນັບໄດ້ ${_s(c)} $unit',
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: c == null
-                          ? Colors.grey
-                          : diff == 0
-                              ? Colors.green
-                              : Colors.red)),
-              if (diff != null && diff != 0)
-                Text('ຕ່າງ ${diff > 0 ? '+' : ''}${_s(diff)}',
-                    style: const TextStyle(fontSize: 12, color: Colors.red)),
-            ]),
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('ໃນລະບົບ ${_s(sys)} $unit',
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.bold)),
+                Text(c == null ? 'ຍັງບໍ່ນັບ' : 'ນັບໄດ້ ${_s(c)} $unit',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: c == null
+                            ? Colors.grey
+                            : diff == 0
+                                ? Colors.green
+                                : Colors.red)),
+                if (diff != null && diff != 0)
+                  Text('ຕ່າງ ${diff > 0 ? '+' : ''}${_s(diff)}',
+                      style: const TextStyle(fontSize: 12, color: Colors.red)),
+              ]),
         ),
       ),
       if (_isOpen)

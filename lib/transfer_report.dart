@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
-import 'screens.dart' show BarcodeScanPage;
 import 'lao.dart';
 import 'theme.dart';
 import 'widgets.dart';

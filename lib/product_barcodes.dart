@@ -2,12 +2,11 @@
 // Server: GET/PUT /products/:id/barcodes, GET /products/by-barcode/:code
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'api.dart';
-import 'crud.dart';
 import 'screens.dart' show BarcodeScanPage;
 import 'theme.dart';
-import 'widgets.dart';
 
 /// Holds the barcodes of the product form; saved after the product is saved.
 class ProductBarcodesController {
@@ -76,9 +75,10 @@ class _ProductBarcodesEditorState extends State<ProductBarcodesEditor> {
           await Api.get('/products/by-barcode/${Uri.encodeComponent(code)}');
       final owner = r is Map ? r['productId'] : null;
       if (owner != null && '$owner' != (widget.productId ?? '')) {
-        if (mounted)
+        if (mounted) {
           setState(() =>
               _err = 'barcode ນີ້ໃຊ້ກັບສິນຄ້າອື່ນແລ້ວ: ${(r as Map)['name']}');
+        }
         return;
       }
     } catch (_) {
@@ -94,6 +94,11 @@ class _ProductBarcodesEditorState extends State<ProductBarcodesEditor> {
 
   /// Photo of the printed number -> read the text on the phone -> add the barcode (pick one if several).
   Future<void> _scanText() async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Photo scan works on the phone app only')));
+      return;
+    }
     final shot = await ImagePicker()
         .pickImage(source: ImageSource.camera, imageQuality: 90);
     if (shot == null || !mounted) return;
@@ -113,8 +118,9 @@ class _ProductBarcodesEditorState extends State<ProductBarcodesEditor> {
       final joined = line.replaceAll(RegExp(r'\s*-\s*'), '-');
       for (final raw in joined.split(RegExp(r'\s+'))) {
         final t = raw.replaceAll(RegExp(r'[^A-Za-z0-9\-]'), '');
-        if (t.length >= 5 && RegExp(r'\d').hasMatch(t) && !cands.contains(t))
+        if (t.length >= 5 && RegExp(r'\d').hasMatch(t) && !cands.contains(t)) {
           cands.add(t);
+        }
       }
     }
     if (cands.isEmpty) {

@@ -1,3 +1,4 @@
+import 'main_shell.dart';
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'screens.dart';
@@ -20,6 +21,22 @@ class App extends StatelessWidget {
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
       themeMode: ThemeMode.system,
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        final w = mq.size.width > 1200 ? 1200.0 : mq.size.width;
+        return ColoredBox(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          child: Center(
+            child: SizedBox(
+              width: w,
+              child: MediaQuery(
+                data: mq.copyWith(size: Size(w, mq.size.height)),
+                child: child!,
+              ),
+            ),
+          ),
+        );
+      },
       home: ValueListenableBuilder<bool>(
         valueListenable: loggedIn,
         builder: (_, ok, __) => ok ? const HomeScreen() : const LoginScreen(),

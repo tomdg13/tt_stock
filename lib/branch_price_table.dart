@@ -138,6 +138,7 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
         builder: (c) => Dialog(
           child: InteractiveViewer(
             child: Image.network(url,
+                webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => const Padding(
                     padding: EdgeInsets.all(40),
@@ -148,6 +149,7 @@ class _BranchPriceTableState extends State<BranchPriceTable> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Image.network(url,
+            webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
             width: 44,
             height: 44,
             fit: BoxFit.cover,

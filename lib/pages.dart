@@ -56,6 +56,7 @@ class _ProductPickerState extends State<_ProductPicker> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: Image.network(url,
+          webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
           width: 48,
           height: 48,
           fit: BoxFit.cover,
@@ -108,12 +109,13 @@ class _ProductPickerState extends State<_ProductPicker> {
                 if (s.connectionState != ConnectionState.done) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                if (s.hasError)
+                if (s.hasError) {
                   return ErrorView(
                       s.error!,
                       () => setState(() {
                             _f = _load();
                           }));
+                }
                 final items = asList(s.data);
                 return ListView.builder(
                   itemCount: items.length,
@@ -199,10 +201,11 @@ class _LineEditorState extends State<LineEditor> {
                         builder: (_) => PickProductPage(
                             branchId: widget.branchId, pickerMode: true)))
                 : await pickProduct(context);
-            if (prod != null)
+            if (prod != null) {
               setState(() {
                 lines.add(Line(prod, 1));
               });
+            }
           },
           icon: const Icon(Icons.add),
           label: const Text('ເພີ່ມສິນຄ້າ'),
@@ -240,6 +243,8 @@ class _LineEditorState extends State<LineEditor> {
                             return ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
                                 child: Image.network(u,
+                                    webHtmlElementStrategy:
+                                        WebHtmlElementStrategy.fallback,
                                     width: 40,
                                     height: 40,
                                     fit: BoxFit.cover,
@@ -712,9 +717,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
             const SizedBox(height: 8),
             futureBlock(_mv, () => _pick(_prod), (d) {
               final rows = asList(d);
-              if (rows.isEmpty)
+              if (rows.isEmpty) {
                 return const Padding(
                     padding: EdgeInsets.all(8), child: Text('ຍັງບໍ່ມີລາຍການ'));
+              }
               return Column(children: [
                 for (final m in rows.take(40)) moveRow(context, m)
               ]);
@@ -775,14 +781,16 @@ class _StockFormPageState extends State<StockFormPage> {
   }
 
   Future<void> _submit() async {
-    if (_branchId == null)
+    if (_branchId == null) {
       return setState(() {
         _error = 'ເລືອກສາຂາ';
       });
-    if (_lines.isEmpty)
+    }
+    if (_lines.isEmpty) {
       return setState(() {
         _error = 'ເພີ່ມສິນຄ້າຢ່າງນ້ອຍ 1 ລາຍການ';
       });
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -825,15 +833,17 @@ class _StockFormPageState extends State<StockFormPage> {
         _recent = Api.get('/stock/movements');
       });
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = '$e';
         });
+      }
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _busy = false;
         });
+      }
     }
   }
 
@@ -936,10 +946,11 @@ class _StockFormPageState extends State<StockFormPage> {
         });
         _snack('+$q $name');
       } catch (e) {
-        if (mounted)
+        if (mounted) {
           setState(() {
             _error = '$e';
           });
+        }
         return;
       }
     }
@@ -1100,8 +1111,9 @@ class _StockFormPageState extends State<StockFormPage> {
             }).toList();
           }
           if (rows.isEmpty) rows = all;
-          if (rows.isEmpty)
+          if (rows.isEmpty) {
             return Text('ຍັງບໍ່ມີລາຍການ', style: TextStyle(color: p.mut));
+          }
           return Column(
               children: [for (final m in rows.take(5)) moveRow(context, m)]);
         }),
@@ -1167,6 +1179,7 @@ class _TransferScreenState extends State<TransferScreen> {
         return ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: Image.network(u,
+              webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
               width: 40,
               height: 40,
               fit: BoxFit.cover,
@@ -1202,18 +1215,21 @@ class _TransferScreenState extends State<TransferScreen> {
       });
 
   Future<void> _send() async {
-    if (_from == null || _to == null)
+    if (_from == null || _to == null) {
       return setState(() {
         _error = 'ເລືອກສາຂາຕົ້ນທາງ ແລະ ປາຍທາງ';
       });
-    if (_from == _to)
+    }
+    if (_from == _to) {
       return setState(() {
         _error = 'ສາຂາຕົ້ນທາງ ແລະ ປາຍທາງຕ້ອງຕ່າງກັນ';
       });
-    if (_lines.isEmpty)
+    }
+    if (_lines.isEmpty) {
       return setState(() {
         _error = 'ເພີ່ມສິນຄ້າຢ່າງນ້ອຍ 1 ລາຍການ';
       });
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -1249,15 +1265,17 @@ class _TransferScreenState extends State<TransferScreen> {
       _reload();
       widget.onCreated?.call();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = '$e';
         });
+      }
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _busy = false;
         });
+      }
     }
   }
 
@@ -1268,9 +1286,10 @@ class _TransferScreenState extends State<TransferScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(done)));
       _reload();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('$e')));
+      }
     }
   }
 
@@ -1315,8 +1334,9 @@ class _TransferScreenState extends State<TransferScreen> {
             title: 'ໃບໂອນ',
             child: futureBlock(_list, _reload, (d) {
               final rows = asList(d);
-              if (rows.isEmpty)
+              if (rows.isEmpty) {
                 return Text('ຍັງບໍ່ມີລາຍການ', style: TextStyle(color: p.mut));
+              }
               return Column(
                   children: [for (final t in rows) _transferRow(context, t)]);
             }),
@@ -1690,8 +1710,9 @@ class _TransferDocsPageState extends State<TransferDocsPage> {
       final base = Api.baseUrl.replaceAll(RegExp(r'/+$'), '');
       final req = http.MultipartRequest(
           'POST', Uri.parse('$base/stock/transfers/${widget.trfId}/docs'));
-      if (Api.token != null)
+      if (Api.token != null) {
         req.headers['Authorization'] = 'Bearer ${Api.token}';
+      }
       for (final f in files) {
         req.files.add(http.MultipartFile.fromBytes(
             'files', await f.readAsBytes(),
@@ -1751,8 +1772,9 @@ class _TransferDocsPageState extends State<TransferDocsPage> {
     try {
       await Api.delete(
           '/stock/transfers/${widget.trfId}/docs/${pick(d, ['id'])}');
-      if (mounted)
+      if (mounted) {
         setState(() => _docs.removeWhere((x) => '${x['id']}' == '${d['id']}'));
+      }
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     }

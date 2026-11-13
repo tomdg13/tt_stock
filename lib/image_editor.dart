@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/foundation.dart' show compute, kIsWeb;
 // Image editor for product photos: crop / rotate, remove background (ML Kit), undo.
 import 'dart:io';
 import 'dart:typed_data';
@@ -9,6 +9,7 @@ import 'package:image_cropper/image_cropper.dart';
 
 /// Opens the editor. Returns the edited image bytes, or null if cancelled.
 Future<Uint8List?> editProductImage(BuildContext context, Uint8List bytes) {
+  if (kIsWeb) return Future.value(bytes);
   return Navigator.push<Uint8List>(
       context, MaterialPageRoute(builder: (_) => ImageEditorPage(bytes)));
 }

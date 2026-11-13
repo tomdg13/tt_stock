@@ -420,11 +420,11 @@ class _CrudDetailState extends State<CrudDetail> {
                     child:
                         ProductImageStrip(asList((s.data as Map)['images']))),
               if (sp.path == '/branches') BranchRequestInfo(widget.row['id']),
-                if (sp.path == '/products')
-                  ProductUsageButtons(
-                    onOpenPOs: () => openProductPOs(context, widget.row),
-                    onOpenATMs: () => openProductInstalls(context, widget.row),
-                  ),
+              if (sp.path == '/products')
+                ProductUsageButtons(
+                  onOpenPOs: () => openProductPOs(context, widget.row),
+                  onOpenATMs: () => openProductInstalls(context, widget.row),
+                ),
               AppCard(child: DataView(s.data)),
             ]),
           );

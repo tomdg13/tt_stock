@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
-import 'crud.dart';
-import 'specs.dart';
 import 'theme.dart';
 import 'type_image.dart';
 import 'widgets.dart';
@@ -47,11 +45,12 @@ class _TerminalPickListState extends State<TerminalPickList> {
   }
 
   Future<void> _load() async {
-    if (mounted)
+    if (mounted) {
       setState(() {
         _loading = true;
         _error = null;
       });
+    }
     try {
       final d = await Api.get('/terminals?${widget.extraQuery}');
       if (!mounted) return;
@@ -108,7 +107,7 @@ class _TerminalPickListState extends State<TerminalPickList> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                              color: tc.withOpacity(0.15),
+                              color: tc.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(10)),
                           child: Text(state,
                               style: TextStyle(

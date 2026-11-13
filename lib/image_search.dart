@@ -37,6 +37,7 @@ Widget _thumb(String v) {
   return ClipRRect(
     borderRadius: BorderRadius.circular(8),
     child: Image.network(url,
+        webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
         width: 48,
         height: 48,
         fit: BoxFit.cover,

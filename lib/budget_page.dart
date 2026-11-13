@@ -367,6 +367,7 @@ class _BudgetPageState extends State<BudgetPage> {
               width: 48,
               height: 48,
               child: Image.network(url,
+                  webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
                   fit: BoxFit.cover,
                   headers: Api.token == null
                       ? null

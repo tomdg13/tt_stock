@@ -12,8 +12,9 @@ import 'theme.dart';
 
 String terminalTypeImageUrl(String file) {
   if (file.isEmpty) return '';
-  if (file.startsWith('/') || file.startsWith('http'))
+  if (file.startsWith('/') || file.startsWith('http')) {
     return productImageUrl(file);
+  }
   return productImageUrl('/uploads/terminal-types/$file');
 }
 
@@ -28,6 +29,7 @@ Widget typeThumb(BuildContext context, String file,
   return ClipRRect(
     borderRadius: BorderRadius.circular(8),
     child: Image.network(url,
+        webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
         width: size,
         height: size,
         fit: BoxFit.cover,
@@ -48,8 +50,9 @@ class TypeImageController {
     final img = picked;
     if (img != null) {
       final req = http.MultipartRequest('POST', uri);
-      if (Api.token != null)
+      if (Api.token != null) {
         req.headers['Authorization'] = 'Bearer ${Api.token}';
+      }
       final t = img.type.split('/');
       req.files.add(http.MultipartFile.fromBytes('image', img.bytes,
           filename: img.name, contentType: MediaType(t[0], t[1])));
@@ -112,6 +115,7 @@ class _TypeImageEditorState extends State<TypeImageEditor> {
       preview = Image.memory(c.picked!.bytes, fit: BoxFit.cover);
     } else if (!c.removed && widget.existingFile.isNotEmpty) {
       preview = Image.network(terminalTypeImageUrl(widget.existingFile),
+          webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) =>
               const Center(child: Icon(Icons.broken_image_outlined)));

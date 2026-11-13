@@ -139,8 +139,9 @@ class _TerminalInfoPageState extends State<TerminalInfoPage> {
           nd is Map ? Map<String, dynamic>.from(nd) : <String, dynamic>{};
       final st = pick(nm, ['state', 'status']);
       if (st.toLowerCase() != kReady.toLowerCase()) {
-        if (mounted)
+        if (mounted) {
           toastMsg(context, 'Terminal $nb ສະຖານະ "$st" ບໍ່ແມ່ນ Ready');
+        }
         return;
       }
       final nt = pick(nm, ['typeId']);
@@ -411,8 +412,9 @@ class _PickReadyTerminalPageState extends State<PickReadyTerminalPage> {
   }
 
   bool _ok(Map<String, dynamic> m) {
-    if (pick(m, ['state', 'status']).toLowerCase() != kReady.toLowerCase())
+    if (pick(m, ['state', 'status']).toLowerCase() != kReady.toLowerCase()) {
       return false;
+    }
     if (pick(m, ['barcode']) == widget.exclude) return false;
     if (_sel.isEmpty) return true;
     final t = _n([
@@ -607,11 +609,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
     final tot = c['total'];
     if (tot is Map && tot.isNotEmpty) {
       out.add(Text(
-          'ລວມ ' +
-              tot.entries
-                  .map((e) =>
-                      '${e.value is num ? (e.value as num).toStringAsFixed(2) : e.value} ${e.key}')
-                  .join(' + '),
+          'ລວມ ${tot.entries.map((e) => '${e.value is num ? (e.value as num).toStringAsFixed(2) : e.value} ${e.key}').join(' + ')}',
           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)));
     }
     return out;
@@ -1144,8 +1142,9 @@ class _PickProductPageState extends State<PickProductPage> {
           final nm = _n(o.value);
           if (nm.isEmpty) continue;
           final exact = _modelLabel.isNotEmpty && _n(_modelLabel) == nm;
-          if (!exact && !(_modelLabel.isNotEmpty && _hay.contains(nm)))
+          if (!exact && !(_modelLabel.isNotEmpty && _hay.contains(nm))) {
             continue;
+          }
           final rb = brandOf[nm] ?? '';
           if (brandId != null && rb.isNotEmpty && rb != '$brandId') continue;
           ids.add(o.key);
@@ -1183,7 +1182,8 @@ class _PickProductPageState extends State<PickProductPage> {
     if (url.isEmpty) return fallback;
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
-      child: Image.network(url, webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+      child: Image.network(url,
+          webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
           width: 48,
           height: 48,
           fit: BoxFit.cover,
@@ -1211,9 +1211,8 @@ class _PickProductPageState extends State<PickProductPage> {
     final pid = pick(m, ['id', 'productId']);
     final branchQty = _branchStock[pid] ?? 0;
     final soldOut = _hasBranch && branchQty <= 0;
-    final stock = _hasBranch
-        ? '${fmtNum(branchQty.toDouble())}'
-        : pick(m, ['stock', 'qty']);
+    final stock =
+        _hasBranch ? fmtNum(branchQty.toDouble()) : pick(m, ['stock', 'qty']);
     return cardBox(
       context,
       margin: const EdgeInsets.only(bottom: 8),
@@ -1275,7 +1274,7 @@ class _PickProductPageState extends State<PickProductPage> {
             TextButton.icon(
               icon: const Icon(Icons.add),
               label: const Text('ເພີ່ມ'),
-              onPressed: () => _add(spec!),
+              onPressed: () => _add(spec),
             ),
         ],
       ),

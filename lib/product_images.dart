@@ -35,8 +35,9 @@ String _imgType(String name) {
 String productImageUrl(String v) {
   if (v.isEmpty || v.startsWith('http') || v.startsWith('data:')) return v;
   final base = Api.baseUrl.replaceAll(RegExp(r'/+$'), '');
-  if (v.startsWith('/api/'))
+  if (v.startsWith('/api/')) {
     return '${base.replaceAll(RegExp(r'/api$'), '')}$v';
+  }
   return '$base${v.startsWith('/') ? '' : '/'}$v';
 }
 
@@ -71,10 +72,11 @@ Future<void> uploadProductImages(
       var msg = 'Error ${res.statusCode}';
       try {
         final d = jsonDecode(utf8.decode(res.bodyBytes));
-        if (d is Map && d['message'] != null)
+        if (d is Map && d['message'] != null) {
           msg = d['message'] is List
               ? (d['message'] as List).join('\n')
               : '${d['message']}';
+        }
       } catch (_) {}
       throw Exception(msg);
     }
@@ -97,6 +99,7 @@ class ProductImageStrip extends StatelessWidget {
 
   Widget _img(String url, {BoxFit fit = BoxFit.cover}) => Image.network(
         url,
+        webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
         fit: fit,
         headers:
             Api.token == null ? null : {'Authorization': 'Bearer ${Api.token}'},
@@ -152,8 +155,9 @@ class _ProductImagesEditorState extends State<ProductImagesEditor> {
   @override
   void initState() {
     super.initState();
-    if (widget.productId != null && widget.productId!.isNotEmpty)
+    if (widget.productId != null && widget.productId!.isNotEmpty) {
       _f = Api.get(_base);
+    }
   }
 
   void _reload() => setState(() {
@@ -313,6 +317,7 @@ class _ProductImagesEditorState extends State<ProductImagesEditor> {
                   _box(
                     Image.network(
                       _url(m),
+                      webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
                       fit: BoxFit.cover,
                       headers: Api.token == null
                           ? null
@@ -432,6 +437,7 @@ class _ProductImagesPageState extends State<ProductImagesPage> {
 
   Widget _img(String url, {BoxFit fit = BoxFit.cover}) => Image.network(
         url,
+        webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
         fit: fit,
         headers:
             Api.token == null ? null : {'Authorization': 'Bearer ${Api.token}'},

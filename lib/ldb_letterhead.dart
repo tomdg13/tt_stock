@@ -50,7 +50,7 @@ Future<Uint8List?> _addrPng(String lao, String en) async {
     ps.add(TextPainter(
         text: TextSpan(
             text: lao,
-            style: TextStyle(
+            style: const TextStyle(
                 fontFamily: 'LdbLao', fontSize: 21 * sc, color: white)),
         textDirection: TextDirection.ltr)
       ..layout());
@@ -59,7 +59,7 @@ Future<Uint8List?> _addrPng(String lao, String en) async {
     ps.add(TextPainter(
         text: TextSpan(
             text: en,
-            style: TextStyle(
+            style: const TextStyle(
                 fontFamily: 'serif',
                 fontWeight: ui.FontWeight.bold,
                 fontSize: 19 * sc,

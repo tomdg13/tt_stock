@@ -330,7 +330,7 @@ class _InvoicePreviewPageState extends State<InvoicePreviewPage> {
         ),
         if (dup.isNotEmpty)
           Card(
-            color: Colors.red.withOpacity(0.08),
+            color: Colors.red.withValues(alpha: 0.08),
             child: SwitchListTile(
               title: Text('Invoice ນີ້ເຄີຍນຳເຂົ້າແລ້ວ ($dup)',
                   style: TextStyle(color: p.bad)),
@@ -366,7 +366,7 @@ class _InvoicePreviewPageState extends State<InvoicePreviewPage> {
                             horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
                           color: (l.isNew ? Colors.orange : Colors.green)
-                              .withOpacity(0.15),
+                              .withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
@@ -486,9 +486,10 @@ class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
           }
           if (s.hasError) return Center(child: Text('${s.error}'));
           final rows = asList(s.data);
-          if (rows.isEmpty)
+          if (rows.isEmpty) {
             return Center(
                 child: Text('ຍັງບໍ່ມີລາຍການ', style: TextStyle(color: p.mut)));
+          }
           return ListView.builder(
             itemCount: rows.length,
             itemBuilder: (c, i) {

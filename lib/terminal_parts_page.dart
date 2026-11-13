@@ -72,6 +72,7 @@ class _TerminalPartsPageState extends State<TerminalPartsPage> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: Image.network(u,
+          webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
           width: 44,
           height: 44,
           fit: BoxFit.cover,

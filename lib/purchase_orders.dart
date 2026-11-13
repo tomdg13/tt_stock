@@ -31,8 +31,9 @@ MediaType _mt(String name) {
   if (l.endsWith('.pdf')) return MediaType('application', 'pdf');
   if (l.endsWith('.png')) return MediaType('image', 'png');
   if (l.endsWith('.webp')) return MediaType('image', 'webp');
-  if (l.endsWith('.jpg') || l.endsWith('.jpeg'))
+  if (l.endsWith('.jpg') || l.endsWith('.jpeg')) {
     return MediaType('image', 'jpeg');
+  }
   if (l.endsWith('.docx')) {
     return MediaType('application',
         'vnd.openxmlformats-officedocument.wordprocessingml.document');
@@ -49,10 +50,12 @@ MediaType _mt(String name) {
 IconData _iconFor(String name) {
   final l = name.toLowerCase();
   if (l.endsWith('.pdf')) return Icons.picture_as_pdf_outlined;
-  if (l.endsWith('.xls') || l.endsWith('.xlsx'))
+  if (l.endsWith('.xls') || l.endsWith('.xlsx')) {
     return Icons.table_chart_outlined;
-  if (l.endsWith('.doc') || l.endsWith('.docx'))
+  }
+  if (l.endsWith('.doc') || l.endsWith('.docx')) {
     return Icons.description_outlined;
+  }
   return Icons.image_outlined;
 }
 
@@ -362,8 +365,9 @@ class _PoFormPageState extends State<PoFormPage> {
           '/purchase-orders/${Uri.encodeComponent(_id!)}/documents/${pick(d, [
             'id'
           ])}');
-      if (mounted)
+      if (mounted) {
         setState(() => _docs.removeWhere((x) => '${x['id']}' == '${d['id']}'));
+      }
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     }

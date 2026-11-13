@@ -206,8 +206,7 @@ class _StockDrillState extends State<StockDrill> {
     );
   }
 
-  DataTable _table(Pal p, List<DataColumn> cols, List<DataRow> rows,
-      {bool selectable = false}) {
+  DataTable _table(Pal p, List<DataColumn> cols, List<DataRow> rows) {
     return DataTable(
       showCheckboxColumn: false,
       columnSpacing: 20,
@@ -900,7 +899,7 @@ class _ModelTerminals extends StatefulWidget {
 }
 
 class _ModelTerminalsState extends State<_ModelTerminals> {
-  late Future<dynamic> _f = Api.get('/terminals?limit=5000');
+  late final Future<dynamic> _f = Api.get('/terminals?limit=5000');
 
   bool _match(Map<String, dynamic> t) {
     final m = widget.model.toLowerCase();

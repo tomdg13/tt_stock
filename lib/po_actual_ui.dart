@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -73,13 +72,8 @@ Future<void> poActualUpload(BuildContext context, String poNo) async {
       return;
     }
     final f = picked.first;
-    debugPrint('[PO-UP] picked name=${f.name} path=${f.path}');
-    final fp = f.path;
-    final bytes = fp == null ? null : await File(fp).readAsBytes();
-    if (bytes == null) {
-      toast('ອ່ານໄຟລ໌ບໍ່ໄດ້');
-      return;
-    }
+    debugPrint('[PO-UP] picked name=${f.name}');
+    final bytes = await f.readAsBytes();
     toast('ກຳລັງອັບໂຫຼດ...');
     final base = Api.baseUrl.replaceAll(RegExp(r'/+$'), '');
     final req =
