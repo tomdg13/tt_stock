@@ -1,3 +1,4 @@
+import 'product_images.dart';
 // Terminal info page with "Fix" and "Change terminal" actions.
 // New file: nothing existing is overwritten. Needs mobile_scanner (already in pubspec).
 import 'terminal_parts_page.dart';
@@ -813,6 +814,72 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
     );
   }
 
+  final Map<String, String> _imgCache = {};
+  final Set<String> _imgAsked = {};
+
+  /// Photo for a part line that came without one (for example a scanned part).
+  Future<void> _fetchImg(String id) async {
+    if (!_imgAsked.add(id)) return;
+    try {
+      final d = await Api.get('/products/${Uri.encodeComponent(id)}');
+      if (d is! Map) return;
+      final imgs = d['images'];
+      if (imgs is! List || imgs.isEmpty || imgs.first is! Map) return;
+      final u = pick(imgs.first as Map, ['url', 'path']);
+      if (u.isNotEmpty && mounted) setState(() => _imgCache[id] = u);
+    } catch (_) {}
+  }
+
+  /// Small photo of a part line. Tap it to see it bigger.
+  Widget _partThumb(String id, Map r, Pal p) {
+    var raw = pick(r, ['imageUrl', 'image', 'photo']);
+    if (raw.isEmpty) {
+      raw = _imgCache[id] ?? '';
+      if (raw.isEmpty) _fetchImg(id);
+    }
+    final url = raw.isEmpty ? '' : productImageUrl(raw);
+    final ph = Container(
+      width: 44,
+      height: 44,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: p.mut.withAlpha(30),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(Icons.image_outlined, size: 22, color: p.mut),
+    );
+    if (url.isEmpty) return ph;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => showDialog<void>(
+        context: context,
+        builder: (c) => Dialog(
+          clipBehavior: Clip.antiAlias,
+          child: InteractiveViewer(
+            child: Image.network(
+              url,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Padding(
+                padding: EdgeInsets.all(24),
+                child: Icon(Icons.broken_image_outlined, size: 48),
+              ),
+            ),
+          ),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          url,
+          width: 44,
+          height: 44,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => ph,
+        ),
+      ),
+    );
+  }
+
   Widget _partRow(String id) {
     final p = pal(context);
     final r = _parts[id]!;
@@ -823,6 +890,8 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
       decoration:
           BoxDecoration(border: Border(bottom: BorderSide(color: p.bd))),
       child: Row(children: [
+        _partThumb(id, r, p),
+        const SizedBox(width: 10),
         Expanded(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1114,7 +1183,7 @@ class _PickProductPageState extends State<PickProductPage> {
     if (url.isEmpty) return fallback;
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
-      child: Image.network(url,
+      child: Image.network(url, webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
           width: 48,
           height: 48,
           fit: BoxFit.cover,
