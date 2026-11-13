@@ -762,12 +762,19 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
             else
               for (final id in _parts.keys) _partRow(id),
             const SizedBox(height: 8),
+            if (_branchId == null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text("ເລືອກສາຂາກ່ອນ ຈຶ່ງຈະເພີ່ມອາໄຫຼ່ໄດ້",
+                    style: TextStyle(color: p.bad, fontSize: 12),
+                    textAlign: TextAlign.center),
+              ),
             Row(children: [
               Expanded(
                 child: FilledButton.icon(
                   icon: const Icon(Icons.qr_code_scanner),
                   label: const Text('ສະແກນ'),
-                  onPressed: (_busy || _branchId == null) ? null : _scanPart,
+                  onPressed: _busy ? null : _scanPart,
                 ),
               ),
               const SizedBox(width: 8),
@@ -775,7 +782,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.add),
                   label: const Text('ເລືອກຈາກສິນຄ້າ'),
-                  onPressed: (_busy || _branchId == null) ? null : _addPart,
+                  onPressed: _busy ? null : _addPart,
                 ),
               ),
             ]),
