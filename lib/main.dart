@@ -1,4 +1,4 @@
-import 'main_shell.dart';
+import 'page_log.dart';
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'screens.dart';
@@ -17,6 +17,7 @@ class App extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'TT Stock',
+      navigatorObservers: [PageLogObserver()],
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
