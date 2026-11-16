@@ -24,10 +24,8 @@ class RepairNewCasePage extends StatefulWidget {
 class _RepairNewCasePageState extends State<RepairNewCasePage> {
   final _search = TextEditingController();
   final _remark = TextEditingController();
-  List<Map<String, dynamic>> _products = [];
   final Map<String, int> _qty = {};
   final Map<String, String> _names = {};
-  bool _loading = true;
   bool _busy = false;
   String? _error;
 
@@ -35,7 +33,6 @@ class _RepairNewCasePageState extends State<RepairNewCasePage> {
   void initState() {
     super.initState();
     _atmLoad = _loadAtm();
-    _loadProducts();
   }
 
   @override
@@ -43,23 +40,6 @@ class _RepairNewCasePageState extends State<RepairNewCasePage> {
     _search.dispose();
     _remark.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadProducts() async {
-    try {
-      final pr = asList(await Api.get('/products?limit=500'));
-      if (mounted == false) return;
-      setState(() {
-        _products = pr;
-        _loading = false;
-      });
-    } catch (e) {
-      if (mounted == false) return;
-      setState(() {
-        _loading = false;
-        _error = '$e'.replaceFirst('Exception: ', '');
-      });
-    }
   }
 
   Map<String, dynamic> _atm = {};
