@@ -419,8 +419,39 @@ class RepairStepForm extends StatefulWidget {
 class _RepairStepFormState extends State<RepairStepForm> {
   final _note = TextEditingController();
   final _files = <_Doc>[];
+  List<Map<String, dynamic>> _branches = [];
+  dynamic _branchId = Api.user?['branchId'];
   bool _busy = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.caseId == null) _loadBranches();
+  }
+
+  Future<void> _loadBranches() async {
+    try {
+      final b = asList(await Api.get('/repair/branches'));
+      dynamic pre = _branchId;
+      if (pre == null && widget.atmId.isNotEmpty) {
+        final a = await Api.get('/atms/${Uri.encodeComponent(widget.atmId)}');
+        final ab = a is Map ? '${a['atmBranchId'] ?? ''}'.toLowerCase() : '';
+        for (final x in b) {
+          final n = '${x['name'] ?? ''}'.toLowerCase();
+          if (n.isNotEmpty && ab.contains(n)) {
+            pre = x['id'];
+            break;
+          }
+        }
+      }
+      if (mounted == false) return;
+      setState(() {
+        _branches = b;
+        _branchId = pre;
+      });
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -489,6 +520,10 @@ class _RepairStepFormState extends State<RepairStepForm> {
   }
 
   Future<void> _save() async {
+    if (widget.caseId == null && _branchId == null) {
+      setState(() => _error = 'ກະລຸນາເລືອກສາຂາທີ່ຂໍ');
+      return;
+    }
     if (_files.isEmpty) {
       setState(() => _error = 'ກະລຸນາແນບເອກະສານ');
       return;
@@ -505,6 +540,7 @@ class _RepairStepFormState extends State<RepairStepForm> {
             {
               'barcode': widget.barcode,
               if (widget.atmId.isNotEmpty) 'atmId': widget.atmId,
+              if (_branchId != null) 'branchId': '$_branchId',
               if (note.isNotEmpty) 'note': note,
             },
             _files);
@@ -539,6 +575,22 @@ class _RepairStepFormState extends State<RepairStepForm> {
         Text('${widget.barcode}  ·  ${repairSideLabel(n)}',
             style: TextStyle(color: p.mut)),
         const SizedBox(height: 12),
+        if (widget.caseId == null) ...[
+          DropdownButtonFormField<dynamic>(
+            key: ValueKey('rb-${_branches.length}-$_branchId'),
+            initialValue:
+                _branches.any((b) => b['id'] == _branchId) ? _branchId : null,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'ສາຂາທີ່ຂໍ'),
+            items: [
+              for (final b in _branches)
+                DropdownMenuItem(
+                    value: b['id'], child: Text(pick(b, ['name', 'id']))),
+            ],
+            onChanged: _busy ? null : (v) => setState(() => _branchId = v),
+          ),
+          const SizedBox(height: 12),
+        ],
         TextField(
           controller: _note,
           maxLines: 3,
