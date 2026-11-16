@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
+import 'crud.dart' show toastMsg;
 import 'theme.dart';
 import 'widgets.dart';
 import 'product_images.dart' show productImageUrl;
@@ -15,6 +16,7 @@ class _TerminalPartsPageState extends State<TerminalPartsPage> {
   late Future<List<List<Map<String, dynamic>>>> _f = _load();
   final Map<String, String> _imgById = {};
   final Map<String, String> _imgByName = {};
+  final Set<String> _removing = {};
 
   void _reload() => setState(() {
         _f = _load();
@@ -58,6 +60,44 @@ class _TerminalPartsPageState extends State<TerminalPartsPage> {
     return m == null ? '' : ' × ${m.group(1)}';
   }
 
+  Future<void> _removeUsed(Map<String, dynamic> e) async {
+    final id = pick(e, ['id']);
+    final logId = int.tryParse(id);
+    if (logId == null || _removing.contains(id)) return;
+    final name = pick(e, ['productName']).isEmpty
+        ? pick(e, ['action'])
+        : pick(e, ['productName']);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dc) => AlertDialog(
+        title: const Text('ລຶບອາໄຫຼ່ນີ້ອອກ?'),
+        content: Text(
+            '$name${_qty(pick(e, ['action']))}\nຈຳນວນຈະຖືກສົ່ງຄືນເຂົ້າສາງ ແລະ ລຶບອອກຈາກປະຫວັດການສ້ອມ'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dc, false),
+              child: const Text('ຍົກເລີກ')),
+          TextButton(
+              onPressed: () => Navigator.pop(dc, true),
+              child: Text('ລຶບ', style: TextStyle(color: pal(dc).bad))),
+        ],
+      ),
+    );
+    if (ok == null || ok == false) return;
+    setState(() => _removing.add(id));
+    try {
+      await Api.post('/repair/part/remove', {'logId': logId});
+      if (mounted == false) return;
+      toastMsg(context, 'ລຶບແລ້ວ');
+      _removing.remove(id);
+      _reload();
+    } catch (err) {
+      if (mounted == false) return;
+      setState(() => _removing.remove(id));
+      toastMsg(context, 'ລຶບບໍ່ໄດ້: $err');
+    }
+  }
+
   Widget _thumb(String id, String name) {
     final p = pal(context);
     final ph = Container(
@@ -91,6 +131,34 @@ class _TerminalPartsPageState extends State<TerminalPartsPage> {
         child: Text('ຍັງບໍ່ມີລາຍການ', style: TextStyle(color: pal(c).mut)),
       );
 
+  Widget _usedTrailing(Map<String, dynamic> e) {
+    final p = pal(context);
+    final id = pick(e, ['id']);
+    final busy = _removing.contains(id);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(_d(pick(e, ['logDate'])),
+            textAlign: TextAlign.right,
+            style: TextStyle(color: p.mut, fontSize: 12)),
+        if (Api.can('ATM_MANAGE'))
+          busy
+              ? const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                )
+              : IconButton(
+                  tooltip: 'ລຶບອາໄຫຼ່',
+                  icon: Icon(Icons.delete_outline, color: p.bad),
+                  onPressed: () => _removeUsed(e),
+                ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = pal(context);
@@ -99,7 +167,9 @@ class _TerminalPartsPageState extends State<TerminalPartsPage> {
       body: FutureBuilder<List<List<Map<String, dynamic>>>>(
         future: _f,
         builder: (c, s) {
-          if (s.connectionState != ConnectionState.done) {
+          if (s.connectionState == ConnectionState.done) {
+            // loaded
+          } else {
             return const Center(child: CircularProgressIndicator());
           }
           if (s.hasError) return ErrorView(s.error ?? '', _reload);
@@ -140,17 +210,11 @@ class _TerminalPartsPageState extends State<TerminalPartsPage> {
                   child: ListTile(
                     leading: _thumb('', pick(e, ['productName'])),
                     title: Text(
-                        '${pick(e, ['productName']).isEmpty ? pick(e, [
-                                'action'
-                              ]) : pick(e, [
-                                'productName'
-                              ])}${_qty(pick(e, ['action']))}',
+                        '${pick(e, ['productName']).isEmpty ? pick(e, ['action']) : pick(e, ['productName'])}${_qty(pick(e, ['action']))}',
                         style: const TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text(pick(e, ['userName']),
                         style: TextStyle(color: p.mut, fontSize: 13)),
-                    trailing: Text(_d(pick(e, ['logDate'])),
-                        textAlign: TextAlign.right,
-                        style: TextStyle(color: p.mut, fontSize: 12)),
+                    trailing: _usedTrailing(e),
                   ),
                 ),
             ]),

@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'api.dart';
 import 'stock_request.dart';
+import 'repair_case.dart' show TerminalRepairPage;
+import 'request_status_page.dart';
 import 'crud.dart';
 import 'specs.dart';
 import 'terminal_history.dart';
@@ -313,27 +315,25 @@ class _TerminalInfoPageState extends State<TerminalInfoPage> {
                           MaterialPageRoute(
                               builder: (_) => HistoryPage(barcode: _barcode)))),
                   act(
-                      Icons.build_circle_outlined,
-                      'ສ້ອມ/ປ່ຽນ',
+                      Icons.inventory_2_outlined,
+                      'ຮ້ອງຂໍອາໄຫຼ່',
                       () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                              builder: (_) => HistoryPage(
-                                  barcode: _barcode,
-                                  initialFilter: 'status')))),
+                              builder: (_) => RequestStatusPage(
+                                  terminal: Map<String, dynamic>.from(m))))),
                   if (canManage) ...[
                     act(
                         Icons.build_outlined,
-                        'ສ້ອມ',
+                        'ເຄດສ້ອມ',
                         _busy
                             ? null
                             : () async {
                                 await Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                        builder: (_) => StockRequestsPage(
-                                            terminal: m,
-                                            onChanged: () {
+                                        builder: (_) => TerminalRepairPage(m,
+                                                onChanged: () {
                                               widget.onChanged?.call();
                                               _reload();
                                             })));
@@ -545,7 +545,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
   final _cost = <String, Map<String, dynamic>>{};
   List<Map<String, dynamic>> _branches = [];
   dynamic _branchId = Api.user?['branchId'];
-  bool _reinstall = true, _busy = false;
+  bool _busy = false;
   String? _error;
   Map<String, dynamic> _atmInfo = {};
   Future<void>? _atmLoad;
@@ -705,6 +705,10 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
 
   Future<void> _save() async {
     final used = _qty.entries.where((e) => e.value > 0).toList();
+    if (used.isEmpty) {
+      setState(() => _error = 'ກະລຸນາເລືອກອາໄຫຼ່ກ່ອນ');
+      return;
+    }
     if (used.isNotEmpty && _branchId == null) {
       setState(() => _error = 'ເລືອກສາຂາທີ່ຈະຕັດສະຕັອກກ່ອນ');
       return;
@@ -715,20 +719,18 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
     });
     try {
       // NOTE: body field names are inferred from the route list; adjust here if the server complains.
-      await Api.post('/repair', {
+      final r = await Api.post('/repair/cases', {
         'barcode': _barcode,
         if (_atm.isNotEmpty) 'atmId': _atm,
-        if (_branchId != null) 'branchId': _branchId,
         'parts': [
           for (final e in used) {'productId': e.key, 'qty': e.value}
         ],
-        'reinstall': _reinstall,
-        if (_note.text.trim().isNotEmpty) 'note': _note.text.trim(),
+        if (_note.text.trim().isNotEmpty) 'remark': _note.text.trim(),
       });
       widget.onChanged?.call();
       if (!mounted) return;
-      toastMsg(context, 'ບັນທຶກການສ້ອມແລ້ວ');
-      Navigator.pop(context, true);
+      toastMsg(context, 'ສ້າງເຄດສ້ອມແລ້ວ');
+      Navigator.pop(context, r);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {
@@ -740,7 +742,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
   Widget build(BuildContext context) {
     final p = pal(context);
     return Scaffold(
-      appBar: AppBar(title: Text('ສ້ອມ · $_barcode')),
+      appBar: AppBar(title: Text('ສ້າງເຄດສ້ອມ · $_barcode')),
       bottomNavigationBar: const ShellBar(),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         AppCard(
@@ -805,15 +807,6 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
                 controller: _note,
                 decoration:
                     const InputDecoration(labelText: 'ໝາຍເຫດ (ບໍ່ບັງຄັບ)')),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('ຕິດຕັ້ງຄືນເຂົ້າຕູ້ຫຼັງສ້ອມ'),
-              subtitle: Text(_reinstall
-                  ? 'ຫຼັງບັນທຶກ: ໃຊ້ງານໃນຕູ້ (In Use)'
-                  : 'ຫຼັງບັນທຶກ: ລໍຖ້າ MA'),
-              value: _reinstall,
-              onChanged: (v) => setState(() => _reinstall = v),
-            ),
             if (_error != null)
               Padding(
                   padding: const EdgeInsets.only(bottom: 8),
@@ -827,7 +820,7 @@ class _FixTerminalPageState extends State<FixTerminalPage> {
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('ບັນທຶກການສ້ອມ'),
+                    : const Text('ສ້າງເຄດສ້ອມ'),
               ),
             ),
           ]),

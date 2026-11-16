@@ -1,9 +1,10 @@
 import 'request_parts_box.dart';
 import 'main_shell.dart';
 import 'package:flutter/material.dart';
+import 'repair_new_case.dart';
+import 'request_status_bar.dart';
 
 import 'api.dart';
-import 'repair_case.dart';
 import 'terminal_actions.dart';
 import 'pages.dart';
 import 'theme.dart';
@@ -39,6 +40,7 @@ class StockRequestsPage extends StatefulWidget {
 }
 
 class _StockRequestsPageState extends State<StockRequestsPage> {
+  String? _filter;
   late Future<dynamic> _f = Api.get('/stock/requests');
 
   void _reload() => setState(() {
@@ -151,15 +153,38 @@ class _StockRequestsPageState extends State<StockRequestsPage> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
             children: [
               futureBlock(_f, _reload, (d) {
-                final rows = _rowsFor(d, inbox);
+                final all = _rowsFor(d, inbox);
+                final flt = _filter;
+                final rows = flt == null
+                    ? all
+                    : all.where((r) => pick(r, ['status']) == flt).toList();
+                final counts = <String, int>{};
+                for (final r in all) {
+                  final s = pick(r, ['status']);
+                  counts[s] = (counts[s] ?? 0) + 1;
+                }
+                final bar = RequestStatusBar(
+                  items: [
+                    for (final e in _reqStatus.entries)
+                      StatusBarItem(
+                          e.key, e.value[0] as String, e.value[1] as Color)
+                  ],
+                  counts: counts,
+                  selected: flt,
+                  onSelect: (k) =>
+                      setState(() => _filter = k == _filter ? null : k),
+                );
                 if (rows.isEmpty) {
-                  return Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text('ຍັງບໍ່ມີລາຍການ',
-                          style: TextStyle(color: pal(context).mut)));
+                  return Column(children: [
+                    bar,
+                    Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text('ຍັງບໍ່ມີລາຍການ',
+                            style: TextStyle(color: pal(context).mut)))
+                  ]);
                 }
                 return Column(
-                    children: [for (final r in rows) _card(r, inbox)]);
+                    children: [bar, for (final r in rows) _card(r, inbox)]);
               }),
             ]),
       );
@@ -179,34 +204,47 @@ class _StockRequestsPageState extends State<StockRequestsPage> {
             if (widget.terminal != null) const Tab(text: 'ການສ້ອມ'),
           ]),
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () async {
-            if (widget.terminal != null) {
-              final saved = await Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => FixTerminalPage(widget.terminal!,
-                          onChanged: widget.onChanged)));
-              if (saved == true && context.mounted) {
-                Navigator.pop(context);
-                return;
-              }
-              _reload();
-              return;
-            }
-            debugPrint("[REQ] FAB tapped -> open StockRequestForm");
-            final ok = await Navigator.push<bool>(context,
-                MaterialPageRoute(builder: (_) => const StockRequestForm()));
-            if (ok == true) _reload();
-          },
-          icon: const Icon(Icons.add),
-          label: const Text('ຂໍອາໄຫຼ່'),
-        ),
+        floatingActionButton: widget.terminal != null
+            ? null
+            : FloatingActionButton.extended(
+                onPressed: () async {
+                  if (widget.terminal != null) {
+                    final saved = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => FixTerminalPage(widget.terminal!,
+                                onChanged: widget.onChanged)));
+                    if (saved == true && context.mounted) {
+                      Navigator.pop(context);
+                      return;
+                    }
+                    _reload();
+                    return;
+                  }
+                  debugPrint("[REQ] FAB tapped -> open StockRequestForm");
+                  final ok = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const StockRequestForm()));
+                  if (ok == true) _reload();
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('ຂໍອາໄຫຼ່'),
+              ),
         body: TabBarView(children: [
           _tab(true),
           _tab(false),
           if (widget.terminal != null)
-            TerminalRepairTab('${widget.terminal!['barcode'] ?? ''}'),
+            TerminalRepairTab('${widget.terminal!['barcode'] ?? ''}',
+                onOpenCase: () async {
+              final saved = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => RepairNewCasePage(
+                          barcode: '${widget.terminal!['barcode'] ?? ''}',
+                          atmId: '${widget.terminal!['atmId'] ?? ''}')));
+              if (saved == true) widget.onChanged?.call();
+            }),
         ]),
       ),
     );
@@ -844,7 +882,8 @@ class _BranchRequestInfoState extends State<BranchRequestInfo> {
 /// Repairs of one terminal = stock movements whose refNo is "MA <barcode> @<atm>".
 class TerminalRepairTab extends StatefulWidget {
   final String barcode;
-  const TerminalRepairTab(this.barcode, {super.key});
+  final Future<void> Function()? onOpenCase;
+  const TerminalRepairTab(this.barcode, {super.key, this.onOpenCase});
   @override
   State<TerminalRepairTab> createState() => _TerminalRepairTabState();
 }
@@ -1003,8 +1042,6 @@ class _TerminalRepairTabState extends State<TerminalRepairTab> {
           return ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
               children: [
-                RepairCasesSection(widget.barcode,
-                    key: ObjectKey(data), atmId: '${term['atmId'] ?? ''}'),
                 if (term.isNotEmpty)
                   Card(
                     child: ListTile(
@@ -1053,3 +1090,11 @@ class _TerminalRepairTabState extends State<TerminalRepairTab> {
     );
   }
 }
+
+/// public helpers used by request_status_page.dart
+Widget reqStatusChip(String st) => _statusChip(st);
+
+List<StatusBarItem> reqStatusItems() => [
+      for (final e in _reqStatus.entries)
+        StatusBarItem(e.key, e.value[0] as String, e.value[1] as Color)
+    ];

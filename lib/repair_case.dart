@@ -1,22 +1,33 @@
-// Repair case workflow (7 steps, each step needs a document).
+// Repair cases: one case = one repair of one terminal, 7 steps, each step needs a document.
+// Flow: pick parts (FixTerminalPage) -> case created (step 0) -> print the request form,
+//       the branch signs it -> attach the signed document (step 1) -> steps 2..7.
+// Step 4 cuts the stock (Head Office) and reinstalls the terminal (done by the server).
 // Server: GET /repair/cases?barcode=, GET /repair/cases/:id,
-//         POST /repair/cases (multipart: barcode, atmId, note, files)  -> opens the case at step 1
-//         POST /repair/cases/:id/step (multipart: step, note, files)   -> saves the next step
+//         POST /repair/cases (json), POST /repair/cases/:id/step (multipart: step, note, files)
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
-import 'package:image_picker/image_picker.dart' show ImagePicker, ImageSource;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart' show ImagePicker, ImageSource;
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'api.dart';
 import 'crud.dart' show toastMsg;
 import 'product_images.dart' show productImageUrl;
 import 'purchase_orders.dart' show kPoDocExt;
+import 'terminal_actions.dart' show FixTerminalPage;
 import 'theme.dart';
 import 'widgets.dart';
 
+// ---------------------------------------------------------------------------
+// Steps and helpers
+// ---------------------------------------------------------------------------
 const kRepairSteps = [
   'ສາຂາຂໍ້ເຄືອງ',
   'ສ້າງສົງເຄືອງ',
@@ -34,7 +45,20 @@ String repairSideLabel(int n) => repairSide(n) == 'hq' ? 'ສ້າງ' : 'ສ�
 String repairStepName(int n) =>
     (n >= 1 && n <= 7) ? kRepairSteps[n - 1] : 'ຂັ້ນ $n';
 
-/// 'hq' / 'branch' from the user's branch, or 'any' when unknown (server still checks).
+String nextStepLabel(int n) => n == 1
+    ? 'ແນບເອກະສານທີ່ເຊັນແລ້ວ (ຂັ້ນ 1)'
+    : 'ຂັ້ນ $n · ${repairStepName(n)}';
+String waitingLabel(int n) =>
+    'ລໍຖ້າ ${repairSideLabel(n)} ເຮັດຂັ້ນ $n · ${repairStepName(n)}';
+
+String caseChipText(Map<String, dynamic> c) {
+  if ('${c['status']}' == 'CLOSED') return 'ປິດເຄດແລ້ວ';
+  final n = int.tryParse('${c['currentStep']}') ?? 0;
+  if (n == 0) return 'ລໍຖ້າເອກະສານເຊັນ (ຂັ້ນ 1)';
+  return 'ຂັ້ນ $n · ${repairStepName(n)}';
+}
+
+/// 'hq' / 'branch' from the user's branch, or 'any' when unknown (the server still checks).
 Future<String> repairMySide() async {
   final b = Api.user?['branchId'];
   if (b == null) return 'any';
@@ -45,6 +69,13 @@ Future<String> repairMySide() async {
     }
   } catch (_) {}
   return 'any';
+}
+
+String _dt(dynamic v) {
+  final d = DateTime.tryParse('$v')?.toLocal();
+  if (d == null) return '${v ?? ''}';
+  String t(int n) => n.toString().padLeft(2, '0');
+  return '${d.year}-${t(d.month)}-${t(d.day)} ${t(d.hour)}:${t(d.minute)}';
 }
 
 MediaType _rmt(String name) {
@@ -68,6 +99,12 @@ MediaType _rmt(String name) {
   return MediaType('application', 'octet-stream');
 }
 
+class _Doc {
+  final String name;
+  final Uint8List bytes;
+  _Doc(this.name, this.bytes);
+}
+
 Future<dynamic> _postMultipart(
     String path, Map<String, String> fields, List<_Doc> files) async {
   final base = Api.baseUrl.replaceAll(RegExp(r'/+$'), '');
@@ -76,8 +113,7 @@ Future<dynamic> _postMultipart(
   if (Api.token != null) req.headers['Authorization'] = 'Bearer ${Api.token}';
   req.fields.addAll(fields);
   for (final f in files) {
-    final bytes = f.bytes;
-    req.files.add(http.MultipartFile.fromBytes('files', bytes,
+    req.files.add(http.MultipartFile.fromBytes('files', f.bytes,
         filename: f.name, contentType: _rmt(f.name)));
   }
   apiLog(
@@ -101,35 +137,39 @@ Future<dynamic> _postMultipart(
   return jsonDecode(body);
 }
 
-String _dt(dynamic v) {
-  final d = DateTime.tryParse('$v')?.toLocal();
-  if (d == null) return '${v ?? ''}';
-  String t(int n) => n.toString().padLeft(2, '0');
-  return '${d.year}-${t(d.month)}-${t(d.day)} ${t(d.hour)}:${t(d.minute)}';
-}
-
-String caseChipText(Map<String, dynamic> c) {
-  if ('${c['status']}' == 'CLOSED') return 'ປິດເຄດແລ້ວ';
-  final n = int.tryParse('${c['currentStep']}') ?? 1;
-  return 'ຂັ້ນ $n · ${repairStepName(n)}';
+/// Opens the form of one step. true = saved.
+Future<bool> openStepForm(BuildContext context, Map<String, dynamic> c,
+    int step, String barcode) async {
+  final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+          builder: (_) => RepairStepForm(
+              stepNo: step,
+              caseId: int.tryParse('${c['caseId']}') ?? 0,
+              barcode: barcode)));
+  return ok == true;
 }
 
 // ---------------------------------------------------------------------------
-// Section shown on the repair tab: list of cases of one terminal + open button
+// Page of one terminal: its repair cases + create a new case
 // ---------------------------------------------------------------------------
-class RepairCasesSection extends StatefulWidget {
-  final String barcode, atmId;
-  const RepairCasesSection(this.barcode, {super.key, this.atmId = ''});
+class TerminalRepairPage extends StatefulWidget {
+  final Map<String, dynamic> terminal;
+  final VoidCallback? onChanged;
+  const TerminalRepairPage(this.terminal, {super.key, this.onChanged});
   @override
-  State<RepairCasesSection> createState() => _RepairCasesSectionState();
+  State<TerminalRepairPage> createState() => _TerminalRepairPageState();
 }
 
-class _RepairCasesSectionState extends State<RepairCasesSection> {
+class _TerminalRepairPageState extends State<TerminalRepairPage> {
   late Future<Map<String, dynamic>> _f = _load();
+
+  String get _barcode => pick(widget.terminal, ['barcode']);
+  String get _atm => pick(widget.terminal, ['atmId']);
 
   Future<Map<String, dynamic>> _load() async {
     final d = await Api.get(
-        '/repair/cases?barcode=${Uri.encodeQueryComponent(widget.barcode)}');
+        '/repair/cases?barcode=${Uri.encodeQueryComponent(_barcode)}');
     return {'cases': asList(d), 'side': await repairMySide()};
   }
 
@@ -137,96 +177,222 @@ class _RepairCasesSectionState extends State<RepairCasesSection> {
         _f = _load();
       });
 
-  Future<void> _open() async {
-    final ok = await Navigator.push<bool>(
+  Future<void> _create() async {
+    final r = await Navigator.push<dynamic>(
         context,
         MaterialPageRoute(
-            builder: (_) => RepairStepForm(
-                stepNo: 1, barcode: widget.barcode, atmId: widget.atmId)));
-    if (ok == true && mounted) _reload();
+            builder: (_) =>
+                FixTerminalPage(widget.terminal, onChanged: widget.onChanged)));
+    if (!mounted) return;
+    _reload();
+    if (r is Map) {
+      // show the request form right away so it can be printed and signed
+      await Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) =>
+                  RepairRequestFormPage(Map<String, dynamic>.from(r))));
+      if (mounted) _reload();
+    }
   }
 
-  Future<void> _show(Map<String, dynamic> c, String side) async {
+  Future<void> _next(Map<String, dynamic> c, int n) async {
+    if (await openStepForm(context, c, n, _barcode)) {
+      widget.onChanged?.call();
+      if (mounted) _reload();
+    }
+  }
+
+  Future<void> _form(Map<String, dynamic> c) async {
+    await Navigator.push(
+        context, MaterialPageRoute(builder: (_) => RepairRequestFormPage(c)));
+  }
+
+  Future<void> _details(Map<String, dynamic> c, String side) async {
     await Navigator.push(
         context,
         MaterialPageRoute(
-            builder: (_) => RepairCasePage(c,
-                barcode: widget.barcode, atmId: widget.atmId, side: side)));
+            builder: (_) => RepairCasePage(c, barcode: _barcode, side: side)));
+    widget.onChanged?.call();
     if (mounted) _reload();
+  }
+
+  Widget _progress(int cur, bool closed) {
+    final p = pal(context);
+    final primary = Theme.of(context).colorScheme.primary;
+    return Row(children: [
+      for (var n = 1; n <= 7; n++)
+        Expanded(
+          child: Center(
+            child: Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: n <= cur ? Colors.green : null,
+                border: Border.all(
+                    color: n <= cur
+                        ? Colors.green
+                        : (n == cur + 1 && closed == false)
+                            ? primary
+                            : p.bd,
+                    width: 1.5),
+              ),
+              child: n <= cur
+                  ? const Icon(Icons.check, size: 16, color: Colors.white)
+                  : Text('$n',
+                      style: TextStyle(
+                          fontSize: 12, color: n == cur + 1 ? primary : p.mut)),
+            ),
+          ),
+        ),
+    ]);
+  }
+
+  Widget _card(Map<String, dynamic> c, String side) {
+    final p = pal(context);
+    final cur = int.tryParse('${c['currentStep']}') ?? 0;
+    final closed = '${c['status']}' == 'CLOSED';
+    final next = (closed || cur >= 7) ? null : cur + 1;
+    final canAct = next != null &&
+        Api.can('ATM_MANAGE') &&
+        (side == 'any' || side == repairSide(next));
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('ເຄດ ${c['reqNo'] ?? '#${c['caseId']}'}',
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 10),
+          _progress(cur, closed),
+          const SizedBox(height: 8),
+          Text(caseChipText(c),
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+          for (final pt in asList(c['parts']))
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                  '• ${pick(pt, ['name'])}  × ${pick(pt, ['qty'])} ${pick(pt, [
+                        'unit'
+                      ])}',
+                  style: TextStyle(color: p.mut, fontSize: 13)),
+            ),
+          const SizedBox(height: 12),
+          if (next != null && canAct)
+            SizedBox(
+              height: 48,
+              child: FilledButton(
+                onPressed: () => _next(c, next),
+                child: Text(nextStepLabel(next)),
+              ),
+            ),
+          if (next != null && canAct == false)
+            Text(waitingLabel(next),
+                textAlign: TextAlign.center, style: TextStyle(color: p.mut)),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _form(c),
+                icon: const Icon(Icons.description_outlined),
+                label: const Text('ໃບຂໍອາໄຫຼ່'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _details(c, side),
+                icon: const Icon(Icons.timeline),
+                label: const Text('ລາຍລະອຽດ'),
+              ),
+            ),
+          ]),
+        ]),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final p = pal(context);
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _f,
-      builder: (c, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()));
-        }
-        if (snap.hasError) {
-          return Card(
-            child: ListTile(
-              title: Text('${snap.error}', style: TextStyle(color: p.bad)),
-              trailing:
-                  TextButton(onPressed: _reload, child: const Text('ລອງໃໝ່')),
-            ),
-          );
-        }
-        final data = snap.data ?? {};
-        final cases = (data['cases'] as List).cast<Map<String, dynamic>>();
-        final side = '${data['side']}';
-        final hasOpen = cases.any((e) => '${e['status']}' == 'OPEN');
-        final canOpen =
-            Api.can('ATM_MANAGE') && hasOpen == false && side != 'hq';
-        return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
-                child: Text('ເຄດສ້ອມ (7 ຂັ້ນຕອນ)',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+    return Scaffold(
+      appBar: AppBar(title: Text('ເຄດສ້ອມ · $_barcode')),
+      body: RefreshIndicator(
+        onRefresh: () async => _reload(),
+        child: FutureBuilder<Map<String, dynamic>>(
+          future: _f,
+          builder: (c, snap) {
+            if (snap.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snap.hasError) {
+              return ListView(padding: const EdgeInsets.all(24), children: [
+                Text('${snap.error}', style: TextStyle(color: p.bad)),
+                TextButton(onPressed: _reload, child: const Text('ລອງໃໝ່')),
+              ]);
+            }
+            final data = snap.data ?? {};
+            final cases = (data['cases'] as List).cast<Map<String, dynamic>>();
+            final side = '${data['side']}';
+            final open =
+                cases.where((e) => '${e['status']}' == 'OPEN').toList();
+            final done =
+                cases.where((e) => '${e['status']}' != 'OPEN').toList();
+            final canCreate =
+                Api.can('ATM_MANAGE') && open.isEmpty && side != 'hq';
+            return ListView(padding: const EdgeInsets.all(16), children: [
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.memory),
+                  title: Text(_barcode,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text([
+                    pick(widget.terminal, ['typeName']),
+                    if (_atm.isNotEmpty) 'ຕູ້ $_atm',
+                    pick(widget.terminal, ['state']),
+                  ].where((e) => e.isNotEmpty).join('  ·  ')),
+                ),
               ),
-              if (cases.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child:
-                      Text('ຍັງບໍ່ມີເຄດສ້ອມ', style: TextStyle(color: p.mut)),
-                ),
-              for (final cs in cases)
-                Card(
-                  child: ListTile(
-                    leading: Icon(
-                        '${cs['status']}' == 'CLOSED'
-                            ? Icons.check_circle
-                            : Icons.timelapse,
-                        color: '${cs['status']}' == 'CLOSED'
-                            ? Colors.green
-                            : Colors.orange),
-                    title: Text('ເຄດ #${cs['caseId']}  ${cs['refNo'] ?? ''}',
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: Text(caseChipText(cs)),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _show(cs, side),
-                  ),
-                ),
-              if (canOpen)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
+              const SizedBox(height: 8),
+              if (canCreate)
+                SizedBox(
+                  height: 52,
                   child: FilledButton.icon(
-                    onPressed: _open,
+                    onPressed: _create,
                     icon: const Icon(Icons.add),
-                    label: const Text('ເປີດເຄດສ້ອມ (ຂັ້ນ 1)'),
+                    label: const Text('ສ້າງເຄດສ້ອມ (ເລືອກອາໄຫຼ່)'),
                   ),
                 ),
-              const SizedBox(height: 8),
-              const Divider(),
-              const SizedBox(height: 8),
+              if (open.isEmpty && side == 'hq')
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text('ສາຂາເປັນຜູ້ສ້າງເຄດ',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: p.mut)),
+                ),
+              if (cases.isEmpty && canCreate == false && side != 'hq')
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text('ຍັງບໍ່ມີເຄດສ້ອມ',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: p.mut)),
+                ),
+              for (final cs in open) _card(cs, side),
+              if (done.isNotEmpty) ...[
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(4, 16, 4, 4),
+                  child: Text('ເຄດທີ່ປິດແລ້ວ',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+                for (final cs in done) _card(cs, side),
+              ],
             ]);
-      },
+          },
+        ),
+      ),
     );
   }
 }
@@ -236,9 +402,9 @@ class _RepairCasesSectionState extends State<RepairCasesSection> {
 // ---------------------------------------------------------------------------
 class RepairCasePage extends StatefulWidget {
   final Map<String, dynamic> data;
-  final String barcode, atmId, side;
+  final String barcode, side;
   const RepairCasePage(this.data,
-      {super.key, required this.barcode, this.atmId = '', this.side = 'any'});
+      {super.key, required this.barcode, this.side = 'any'});
   @override
   State<RepairCasePage> createState() => _RepairCasePageState();
 }
@@ -246,7 +412,7 @@ class RepairCasePage extends StatefulWidget {
 class _RepairCasePageState extends State<RepairCasePage> {
   late Map<String, dynamic> _c = widget.data;
 
-  int get _cur => int.tryParse('${_c['currentStep']}') ?? 1;
+  int get _cur => int.tryParse('${_c['currentStep']}') ?? 0;
   bool get _closed => '${_c['status']}' == 'CLOSED';
 
   Map<String, dynamic>? _stepRow(int n) {
@@ -266,15 +432,7 @@ class _RepairCasePageState extends State<RepairCasePage> {
   }
 
   Future<void> _next(int n) async {
-    final ok = await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(
-            builder: (_) => RepairStepForm(
-                stepNo: n,
-                caseId: int.tryParse('${_c['caseId']}'),
-                barcode: widget.barcode,
-                atmId: widget.atmId)));
-    if (ok == true) await _reload();
+    if (await openStepForm(context, _c, n, widget.barcode)) await _reload();
   }
 
   Future<void> _openDoc(Map<String, dynamic> d) async {
@@ -326,7 +484,7 @@ class _RepairCasePageState extends State<RepairCasePage> {
           Text(
               [
                 pick(row, ['userName']),
-                _dt(row['stepDate']),
+                _dt(row['stepDate'])
               ].where((e) => e.isNotEmpty).join('  ·  '),
               style: TextStyle(color: p.mut, fontSize: 12)),
           if (pick(row, ['note']).isNotEmpty)
@@ -362,16 +520,45 @@ class _RepairCasePageState extends State<RepairCasePage> {
     final canAct = next != null &&
         Api.can('ATM_MANAGE') &&
         (widget.side == 'any' || widget.side == repairSide(next));
+    final parts = asList(_c['parts']);
     return Scaffold(
-      appBar: AppBar(title: Text('ເຄດ #${_c['caseId']} · ${widget.barcode}')),
+      appBar: AppBar(title: Text('ເຄດ ${_c['reqNo'] ?? '#${_c['caseId']}'}')),
       body: RefreshIndicator(
         onRefresh: _reload,
         child: ListView(padding: const EdgeInsets.all(16), children: [
           Text(caseChipText(_c),
               style:
                   const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-          if ('${_c['refNo'] ?? ''}'.isNotEmpty)
-            Text('${_c['refNo']}', style: TextStyle(color: p.mut)),
+          Text('${widget.barcode}  ·  ${_c['refNo'] ?? ''}',
+              style: TextStyle(color: p.mut)),
+          const SizedBox(height: 12),
+          if (parts.isNotEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('ອາໄຫຼ່ທີ່ຂໍ',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                      for (final pt in parts)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Row(children: [
+                            Expanded(child: Text(pick(pt, ['name']))),
+                            Text(
+                                '× ${pick(pt, ['qty'])} ${pick(pt, ['unit'])}'),
+                          ]),
+                        ),
+                    ]),
+              ),
+            ),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => RepairRequestFormPage(_c))),
+            icon: const Icon(Icons.description_outlined),
+            label: const Text('ເບິ່ງ / ພິມ / ແຊຣ໌ ໃບຂໍອາໄຫຼ່'),
+          ),
           const SizedBox(height: 12),
           for (var n = 1; n <= 7; n++) _row(n),
           const SizedBox(height: 8),
@@ -380,12 +567,11 @@ class _RepairCasePageState extends State<RepairCasePage> {
               height: 48,
               child: FilledButton(
                 onPressed: () => _next(next),
-                child:
-                    Text('ອັບເດດສະຖານະ · ຂັ້ນ $next ${repairStepName(next)}'),
+                child: Text(nextStepLabel(next)),
               ),
             ),
           if (next != null && canAct == false)
-            Text('ລໍຖ້າ ${repairSideLabel(next)} ເຮັດຂັ້ນ $next',
+            Text(waitingLabel(next),
                 textAlign: TextAlign.center, style: TextStyle(color: p.mut)),
         ]),
       ),
@@ -394,24 +580,17 @@ class _RepairCasePageState extends State<RepairCasePage> {
 }
 
 // ---------------------------------------------------------------------------
-// Form: note + documents (required) for one step
+// Form: note + documents (required) for one step. Take a photo or pick a file.
 // ---------------------------------------------------------------------------
-class _Doc {
-  final String name;
-  final Uint8List bytes;
-  _Doc(this.name, this.bytes);
-}
-
 class RepairStepForm extends StatefulWidget {
-  final int stepNo;
-  final int? caseId; // null = open a new case (step 1)
-  final String barcode, atmId;
+  final int stepNo, caseId;
+  final String barcode;
   const RepairStepForm(
       {super.key,
       required this.stepNo,
-      this.caseId,
+      required this.caseId,
       required this.barcode,
-      this.atmId = ''});
+      required String atmId});
   @override
   State<RepairStepForm> createState() => _RepairStepFormState();
 }
@@ -419,40 +598,8 @@ class RepairStepForm extends StatefulWidget {
 class _RepairStepFormState extends State<RepairStepForm> {
   final _note = TextEditingController();
   final _files = <_Doc>[];
-  List<Map<String, dynamic>> _branches = [];
-  dynamic _branchId = Api.user?['branchId'];
   bool _busy = false;
   String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.caseId == null) _loadBranches();
-  }
-
-  Future<void> _loadBranches() async {
-    try {
-      final b = asList(await Api.get('/repair/branches'));
-      dynamic pre;
-      if (widget.atmId.isNotEmpty) {
-        final a = await Api.get('/atms/${Uri.encodeComponent(widget.atmId)}');
-        final ab = a is Map ? '${a['atmBranchId'] ?? ''}'.toLowerCase() : '';
-        for (final x in b) {
-          final n = '${x['name'] ?? ''}'.toLowerCase();
-          if (n.isNotEmpty && ab.contains(n)) {
-            pre = x['id'];
-            break;
-          }
-        }
-      }
-      pre ??= _branchId;
-      if (mounted == false) return;
-      setState(() {
-        _branches = b;
-        _branchId = pre;
-      });
-    } catch (_) {}
-  }
 
   @override
   void dispose() {
@@ -520,14 +667,34 @@ class _RepairStepFormState extends State<RepairStepForm> {
     }
   }
 
+  Future<bool> _confirmStep4() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('ຢືນຢັນຂັ້ນ 4'),
+        content: const Text(
+            'ຈະຕັດສະຕັອກອາໄຫຼ່ຂອງເຄດນີ້ຈາກ Head Office ແລະຕິດຕັ້ງ terminal ຄືນເຂົ້າຕູ້ (In Use). ດຳເນີນການຕໍ່ບໍ?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('ຍົກເລີກ')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('ຢືນຢັນ')),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
   Future<void> _save() async {
-    if (widget.caseId == null && _branchId == null) {
-      setState(() => _error = 'ຫາສາຂາຂອງຕູ້ນີ້ບໍ່ເຫັນ');
-      return;
-    }
     if (_files.isEmpty) {
       setState(() => _error = 'ກະລຸນາແນບເອກະສານ');
       return;
+    }
+    if (widget.stepNo == 4) {
+      final ok = await _confirmStep4();
+      if (ok == false || !mounted) return;
     }
     setState(() {
       _busy = true;
@@ -535,25 +702,13 @@ class _RepairStepFormState extends State<RepairStepForm> {
     });
     try {
       final note = _note.text.trim();
-      if (widget.caseId == null) {
-        await _postMultipart(
-            '/repair/cases',
-            {
-              'barcode': widget.barcode,
-              if (widget.atmId.isNotEmpty) 'atmId': widget.atmId,
-              if (_branchId != null) 'branchId': '$_branchId',
-              if (note.isNotEmpty) 'note': note,
-            },
-            _files);
-      } else {
-        await _postMultipart(
-            '/repair/cases/${widget.caseId}/step',
-            {
-              'step': '${widget.stepNo}',
-              if (note.isNotEmpty) 'note': note,
-            },
-            _files);
-      }
+      await _postMultipart(
+          '/repair/cases/${widget.caseId}/step',
+          {
+            'step': '${widget.stepNo}',
+            if (note.isNotEmpty) 'note': note,
+          },
+          _files);
       if (!mounted) return;
       toastMsg(context, 'ບັນທຶກຂັ້ນ ${widget.stepNo} ແລ້ວ');
       Navigator.pop(context, true);
@@ -576,13 +731,6 @@ class _RepairStepFormState extends State<RepairStepForm> {
         Text('${widget.barcode}  ·  ${repairSideLabel(n)}',
             style: TextStyle(color: p.mut)),
         const SizedBox(height: 12),
-        if (widget.caseId == null && _branchId != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-                'ສາຂາ: ${_branches.where((b) => b['id'] == _branchId).map((b) => pick(b, ['name'])).join()}',
-                style: TextStyle(color: p.mut)),
-          ),
         TextField(
           controller: _note,
           maxLines: 3,
@@ -628,6 +776,236 @@ class _RepairStepFormState extends State<RepairStepForm> {
           ),
         ),
       ]),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Request form (ໃບຂໍອາໄຫຼ່): shown on screen, then printed or shared as PDF.
+// The sheet is drawn by Flutter (correct Lao text) and put into the PDF as an image.
+// ---------------------------------------------------------------------------
+class RepairRequestFormPage extends StatefulWidget {
+  final Map<String, dynamic> data;
+  const RepairRequestFormPage(this.data, {super.key});
+  @override
+  State<RepairRequestFormPage> createState() => _RepairRequestFormPageState();
+}
+
+class _RepairRequestFormPageState extends State<RepairRequestFormPage> {
+  final _key = GlobalKey();
+  late final Future<Map<String, String>> _f = _info();
+  bool _busy = false;
+
+  String get _name => '${widget.data['reqNo'] ?? 'repair-request'}';
+
+  Future<Map<String, String>> _info() async {
+    final d = widget.data;
+    final out = {'branch': '', 'atm': '', 'type': ''};
+    try {
+      for (final b in asList(await Api.get('/repair/branches'))) {
+        if ('${b['id']}' == '${d['branchId']}')
+          out['branch'] = pick(b, ['name']);
+      }
+    } catch (_) {}
+    final atmId = '${d['atmId'] ?? ''}';
+    if (atmId.isNotEmpty) {
+      try {
+        final a = await Api.get('/atms/${Uri.encodeComponent(atmId)}');
+        if (a is Map) {
+          out['atm'] = pick(Map<String, dynamic>.from(a), ['atmLocation']);
+        }
+      } catch (_) {}
+    }
+    try {
+      final t = await Api.get(
+          '/terminals/${Uri.encodeComponent('${d['barcode'] ?? ''}')}');
+      if (t is Map) {
+        out['type'] = pick(Map<String, dynamic>.from(t), ['typeName']);
+      }
+    } catch (_) {}
+    return out;
+  }
+
+  Future<Uint8List> _pdf() async {
+    final obj = _key.currentContext?.findRenderObject();
+    if (obj is! RenderRepaintBoundary) throw Exception('ໜ້າຍັງບໍ່ພ້ອມ');
+    final image = await obj.toImage(pixelRatio: 3);
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (data == null) throw Exception('ສ້າງຮູບບໍ່ໄດ້');
+    final img = pw.MemoryImage(data.buffer.asUint8List());
+    final doc = pw.Document();
+    doc.addPage(pw.Page(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(20),
+      build: (_) => pw.Center(child: pw.Image(img, fit: pw.BoxFit.contain)),
+    ));
+    return doc.save();
+  }
+
+  Future<void> _run(Future<void> Function(Uint8List) fn) async {
+    setState(() => _busy = true);
+    try {
+      await fn(await _pdf());
+    } catch (e) {
+      if (mounted) toastMsg(context, '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Widget _sheet(Map<String, String> info) {
+    final d = widget.data;
+    final parts = asList(d['parts']);
+    const base = TextStyle(color: Colors.black, fontSize: 14, height: 1.4);
+    const bold = TextStyle(
+        color: Colors.black,
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
+        height: 1.4);
+    Widget kv(String k, String v) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(width: 120, child: Text(k, style: bold)),
+            Expanded(child: Text(v.isEmpty ? '-' : v, style: base)),
+          ]),
+        );
+    Widget cell(String t, {bool head = false}) => Padding(
+          padding: const EdgeInsets.all(6),
+          child: Text(t, style: head ? bold : base),
+        );
+    Widget sign(String title) => Expanded(
+          child: Column(children: [
+            const SizedBox(height: 64),
+            Container(
+                height: 1,
+                color: Colors.black54,
+                margin: const EdgeInsets.symmetric(horizontal: 16)),
+            const SizedBox(height: 4),
+            Text(title, style: bold),
+            const SizedBox(height: 4),
+            const Text('ວັນທີ ........../........../..........', style: base),
+          ]),
+        );
+    final date = _dt(d['openedAt']);
+    return Container(
+      width: 595,
+      color: Colors.white,
+      padding: const EdgeInsets.all(32),
+      child: DefaultTextStyle(
+        style: base,
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('ໃບຂໍອາໄຫຼ່',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: Colors.black,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text('ເລກທີ່: ${d['reqNo'] ?? ''}',
+                  textAlign: TextAlign.center, style: bold),
+              const SizedBox(height: 16),
+              kv('ວັນທີ', date.length >= 10 ? date.substring(0, 10) : date),
+              kv('ສາຂາ', info['branch'] ?? ''),
+              kv('ຕູ້ ATM', '${d['atmId'] ?? ''}  ${info['atm'] ?? ''}'.trim()),
+              kv('Terminal',
+                  '${d['barcode'] ?? ''}  ${info['type'] ?? ''}'.trim()),
+              const SizedBox(height: 12),
+              const Text('ລາຍການອາໄຫຼ່ທີ່ຂໍ', style: bold),
+              const SizedBox(height: 6),
+              Table(
+                border: TableBorder.all(color: Colors.black54),
+                columnWidths: const {
+                  0: FixedColumnWidth(56),
+                  1: FlexColumnWidth(3),
+                  2: FlexColumnWidth(2),
+                  3: FixedColumnWidth(70),
+                  4: FixedColumnWidth(60),
+                },
+                children: [
+                  TableRow(children: [
+                    cell('ລຳດັບ', head: true),
+                    cell('ຊື່ອາໄຫຼ່', head: true),
+                    cell('Part No', head: true),
+                    cell('ຫົວໜ່ວຍ', head: true),
+                    cell('ຈຳນວນ', head: true),
+                  ]),
+                  for (var i = 0; i < parts.length; i++)
+                    TableRow(children: [
+                      cell('${i + 1}'),
+                      cell(pick(parts[i], ['name'])),
+                      cell(pick(parts[i], ['partNo'])),
+                      cell(pick(parts[i], ['unit'])),
+                      cell(pick(parts[i], ['qty'])),
+                    ]),
+                ],
+              ),
+              const SizedBox(height: 12),
+              kv('ໝາຍເຫດ', '${d['remark'] ?? ''}'),
+              const SizedBox(height: 24),
+              Row(children: [sign('ຜູ້ຂໍ'), sign('ຫົວໜ້າສາຂາ')]),
+              const SizedBox(height: 16),
+            ]),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('ໃບຂໍອາໄຫຼ່ · $_name')),
+      body: FutureBuilder<Map<String, String>>(
+        future: _f,
+        builder: (c, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(12),
+            child: FittedBox(
+              fit: BoxFit.fitWidth,
+              child: RepaintBoundary(
+                key: _key,
+                child: _sheet(snap.data ?? {}),
+              ),
+            ),
+          );
+        },
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: _busy
+                    ? null
+                    : () => _run((bytes) async {
+                          await Printing.layoutPdf(
+                              onLayout: (_) async => bytes, name: _name);
+                        }),
+                icon: const Icon(Icons.print_outlined),
+                label: const Text('ພິມ'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _busy
+                    ? null
+                    : () => _run((bytes) async {
+                          await Printing.sharePdf(
+                              bytes: bytes, filename: '$_name.pdf');
+                        }),
+                icon: const Icon(Icons.ios_share),
+                label: const Text('ແຊຣ໌ PDF'),
+              ),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }
