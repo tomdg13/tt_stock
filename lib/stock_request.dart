@@ -196,7 +196,6 @@ class _StockRequestsPageState extends State<StockRequestsPage> {
       length: widget.terminal != null ? 3 : 2,
       initialIndex: widget.terminal != null ? 2 : 0,
       child: Scaffold(
-        bottomNavigationBar: const ShellBar(),
         appBar: AppBar(
           title: const Text('ຂໍອາໄຫຼ່ລະຫວ່າງສາຂາ'),
           bottom: TabBar(tabs: [
