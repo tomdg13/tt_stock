@@ -3,7 +3,9 @@
 //         POST /repair/cases (multipart: barcode, atmId, note, files)  -> opens the case at step 1
 //         POST /repair/cases/:id/step (multipart: step, note, files)   -> saves the next step
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart' show ImagePicker, ImageSource;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -67,14 +69,14 @@ MediaType _rmt(String name) {
 }
 
 Future<dynamic> _postMultipart(
-    String path, Map<String, String> fields, List<PlatformFile> files) async {
+    String path, Map<String, String> fields, List<_Doc> files) async {
   final base = Api.baseUrl.replaceAll(RegExp(r'/+$'), '');
   final uri = Uri.parse('$base$path');
   final req = http.MultipartRequest('POST', uri);
   if (Api.token != null) req.headers['Authorization'] = 'Bearer ${Api.token}';
   req.fields.addAll(fields);
   for (final f in files) {
-    final bytes = await f.readAsBytes();
+    final bytes = f.bytes;
     req.files.add(http.MultipartFile.fromBytes('files', bytes,
         filename: f.name, contentType: _rmt(f.name)));
   }
@@ -394,6 +396,12 @@ class _RepairCasePageState extends State<RepairCasePage> {
 // ---------------------------------------------------------------------------
 // Form: note + documents (required) for one step
 // ---------------------------------------------------------------------------
+class _Doc {
+  final String name;
+  final Uint8List bytes;
+  _Doc(this.name, this.bytes);
+}
+
 class RepairStepForm extends StatefulWidget {
   final int stepNo;
   final int? caseId; // null = open a new case (step 1)
@@ -410,7 +418,7 @@ class RepairStepForm extends StatefulWidget {
 
 class _RepairStepFormState extends State<RepairStepForm> {
   final _note = TextEditingController();
-  final _files = <PlatformFile>[];
+  final _files = <_Doc>[];
   bool _busy = false;
   String? _error;
 
@@ -421,12 +429,63 @@ class _RepairStepFormState extends State<RepairStepForm> {
   }
 
   Future<void> _pick() async {
-    final files = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: kPoDocExt,
+    final how = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('ຖ່າຍຮູບເອກະສານ'),
+            onTap: () => Navigator.pop(c, 'camera'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('ເລືອກຮູບຈາກຄັງຮູບ'),
+            onTap: () => Navigator.pop(c, 'gallery'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.attach_file),
+            title: const Text('ເລືອກໄຟລ໌ (PDF, Word, Excel, ຮູບ)'),
+            onTap: () => Navigator.pop(c, 'file'),
+          ),
+        ]),
+      ),
     );
-    if (files.isEmpty || !mounted) return;
-    setState(() => _files.addAll(files));
+    if (how == null || !mounted) return;
+    try {
+      if (how == 'file') {
+        final files = await FilePicker.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: kPoDocExt,
+        );
+        if (files.isEmpty || !mounted) return;
+        final add = <_Doc>[];
+        for (final f in files) {
+          add.add(_Doc(f.name, await f.readAsBytes()));
+        }
+        if (mounted) setState(() => _files.addAll(add));
+      } else {
+        final x = await ImagePicker().pickImage(
+            source: how == 'camera' ? ImageSource.camera : ImageSource.gallery,
+            imageQuality: 85,
+            maxWidth: 2400);
+        if (x == null || !mounted) return;
+        final bytes = await x.readAsBytes();
+        var name = x.name;
+        if (name.isEmpty) {
+          name = 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        }
+        if (RegExp(r'\.(jpg|jpeg|png|webp)$', caseSensitive: false)
+                .hasMatch(name) ==
+            false) {
+          name = '$name.jpg';
+        }
+        if (mounted) setState(() => _files.add(_Doc(name, bytes)));
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = 'ເປີດກ້ອງ/ໄຟລ໌ບໍ່ໄດ້: $e');
+    }
   }
 
   Future<void> _save() async {
@@ -504,7 +563,7 @@ class _RepairStepFormState extends State<RepairStepForm> {
         OutlinedButton.icon(
           onPressed: _busy ? null : _pick,
           icon: const Icon(Icons.attach_file),
-          label: const Text('ເພີ່ມເອກະສານ'),
+          label: const Text('ຖ່າຍຮູບ / ເພີ່ມເອກະສານ'),
         ),
         if (_error != null)
           Padding(
