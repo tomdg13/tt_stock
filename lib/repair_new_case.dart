@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'terminal_actions.dart' show PickProductPage;
 import 'api.dart';
 import 'crud.dart' show toastMsg;
 import 'repair_case.dart' show RepairStepForm;
@@ -10,7 +11,12 @@ import 'widgets.dart';
 /// then the existing RepairStepForm uploads the signed request form as step 1.
 class RepairNewCasePage extends StatefulWidget {
   final String barcode, atmId;
-  const RepairNewCasePage({super.key, required this.barcode, this.atmId = ''});
+  final Map<String, dynamic> terminal;
+  const RepairNewCasePage(
+      {super.key,
+      required this.barcode,
+      this.atmId = '',
+      this.terminal = const {}});
   @override
   State<RepairNewCasePage> createState() => _RepairNewCasePageState();
 }
@@ -28,6 +34,7 @@ class _RepairNewCasePageState extends State<RepairNewCasePage> {
   @override
   void initState() {
     super.initState();
+    _atmLoad = _loadAtm();
     _loadProducts();
   }
 
@@ -53,6 +60,35 @@ class _RepairNewCasePageState extends State<RepairNewCasePage> {
         _error = '$e'.replaceFirst('Exception: ', '');
       });
     }
+  }
+
+  Map<String, dynamic> _atm = {};
+  Future<void>? _atmLoad;
+
+  Future<void> _loadAtm() async {
+    if (widget.atmId.isEmpty) return;
+    try {
+      final d = await Api.get('/atms/${Uri.encodeComponent(widget.atmId)}');
+      if (d is Map && mounted) {
+        setState(() => _atm = Map<String, dynamic>.from(d));
+      }
+    } catch (_) {}
+  }
+
+  /// Opens the part list filtered by terminal type > ATM brand > ATM model.
+  Future<void> _pickPart() async {
+    await _atmLoad;
+    if (!mounted) return;
+    final row = await Navigator.push<Map<String, dynamic>>(
+        context,
+        MaterialPageRoute(
+            builder: (_) => PickProductPage(
+                terminalType: pick(widget.terminal, ['typeName']),
+                terminalTypeId: pick(widget.terminal, ['typeId']),
+                terminal: widget.terminal,
+                atm: _atm)));
+    if (row == null || !mounted) return;
+    _add({...row, 'id': pick(row, ['id', 'productId'])});
   }
 
   void _add(Map<String, dynamic> x) {
@@ -122,14 +158,6 @@ class _RepairNewCasePageState extends State<RepairNewCasePage> {
   @override
   Widget build(BuildContext context) {
     final p = pal(context);
-    final q = _search.text.trim().toLowerCase();
-    final shown = _products
-        .where((x) =>
-            q.isEmpty ||
-            pick(x, ['name']).toLowerCase().contains(q) ||
-            pick(x, ['partNo']).toLowerCase().contains(q))
-        .take(30)
-        .toList();
     return Scaffold(
       appBar: AppBar(title: Text('ເປີດເຄດສ້ອມ · ${widget.barcode}')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
@@ -163,27 +191,11 @@ class _RepairNewCasePageState extends State<RepairNewCasePage> {
             ),
           ),
         const SizedBox(height: 8),
-        TextField(
-          controller: _search,
-          decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search),
-              labelText: 'ຄົ້ນຫາອາໄຫຼ່ (ຊື່ ຫຼື ລະຫັດ)',
-              border: OutlineInputBorder()),
-          onChanged: (_) => setState(() {}),
+        OutlinedButton.icon(
+          onPressed: _busy ? null : _pickPart,
+          icon: const Icon(Icons.add),
+          label: const Text('ເພີ່ມອາໄຫຼ່ (ຕາມ Model ຂອງ terminal)'),
         ),
-        const SizedBox(height: 8),
-        if (_loading) const Center(child: CircularProgressIndicator()),
-        for (final x in shown)
-          ListTile(
-            dense: true,
-            title: Text(pick(x, ['name'])),
-            subtitle: pick(x, ['partNo']).isEmpty
-                ? null
-                : Text(pick(x, ['partNo']),
-                    style: TextStyle(color: p.mut, fontSize: 12)),
-            trailing: const Icon(Icons.add),
-            onTap: () => _add(x),
-          ),
         const SizedBox(height: 12),
         TextField(
           controller: _remark,

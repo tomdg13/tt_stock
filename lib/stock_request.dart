@@ -243,7 +243,8 @@ class _StockRequestsPageState extends State<StockRequestsPage> {
                   MaterialPageRoute(
                       builder: (_) => RepairNewCasePage(
                           barcode: '${widget.terminal!['barcode'] ?? ''}',
-                          atmId: '${widget.terminal!['atmId'] ?? ''}')));
+                          atmId: '${widget.terminal!['atmId'] ?? ''}',
+                          terminal: widget.terminal!)));
               if (saved == true) widget.onChanged?.call();
             }),
         ]),
