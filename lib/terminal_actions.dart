@@ -1,16 +1,12 @@
 import 'main_shell.dart';
 // Terminal info page with "Fix" and "Change terminal" actions.
 // New file: nothing existing is overwritten. Needs mobile_scanner (already in pubspec).
-import 'terminal_parts_page.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'api.dart';
-import 'stock_request.dart';
 import 'repair_case.dart' show TerminalRepairPage;
-import 'request_status_page.dart';
 import 'crud.dart';
 import 'specs.dart';
-import 'terminal_history.dart';
 import 'theme.dart';
 import 'type_image.dart';
 import 'widgets.dart';
@@ -292,55 +288,6 @@ class _TerminalInfoPageState extends State<TerminalInfoPage> {
                   ),
                   const SizedBox(height: 12),
                   AppCard(title: 'ລາຍລະອຽດທັງໝົດ', child: DataView(m)),
-                ]),
-              ),
-            ),
-            Material(
-              elevation: 8,
-              color: Theme.of(context).colorScheme.surface,
-              child: SafeArea(
-                child: Row(children: [
-                  act(
-                      Icons.memory,
-                      'ອາໄຫຼ່',
-                      () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => TerminalPartsPage(_barcode)))),
-                  act(
-                      Icons.history,
-                      'ປະຫວັດ',
-                      () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => HistoryPage(barcode: _barcode)))),
-                  act(
-                      Icons.inventory_2_outlined,
-                      'ຮ້ອງຂໍອາໄຫຼ່',
-                      () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => RequestStatusPage(
-                                  terminal: Map<String, dynamic>.from(m))))),
-                  if (canManage) ...[
-                    act(
-                        Icons.build_outlined,
-                        'ເຄດສ້ອມ',
-                        _busy
-                            ? null
-                            : () async {
-                                await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (_) => TerminalRepairPage(m,
-                                                onChanged: () {
-                                              widget.onChanged?.call();
-                                              _reload();
-                                            })));
-                              }),
-                    act(Icons.swap_horiz, 'ປ່ຽນ',
-                        (_busy || inUse == false) ? null : () => _change(m)),
-                  ],
                 ]),
               ),
             ),
