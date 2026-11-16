@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'crud.dart' show toastMsg;
-import 'main_shell.dart';
 import 'request_status_bar.dart';
 import 'stock_request.dart' show reqStatusChip, reqStatusItems, StockRequestsPage;
 import 'theme.dart';
@@ -149,7 +148,6 @@ class _RequestStatusPageState extends State<RequestStatusPage> {
   Widget build(BuildContext context) {
     final p = pal(context);
     return Scaffold(
-      bottomNavigationBar: const ShellBar(),
       appBar: AppBar(title: const Text('ສະຖານະຄຳຂໍ')),
       floatingActionButton: Api.can('ATM_MANAGE')
           ? FloatingActionButton.extended(
