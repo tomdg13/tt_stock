@@ -1,6 +1,7 @@
 import 'request_parts_box.dart';
 import 'main_shell.dart';
 import 'package:flutter/material.dart';
+import 'repair_cases_tab.dart';
 import 'repair_new_case.dart';
 import 'request_status_bar.dart';
 
@@ -235,7 +236,7 @@ class _StockRequestsPageState extends State<StockRequestsPage> {
           _tab(true),
           _tab(false),
           if (widget.terminal != null)
-            TerminalRepairTab('${widget.terminal!['barcode'] ?? ''}',
+            RepairCasesTab('${widget.terminal!['barcode'] ?? ''}',
                 onOpenCase: () async {
               final saved = await Navigator.push<bool>(
                   context,
