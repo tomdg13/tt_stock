@@ -433,8 +433,8 @@ class _RepairStepFormState extends State<RepairStepForm> {
   Future<void> _loadBranches() async {
     try {
       final b = asList(await Api.get('/repair/branches'));
-      dynamic pre = _branchId;
-      if (pre == null && widget.atmId.isNotEmpty) {
+      dynamic pre;
+      if (widget.atmId.isNotEmpty) {
         final a = await Api.get('/atms/${Uri.encodeComponent(widget.atmId)}');
         final ab = a is Map ? '${a['atmBranchId'] ?? ''}'.toLowerCase() : '';
         for (final x in b) {
@@ -445,6 +445,7 @@ class _RepairStepFormState extends State<RepairStepForm> {
           }
         }
       }
+      pre ??= _branchId;
       if (mounted == false) return;
       setState(() {
         _branches = b;
@@ -521,7 +522,7 @@ class _RepairStepFormState extends State<RepairStepForm> {
 
   Future<void> _save() async {
     if (widget.caseId == null && _branchId == null) {
-      setState(() => _error = 'ກະລຸນາເລືອກສາຂາທີ່ຂໍ');
+      setState(() => _error = 'ຫາສາຂາຂອງຕູ້ນີ້ບໍ່ເຫັນ');
       return;
     }
     if (_files.isEmpty) {
@@ -575,22 +576,13 @@ class _RepairStepFormState extends State<RepairStepForm> {
         Text('${widget.barcode}  ·  ${repairSideLabel(n)}',
             style: TextStyle(color: p.mut)),
         const SizedBox(height: 12),
-        if (widget.caseId == null) ...[
-          DropdownButtonFormField<dynamic>(
-            key: ValueKey('rb-${_branches.length}-$_branchId'),
-            initialValue:
-                _branches.any((b) => b['id'] == _branchId) ? _branchId : null,
-            isExpanded: true,
-            decoration: const InputDecoration(labelText: 'ສາຂາທີ່ຂໍ'),
-            items: [
-              for (final b in _branches)
-                DropdownMenuItem(
-                    value: b['id'], child: Text(pick(b, ['name', 'id']))),
-            ],
-            onChanged: _busy ? null : (v) => setState(() => _branchId = v),
+        if (widget.caseId == null && _branchId != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+                'ສາຂາ: ${_branches.where((b) => b['id'] == _branchId).map((b) => pick(b, ['name'])).join()}',
+                style: TextStyle(color: p.mut)),
           ),
-          const SizedBox(height: 12),
-        ],
         TextField(
           controller: _note,
           maxLines: 3,
