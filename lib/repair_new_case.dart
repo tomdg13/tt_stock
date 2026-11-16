@@ -135,13 +135,37 @@ class _RepairNewCasePageState extends State<RepairNewCasePage> {
     }
   }
 
+  Widget _box(String label, String value, {int minLines = 1}) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: InputDecorator(
+          decoration: InputDecoration(
+              labelText: label, border: const OutlineInputBorder()),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: 20.0 * minLines),
+            child: Text(value.isEmpty ? '-' : value),
+          ),
+        ),
+      );
+
+  String get _partsText => [
+        for (final e in _qty.entries) '${_names[e.key] ?? e.key}  x ${e.value}'
+      ].join('\n');
+
   @override
   Widget build(BuildContext context) {
     final p = pal(context);
     return Scaffold(
       appBar: AppBar(title: Text('ເປີດເຄດສ້ອມ · ${widget.barcode}')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        const Text('ອາໄຫຼ່ທີ່ຈະໃຊ້',
+        _box('ສາຂາ', pick(_atm, ['atmBranchId', 'branchName'])),
+        _box(
+            'ຕູ້ ATM',
+            [
+              widget.atmId,
+              pick(_atm, ['atmLocation']),
+            ].where((e) => e.isNotEmpty).join(' · ')),
+        _box('Terminal', widget.barcode),
+        const Text('ຮ້ອງຂໍອາໄຫຼ່',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
         if (_qty.isEmpty)
@@ -171,6 +195,7 @@ class _RepairNewCasePageState extends State<RepairNewCasePage> {
             ),
           ),
         const SizedBox(height: 8),
+        _box('ຮ້ອງຂໍອາໄຫຼ່ (ລາຍການທີ່ເລືອກ)', _partsText, minLines: 2),
         OutlinedButton.icon(
           onPressed: _busy ? null : _pickPart,
           icon: const Icon(Icons.add),
