@@ -89,14 +89,7 @@ class _RepairCasesTabState extends State<RepairCasesTab> {
                 Builder(builder: (_) {
                   final cur = int.tryParse('${k['currentStep']}') ?? 0;
                   final closed = '${k['status']}' == 'CLOSED';
-                  final doneName = (cur >= 1 && cur <= kRepairSteps.length)
-                      ? kRepairSteps[cur - 1]
-                      : '-';
-                  final nextName =
-                      cur < kRepairSteps.length ? kRepairSteps[cur] : '-';
-                  final stepName = closed
-                      ? 'ສຳເລັດແລ້ວ'
-                      : 'ແລ້ວ: $doneName\nຕໍ່ໄປ: ຂັ້ນ ${cur + 1} $nextName';
+                  final stepName = caseChipText(k);
                   return Card(
                     child: ListTile(
                       onTap: () => _open(k, side),
