@@ -144,9 +144,11 @@ Future<bool> openStepForm(BuildContext context, Map<String, dynamic> c,
       context,
       MaterialPageRoute(
           builder: (_) => RepairStepForm(
-              stepNo: step,
-              caseId: int.tryParse('${c['caseId']}') ?? 0,
-              barcode: barcode)));
+                stepNo: step,
+                caseId: int.tryParse('${c['caseId']}') ?? 0,
+                barcode: barcode,
+                atmId: '',
+              )));
   return ok == true;
 }
 
