@@ -97,7 +97,7 @@ class _RepairCasesTabState extends State<RepairCasesTab> {
                         backgroundColor: closed ? Colors.green : null,
                         child: closed
                             ? const Icon(Icons.check, color: Colors.white)
-                            : Text('$cur/7'),
+                            : Text('$cur/${kRepairSteps.length}'),
                       ),
                       title: Text('ເຄດ #${k['caseId']}',
                           style: const TextStyle(fontWeight: FontWeight.w700)),

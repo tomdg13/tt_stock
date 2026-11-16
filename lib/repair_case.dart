@@ -1,7 +1,7 @@
-// Repair cases: one case = one repair of one terminal, 7 steps, each step needs a document.
+// Repair cases: one case = one repair of one terminal, 6 steps, each step needs a document.
 // Flow: pick parts (FixTerminalPage) -> case created (step 0) -> print the request form,
-//       the branch signs it -> attach the signed document (step 1) -> steps 2..7.
-// Step 4 cuts the stock (Head Office) and reinstalls the terminal (done by the server).
+//       the branch signs it -> attach the signed document (step 1) -> steps 2..6.
+// Step 3 cuts the stock (Head Office) and reinstalls the terminal (done by the server).
 // Server: GET /repair/cases?barcode=, GET /repair/cases/:id,
 //         POST /repair/cases (json), POST /repair/cases/:id/step (multipart: step, note, files)
 import 'dart:convert';
@@ -31,19 +31,18 @@ import 'widgets.dart';
 const kRepairSteps = [
   'ສາຂາຂໍ້ເຄືອງ',
   'ສ້າງສົງເຄືອງ',
-  'ສາຂາຮັບເຄືອງ',
   'ລົງຕິດຕັ້ງ',
   'ສາຂາສົງເຄືອງກັບ',
   'ສ້າງຮັບເຄືອງ',
   'ສຳເລັດປິດເຄດ',
 ];
-const _branchSteps = [1, 3, 4, 5];
+const _branchSteps = [1, 3, 4];
 
-/// 'branch' for steps 1,3,4,5 and 'hq' for steps 2,6,7
+/// 'branch' for steps 1,3,4 and 'hq' for steps 2,5,6
 String repairSide(int n) => _branchSteps.contains(n) ? 'branch' : 'hq';
 String repairSideLabel(int n) => repairSide(n) == 'hq' ? 'ສ້າງ' : 'ສາຂາ';
 String repairStepName(int n) =>
-    (n >= 1 && n <= 7) ? kRepairSteps[n - 1] : 'ຂັ້ນ $n';
+    (n >= 1 && n <= kRepairSteps.length) ? kRepairSteps[n - 1] : 'ຂັ້ນ $n';
 
 String nextStepLabel(int n) => n == 1
     ? 'ແນບເອກະສານທີ່ເຊັນແລ້ວ (ຂັ້ນ 1)'
@@ -223,7 +222,7 @@ class _TerminalRepairPageState extends State<TerminalRepairPage> {
     final p = pal(context);
     final primary = Theme.of(context).colorScheme.primary;
     return Row(children: [
-      for (var n = 1; n <= 7; n++)
+      for (var n = 1; n <= kRepairSteps.length; n++)
         Expanded(
           child: Center(
             child: Container(
@@ -256,7 +255,7 @@ class _TerminalRepairPageState extends State<TerminalRepairPage> {
     final p = pal(context);
     final cur = int.tryParse('${c['currentStep']}') ?? 0;
     final closed = '${c['status']}' == 'CLOSED';
-    final next = (closed || cur >= 7) ? null : cur + 1;
+    final next = (closed || cur >= kRepairSteps.length) ? null : cur + 1;
     final canAct = next != null &&
         Api.can('ATM_MANAGE') &&
         (side == 'any' || side == repairSide(next));
@@ -400,7 +399,7 @@ class _TerminalRepairPageState extends State<TerminalRepairPage> {
 }
 
 // ---------------------------------------------------------------------------
-// Full page: 7-step timeline of one case
+// Full page: 6-step timeline of one case
 // ---------------------------------------------------------------------------
 class RepairCasePage extends StatefulWidget {
   final Map<String, dynamic> data;
@@ -518,7 +517,7 @@ class _RepairCasePageState extends State<RepairCasePage> {
   @override
   Widget build(BuildContext context) {
     final p = pal(context);
-    final next = (_closed || _cur >= 7) ? null : _cur + 1;
+    final next = (_closed || _cur >= kRepairSteps.length) ? null : _cur + 1;
     final canAct = next != null &&
         Api.can('ATM_MANAGE') &&
         (widget.side == 'any' || widget.side == repairSide(next));
@@ -562,7 +561,7 @@ class _RepairCasePageState extends State<RepairCasePage> {
             label: const Text('ເບິ່ງ / ພິມ / ແຊຣ໌ ໃບຂໍອາໄຫຼ່'),
           ),
           const SizedBox(height: 12),
-          for (var n = 1; n <= 7; n++) _row(n),
+          for (var n = 1; n <= kRepairSteps.length; n++) _row(n),
           const SizedBox(height: 8),
           if (next != null && canAct)
             SizedBox(
@@ -694,7 +693,7 @@ class _RepairStepFormState extends State<RepairStepForm> {
       setState(() => _error = 'ກະລຸນາແນບເອກະສານ');
       return;
     }
-    if (widget.stepNo == 4) {
+    if (widget.stepNo == 3) {
       final ok = await _confirmStep4();
       if (ok == false || !mounted) return;
     }
