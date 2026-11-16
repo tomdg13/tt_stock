@@ -3,6 +3,7 @@ import 'main_shell.dart';
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'repair_case.dart';
 import 'terminal_actions.dart';
 import 'pages.dart';
 import 'theme.dart';
@@ -1002,6 +1003,9 @@ class _TerminalRepairTabState extends State<TerminalRepairTab> {
           return ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
               children: [
+                RepairCasesSection(widget.barcode,
+                    key: ObjectKey(data),
+                    atmId: '${term['atmId'] ?? ''}'),
                 if (term.isNotEmpty)
                   Card(
                     child: ListTile(
