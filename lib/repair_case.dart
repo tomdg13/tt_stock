@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'api.dart';
+import 'crud.dart' show toastMsg;
 import 'product_images.dart' show productImageUrl;
 import 'purchase_orders.dart' show kPoDocExt;
 import 'theme.dart';
@@ -58,8 +59,8 @@ MediaType _rmt(String name) {
   }
   if (l.endsWith('.doc')) return MediaType('application', 'msword');
   if (l.endsWith('.xlsx')) {
-    return MediaType('application',
-        'vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    return MediaType(
+        'application', 'vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   }
   if (l.endsWith('.xls')) return MediaType('application', 'vnd.ms-excel');
   return MediaType('application', 'octet-stream');
@@ -167,8 +168,8 @@ class _RepairCasesSectionState extends State<RepairCasesSection> {
           return Card(
             child: ListTile(
               title: Text('${snap.error}', style: TextStyle(color: p.bad)),
-              trailing: TextButton(
-                  onPressed: _reload, child: const Text('ລອງໃໝ່')),
+              trailing:
+                  TextButton(onPressed: _reload, child: const Text('ລອງໃໝ່')),
             ),
           );
         }
@@ -176,48 +177,53 @@ class _RepairCasesSectionState extends State<RepairCasesSection> {
         final cases = (data['cases'] as List).cast<Map<String, dynamic>>();
         final side = '${data['side']}';
         final hasOpen = cases.any((e) => '${e['status']}' == 'OPEN');
-        final canOpen = Api.can('ATM_MANAGE') && hasOpen == false && side != 'hq';
-        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const Padding(
-            padding: EdgeInsets.only(bottom: 8),
-            child: Text('ເຄດສ້ອມ (7 ຂັ້ນຕອນ)',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          ),
-          if (cases.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text('ຍັງບໍ່ມີເຄດສ້ອມ', style: TextStyle(color: p.mut)),
-            ),
-          for (final cs in cases)
-            Card(
-              child: ListTile(
-                leading: Icon(
-                    '${cs['status']}' == 'CLOSED'
-                        ? Icons.check_circle
-                        : Icons.timelapse,
-                    color: '${cs['status']}' == 'CLOSED'
-                        ? Colors.green
-                        : Colors.orange),
-                title: Text('ເຄດ #${cs['caseId']}  ${cs['refNo'] ?? ''}',
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text(caseChipText(cs)),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _show(cs, side),
+        final canOpen =
+            Api.can('ATM_MANAGE') && hasOpen == false && side != 'hq';
+        return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text('ເຄດສ້ອມ (7 ຂັ້ນຕອນ)',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
               ),
-            ),
-          if (canOpen)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: FilledButton.icon(
-                onPressed: _open,
-                icon: const Icon(Icons.add),
-                label: const Text('ເປີດເຄດສ້ອມ (ຂັ້ນ 1)'),
-              ),
-            ),
-          const SizedBox(height: 8),
-          const Divider(),
-          const SizedBox(height: 8),
-        ]);
+              if (cases.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child:
+                      Text('ຍັງບໍ່ມີເຄດສ້ອມ', style: TextStyle(color: p.mut)),
+                ),
+              for (final cs in cases)
+                Card(
+                  child: ListTile(
+                    leading: Icon(
+                        '${cs['status']}' == 'CLOSED'
+                            ? Icons.check_circle
+                            : Icons.timelapse,
+                        color: '${cs['status']}' == 'CLOSED'
+                            ? Colors.green
+                            : Colors.orange),
+                    title: Text('ເຄດ #${cs['caseId']}  ${cs['refNo'] ?? ''}',
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text(caseChipText(cs)),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _show(cs, side),
+                  ),
+                ),
+              if (canOpen)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: FilledButton.icon(
+                    onPressed: _open,
+                    icon: const Icon(Icons.add),
+                    label: const Text('ເປີດເຄດສ້ອມ (ຂັ້ນ 1)'),
+                  ),
+                ),
+              const SizedBox(height: 8),
+              const Divider(),
+              const SizedBox(height: 8),
+            ]);
       },
     );
   }
@@ -360,7 +366,8 @@ class _RepairCasePageState extends State<RepairCasePage> {
         onRefresh: _reload,
         child: ListView(padding: const EdgeInsets.all(16), children: [
           Text(caseChipText(_c),
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           if ('${_c['refNo'] ?? ''}'.isNotEmpty)
             Text('${_c['refNo']}', style: TextStyle(color: p.mut)),
           const SizedBox(height: 12),
@@ -371,7 +378,8 @@ class _RepairCasePageState extends State<RepairCasePage> {
               height: 48,
               child: FilledButton(
                 onPressed: () => _next(next),
-                child: Text('ອັບເດດສະຖານະ · ຂັ້ນ $next ${repairStepName(next)}'),
+                child:
+                    Text('ອັບເດດສະຖານະ · ຂັ້ນ $next ${repairStepName(next)}'),
               ),
             ),
           if (next != null && canAct == false)
@@ -484,10 +492,12 @@ class _RepairStepFormState extends State<RepairStepForm> {
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.insert_drive_file_outlined),
-            title: Text(_files[i].name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            title: Text(_files[i].name,
+                maxLines: 1, overflow: TextOverflow.ellipsis),
             trailing: IconButton(
               icon: Icon(Icons.close, color: p.bad),
-              onPressed: _busy ? null : () => setState(() => _files.removeAt(i)),
+              onPressed:
+                  _busy ? null : () => setState(() => _files.removeAt(i)),
             ),
           ),
         const SizedBox(height: 8),

@@ -1004,8 +1004,7 @@ class _TerminalRepairTabState extends State<TerminalRepairTab> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
               children: [
                 RepairCasesSection(widget.barcode,
-                    key: ObjectKey(data),
-                    atmId: '${term['atmId'] ?? ''}'),
+                    key: ObjectKey(data), atmId: '${term['atmId'] ?? ''}'),
                 if (term.isNotEmpty)
                   Card(
                     child: ListTile(
