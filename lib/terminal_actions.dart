@@ -2,6 +2,7 @@ import 'main_shell.dart';
 // Terminal info page with "Fix" and "Change terminal" actions.
 // New file: nothing existing is overwritten. Needs mobile_scanner (already in pubspec).
 import 'package:flutter/material.dart';
+import 'request_status_page.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'api.dart';
 import 'repair_case.dart' show TerminalRepairPage;
@@ -288,6 +289,29 @@ class _TerminalInfoPageState extends State<TerminalInfoPage> {
                   ),
                   const SizedBox(height: 12),
                   AppCard(title: 'ລາຍລະອຽດທັງໝົດ', child: DataView(m)),
+                ]),
+              ),
+            ),
+            Material(
+              elevation: 8,
+              color: Theme.of(context).colorScheme.surface,
+              child: SafeArea(
+                child: Row(children: [
+                  act(
+                      Icons.inventory_2_outlined,
+                      'ຂໍອາໄຫຼ່',
+                      () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => RequestStatusPage(
+                                  terminal: Map<String, dynamic>.from(m))))),
+                  if (canManage)
+                    act(
+                        Icons.swap_horiz,
+                        'ປ່ຽນອຸປະກອນ',
+                        (_busy || inUse == false)
+                            ? null
+                            : () => _change(m)),
                 ]),
               ),
             ),
