@@ -557,6 +557,92 @@ class _CrudFormState extends State<CrudForm> {
     }
   }
 
+  Widget _optionPicker(FieldSpec f, String label, List<Opt> o, dynamic cur) {
+    var name = '';
+    for (final e in o) {
+      if (e.key == cur) name = e.value;
+    }
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => _pickOption(f, o, cur),
+      child: InputDecorator(
+        decoration: InputDecoration(
+            labelText: label, suffixIcon: const Icon(Icons.search)),
+        child: cur == null
+            ? const Text('-')
+            : Row(children: [
+                _optThumb(_optImgs[f.key]?['$cur'] ?? '', size: 26),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: Text(name,
+                        maxLines: 1, overflow: TextOverflow.ellipsis)),
+                if (!_req(f))
+                  InkWell(
+                    onTap: () => setState(() => _v[f.key] = null),
+                    child: const Icon(Icons.clear, size: 18),
+                  ),
+              ]),
+      ),
+    );
+  }
+
+  Future<void> _pickOption(FieldSpec f, List<Opt> o, dynamic cur) async {
+    final res = await showModalBottomSheet<List<dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (c) {
+        var q = '';
+        return StatefulBuilder(builder: (c, setS) {
+          final t = q.trim().toUpperCase();
+          final list = t.isEmpty
+              ? o
+              : o.where((e) => e.value.toUpperCase().contains(t)).toList();
+          return Padding(
+            padding:
+                EdgeInsets.only(bottom: MediaQuery.of(c).viewInsets.bottom),
+            child: SizedBox(
+              height: MediaQuery.of(c).size.height * 0.8,
+              child: Column(children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: TextField(
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        labelText: 'ຄົ້ນຫາອາໄຫຼ່ຫຼັກ'),
+                    onChanged: (v) => setS(() => q = v),
+                  ),
+                ),
+                Expanded(
+                  child: ListView(children: [
+                    if (!_req(f))
+                      ListTile(
+                          title: const Text('-'),
+                          onTap: () => Navigator.pop(c, [null])),
+                    for (final e in list)
+                      ListTile(
+                        leading: _optThumb(_optImgs[f.key]?['${e.key}'] ?? ''),
+                        title: Text(e.value,
+                            maxLines: 2, overflow: TextOverflow.ellipsis),
+                        selected: e.key == cur,
+                        onTap: () => Navigator.pop(c, [e.key]),
+                      ),
+                    if (list.isEmpty)
+                      const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Center(child: Text('ບໍ່ພົບອາໄຫຼ່ເຕັມ'))),
+                  ]),
+                ),
+              ]),
+            ),
+          );
+        });
+      },
+    );
+    if (res == null || !mounted) return;
+    setState(() => _v[f.key] = res.first);
+  }
+
   void _normalize(FieldSpec f) {
     final o = _opts[f.key] ?? [];
     if (f.type == FT.select && _v[f.key] != null) {
@@ -771,6 +857,7 @@ class _CrudFormState extends State<CrudForm> {
       case FT.select:
         final o = _opts[f.key] ?? [];
         final cur = o.any((e) => e.key == _v[f.key]) ? _v[f.key] : null;
+        if (f.imageKey != null) return _optionPicker(f, label, o, cur);
         return DropdownButtonFormField<dynamic>(
           key: ValueKey('${f.key}-${o.length}-$cur'),
           initialValue: cur,
