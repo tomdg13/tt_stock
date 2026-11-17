@@ -6,7 +6,6 @@ import 'withdraw_page.dart';
 import 'request_status_page.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'api.dart';
-import 'repair_case.dart' show TerminalRepairPage;
 import 'crud.dart';
 import 'specs.dart';
 import 'theme.dart';
