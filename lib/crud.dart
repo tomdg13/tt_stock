@@ -20,6 +20,26 @@ import 'widgets.dart';
 typedef Row_ = Map<String, dynamic>;
 typedef Opt = MapEntry<dynamic, String>;
 
+Widget _optThumb(String raw, {double size = 34}) {
+  final url = productImageUrl(raw);
+  final ph = Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+        color: Colors.black12, borderRadius: BorderRadius.circular(6)),
+    child: const Icon(Icons.image_outlined, size: 18, color: Colors.black38),
+  );
+  if (url.isEmpty) return ph;
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(6),
+    child: Image.network(url,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => ph),
+  );
+}
+
 enum FT { text, number, pin, bool, select, multi, matrix }
 
 class FieldSpec {
@@ -38,6 +58,7 @@ class FieldSpec {
   )? requiredUnless; // required unless field (key) equals value
   final String?
       nameKey; // row key holding the option label (used when the id is missing)
+  final String? imageKey; // row key with a picture: the dropdown shows a thumbnail
   const FieldSpec(
     this.key,
     this.label, {
@@ -53,6 +74,7 @@ class FieldSpec {
     this.hideIf,
     this.requiredUnless,
     this.nameKey,
+    this.imageKey,
   });
 }
 
@@ -451,6 +473,7 @@ class _CrudFormState extends State<CrudForm> {
   final _ctl = <String, TextEditingController>{};
   final _v = <String, dynamic>{};
   final _opts = <String, List<Opt>>{};
+  final _optImgs = <String, Map<String, String>>{}; // field key -> option value -> image
   final _json = TextEditingController();
   final _imgs = ProductImagesController();
   final _bcs = ProductBarcodesController();
@@ -517,6 +540,18 @@ class _CrudFormState extends State<CrudForm> {
               _normalize(f);
             });
           }).catchError((_) {});
+          if (f.imageKey != null) {
+            Api.get(f.optionsPath!).then((d) {
+              if (!mounted) return;
+              final im = <String, String>{};
+              for (final r in asList(d)) {
+                final id = '${r[f.optionValue] ?? r['id'] ?? ''}';
+                final img = '${r[f.imageKey!] ?? ''}';
+                if (id.isNotEmpty && img.isNotEmpty) im[id] = img;
+              }
+              setState(() => _optImgs[f.key] = im);
+            }).catchError((_) {});
+          }
         }
       }
     }
@@ -741,10 +776,34 @@ class _CrudFormState extends State<CrudForm> {
           initialValue: cur,
           isExpanded: true,
           decoration: InputDecoration(labelText: label),
+          selectedItemBuilder: f.imageKey == null
+              ? null
+              : (c) => [
+                    if (!_req(f)) const Text('-'),
+                    for (final e in o)
+                      Row(children: [
+                        _optThumb(_optImgs[f.key]?['${e.key}'] ?? '', size: 26),
+                        const SizedBox(width: 8),
+                        Expanded(
+                            child: Text(e.value,
+                                maxLines: 1, overflow: TextOverflow.ellipsis)),
+                      ]),
+                  ],
           items: [
             if (!_req(f)) const DropdownMenuItem(value: null, child: Text('-')),
             for (final e in o)
-              DropdownMenuItem(value: e.key, child: Text(e.value)),
+              DropdownMenuItem(
+                value: e.key,
+                child: f.imageKey == null
+                    ? Text(e.value)
+                    : Row(children: [
+                        _optThumb(_optImgs[f.key]?['${e.key}'] ?? ''),
+                        const SizedBox(width: 10),
+                        Expanded(
+                            child: Text(e.value,
+                                maxLines: 2, overflow: TextOverflow.ellipsis)),
+                      ]),
+              ),
           ],
           onChanged: (v) => setState(() {
             _v[f.key] = v;

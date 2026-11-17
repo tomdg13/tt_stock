@@ -232,6 +232,7 @@ CrudSpec? crudSpec(String key) {
           FieldSpec('parentProductId', 'ເປັນອາໄຫຼ່ຍ່ອຍຂອງ (ອາໄຫຼ່ເຕັມ)',
               type: FT.select,
               optionsPath: '/products?partType=FULL&active=1&limit=1000',
+              imageKey: 'imageUrl',
               hideIf: ('partType', 'FULL'),
               requiredUnless: ('partType', 'FULL')),
           FieldSpec('unit', 'ຫົວໜ່ວຍ'),
