@@ -6,6 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'api.dart';
+import 'product_images.dart' show productImageUrl;
 
 /// ໃບເບີກອາໄຫຼ່: one withdrawal as a bill, print or share as PDF.
 /// [data] = one row of GET /withdrawals (withdrawNo, branchName, createdAt,
@@ -21,6 +22,50 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
   late Map<String, dynamic> _d = widget.data;
   final _key = GlobalKey();
   bool _busy = false;
+  final Map<String, String> _img = {};
+  Future<void>? _imgLoad;
+
+  @override
+  void initState() {
+    super.initState();
+    _imgLoad = _loadImages();
+  }
+
+  /// First image of every part on the bill (GET /products/:id/images).
+  Future<void> _loadImages() async {
+    final items = _d['items'] is List ? _d['items'] as List : const [];
+    for (final it in items) {
+      if (it is! Map) continue;
+      final id = '${it['productId'] ?? ''}';
+      if (id.isEmpty || _img.containsKey(id)) continue;
+      _img[id] = '';
+      try {
+        final d = await Api.get('/products/${Uri.encodeComponent(id)}/images');
+        if (d is List && d.isNotEmpty && d.first is Map) {
+          final u = '${(d.first as Map)['url'] ?? ''}';
+          if (u.isNotEmpty) _img[id] = u;
+        }
+      } catch (_) {
+        _img[id] = '';
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// The PDF is a picture of the sheet: wait until every part image is loaded.
+  Future<void> _waitImages() async {
+    await _imgLoad;
+    if (!mounted) return;
+    for (final u in _img.values) {
+      if (u.isEmpty) continue;
+      try {
+        await precacheImage(NetworkImage(productImageUrl(u)), context)
+            .timeout(const Duration(seconds: 8));
+      } catch (_) {}
+      if (!mounted) return;
+    }
+    await WidgetsBinding.instance.endOfFrame;
+  }
 
   String get _name => '${_d['withdrawNo'] ?? 'withdraw'}';
 
@@ -44,6 +89,7 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
   }
 
   Future<Uint8List> _pdf() async {
+    await _waitImages();
     final obj = _key.currentContext?.findRenderObject();
     if (obj is! RenderRepaintBoundary) throw Exception('ໜ້າຍັງບໍ່ພ້ອມ');
     final image = await obj.toImage(pixelRatio: 3);
@@ -137,6 +183,23 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
           padding: const EdgeInsets.all(6),
           child: Text(t, style: head ? bold : base),
         );
+    Widget pic(String id) {
+      final url = productImageUrl(_img[id] ?? '');
+      return Padding(
+        padding: const EdgeInsets.all(4),
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: url.isEmpty
+              ? const Icon(Icons.memory, color: Colors.black38)
+              : Image.network(url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      const Icon(Icons.memory, color: Colors.black38)),
+        ),
+      );
+    }
+
     Widget sign(String title) => Expanded(
           child: Column(children: [
             const SizedBox(height: 64),
@@ -183,20 +246,24 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
               const SizedBox(height: 6),
               Table(
                 border: TableBorder.all(color: Colors.black54),
+                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                 columnWidths: const {
-                  0: FixedColumnWidth(56),
-                  1: FlexColumnWidth(3),
-                  2: FixedColumnWidth(70),
+                  0: FixedColumnWidth(48),
+                  1: FixedColumnWidth(60),
+                  2: FlexColumnWidth(3),
+                  3: FixedColumnWidth(64),
                 },
                 children: [
                   TableRow(children: [
                     cell('ລຳດັບ', head: true),
+                    cell('ຮູບ', head: true),
                     cell('ຊື່ອາໄຫຼ່', head: true),
                     cell('ຈຳນວນ', head: true),
                   ]),
                   for (var n = 0; n < items.length; n++)
                     TableRow(children: [
                       cell('${n + 1}'),
+                      pic('${(items[n] as Map)['productId'] ?? ''}'),
                       cell(_s((items[n] as Map)['productName'])),
                       cell(_s((items[n] as Map)['qty'])),
                     ]),
