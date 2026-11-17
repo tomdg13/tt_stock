@@ -302,6 +302,7 @@ class _AuditPageState extends State<AuditPage> {
   Map<String, String> _imgById = {};
   Map<String, String> _ptById = {}; // productId -> FULL / PARTIAL
   Map<String, String> _parentNameById = {}; // productId -> full part name
+  Map<String, String> _typeById = {}; // productId -> product type name
   Map<String, Map<String, dynamic>> _info = {};
   String _q = '';
   final _qc = TextEditingController();
@@ -365,10 +366,12 @@ class _AuditPageState extends State<AuditPage> {
       };
       final pt = <String, String>{};
       final pn = <String, String>{};
+      final ty = <String, String>{};
       for (final m in _list(d)) {
         final id = pick(m, ['id', 'productId']);
         if (id.isEmpty) continue;
         pt[id] = pick(m, ['partType']);
+        ty[id] = pick(m, ['typeName']);
         final par = pick(m, ['parentProductId']);
         if (par.isNotEmpty) pn[id] = names[par] ?? '';
       }
@@ -377,6 +380,7 @@ class _AuditPageState extends State<AuditPage> {
           _imgById = byId;
           _ptById = pt;
           _parentNameById = pn;
+          _typeById = ty;
         });
       }
     } catch (_) {}
@@ -1214,6 +1218,7 @@ class _AuditPageState extends State<AuditPage> {
           'ອາໄຫຼ່ຫຼັກ',
           'ປະເພດອາໄຫຼ່',
           'Branch',
+          'ປະເພດສິນຄ້າ',
           'brand',
           'model',
           'image',
@@ -1236,7 +1241,7 @@ class _AuditPageState extends State<AuditPage> {
         if (t != null) {
           images.add(XlImage(
               row: rows.length,
-              col: 7,
+              col: 8,
               key: u,
               bytes: t[0] as Uint8List,
               w: t[1] as int,
@@ -1249,6 +1254,7 @@ class _AuditPageState extends State<AuditPage> {
           _parentName(id),
           _partTypeLabel(id),
           _branchName,
+          _typeName(id),
           pick(inf, ['brandName']),
           pick(inf, ['modelName']),
           '',
@@ -1264,7 +1270,7 @@ class _AuditPageState extends State<AuditPage> {
         fileName: '${_h['countNo'] ?? 'count'}.xlsx',
         rows: rows,
         boldRows: {0},
-        widths: [10, 9, 16, 12, 12, 11.3, 14, 10, 70, 18, 8, 12, 12],
+        widths: [10, 9, 16, 12, 12, 14, 11.3, 14, 10, 70, 18, 8, 12, 12],
         images: images,
         rowHeights: heights,
         pageHeader: '&L Lao Development Bank&C&Bນັບສະຕັອກ $cn&B&R$br • $date',
@@ -1441,6 +1447,12 @@ class _AuditPageState extends State<AuditPage> {
   String _parentName(String id) => _parentNameById[id] ?? '';
 
   String get _branchName => '${_h['branchName'] ?? ''}';
+
+  String _typeName(String id) {
+    final t = _typeById[id] ?? '';
+    if (t.isNotEmpty) return t;
+    return pick(_info[id] ?? const <String, dynamic>{}, ['typeName']);
+  }
 
   Widget _table(List<Map<String, dynamic>> rows) {
     return SingleChildScrollView(
