@@ -3,7 +3,7 @@ import 'main_shell.dart';
 // New file: nothing existing is overwritten. Needs mobile_scanner (already in pubspec).
 import 'package:flutter/material.dart';
 import 'withdraw_page.dart';
-import 'withdraw_bill.dart';
+import 'withdraw_bill_list.dart';
 import 'request_status_page.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'api.dart';
@@ -73,42 +73,13 @@ class _TerminalInfoPageState extends State<TerminalInfoPage> {
   Map<String, dynamic> _merged(dynamic d) =>
       {...widget.terminal, if (d is Map) ...Map<String, dynamic>.from(d)};
 
-  /// Bill of the newest withdrawal made for this terminal.
+  /// Opens the bill list of this terminal (it has the create-bill button).
   Future<void> _openBill(Map<String, dynamic> m) async {
-    final bc = pick(m, ['barcode']);
-    debugPrint('[WD] bill button tapped barcode=$bc');
-    try {
-      final list = await Api.get('/withdrawals');
-      Map<String, dynamic>? found;
-      if (list is List) {
-        for (final w in list) {
-          if (w is Map && '${w['barcode'] ?? ''}' == bc) {
-            found = Map<String, dynamic>.from(w);
-            break;
-          }
-        }
-      }
-      if (!mounted) return;
-      final bill = found;
-      debugPrint('[WD] bill button: server returned ${list is List ? list.length : '?'} withdrawals, match for $bc: ${bill == null ? 'none -> open new withdrawal' : bill['withdrawNo']}');
-      if (bill == null) {
-        // no withdrawal yet: start one; saving it opens the bill
-        await Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (_) =>
-                    WithdrawPage(barcode: bc, atmId: pick(m, ['atmId']))));
-        return;
-      }
-      await Navigator.push(context,
-          MaterialPageRoute(builder: (_) => WithdrawBillPage(bill)));
-    } catch (e) {
-      debugPrint('[WD] bill button error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
-      }
-    }
+    await Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => WithdrawBillListPage(
+                barcode: pick(m, ['barcode']), atmId: pick(m, ['atmId']))));
   }
 
   // ---------------------------------------------------------- change
