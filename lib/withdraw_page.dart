@@ -4,7 +4,8 @@ import 'terminal_actions.dart' show ScanBarcodePage;
 
 /// ເບີກອາໄຫຼ່: ເລືອກສາຂາ, ສະແກນອາໄຫຼ່, ບັນທຶກເປັນລາຍການ
 class WithdrawPage extends StatefulWidget {
-  const WithdrawPage({super.key});
+  final String barcode, atmId;
+  const WithdrawPage({super.key, this.barcode = '', this.atmId = ''});
   @override
   State<WithdrawPage> createState() => _WithdrawPageState();
 }
@@ -78,6 +79,8 @@ class _WithdrawPageState extends State<WithdrawPage> {
     try {
       await Api.post('/withdrawals', {
         'branchId': _branchId,
+        if (widget.barcode.isNotEmpty) 'barcode': widget.barcode,
+        if (widget.atmId.isNotEmpty) 'atmId': widget.atmId,
         'items': [
           for (final e in _qty.entries) {'productId': e.key, 'qty': e.value}
         ],
@@ -98,6 +101,16 @@ class _WithdrawPageState extends State<WithdrawPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('ເບີກອາໄຫຼ່')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
+        if (widget.barcode.isNotEmpty)
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.memory),
+              title: Text('Terminal ${widget.barcode}'),
+              subtitle: widget.atmId.isEmpty
+                  ? null
+                  : Text('ຕູ້ ATM ${widget.atmId}'),
+            ),
+          ),
         DropdownButtonFormField<dynamic>(
           initialValue: _branches.any((b) => b['id'] == _branchId) ? _branchId : null,
           isExpanded: true,

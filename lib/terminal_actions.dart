@@ -2,6 +2,7 @@ import 'main_shell.dart';
 // Terminal info page with "Fix" and "Change terminal" actions.
 // New file: nothing existing is overwritten. Needs mobile_scanner (already in pubspec).
 import 'package:flutter/material.dart';
+import 'withdraw_page.dart';
 import 'request_status_page.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'api.dart';
@@ -305,6 +306,16 @@ class _TerminalInfoPageState extends State<TerminalInfoPage> {
                           MaterialPageRoute(
                               builder: (_) => RequestStatusPage(
                                   terminal: Map<String, dynamic>.from(m))))),
+                  if (Api.can('ISSUE') || canManage)
+                    act(
+                        Icons.outbox_outlined,
+                        'ເບີກອາໄຫຼ່ໃໝ່',
+                        () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => WithdrawPage(
+                                    barcode: pick(m, ['barcode']),
+                                    atmId: pick(m, ['atmId']))))),
                   if (canManage)
                     act(
                         Icons.swap_horiz,
