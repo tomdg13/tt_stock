@@ -209,7 +209,7 @@ CrudSpec? crudSpec(String key) {
         writePerm: 'PRODUCT_MANAGE',
         extraQuery: 'limit=100&active=1',
         titleKeys: const ['name', 'productName'],
-        subKeys: const ['typeName', 'brandName', 'code'],
+        subKeys: const ['typeName', 'brandName', 'binCodes', 'code'],
         trailKeys: const ['stock', 'qty'],
         detailPath: (r) => '/products/${_id(r)}',
         images: true,
