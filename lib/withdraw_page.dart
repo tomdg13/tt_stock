@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
+import 'product_images.dart' show productImageUrl;
 import 'withdraw_bill.dart';
 import 'terminal_actions.dart' show ScanBarcodePage, PickProductPage;
 
@@ -70,6 +71,45 @@ class _WithdrawPageState extends State<WithdrawPage> {
       _names[id] = '${row['name'] ?? id}';
       _qty[id] = (_qty[id] ?? 0) + 1;
     });
+    _loadImg(id);
+  }
+
+  /// First image of each part (GET /products/:id/images), loaded once per part.
+  final Map<String, String> _img = {};
+
+  Future<void> _loadImg(String id) async {
+    if (_img.containsKey(id)) return;
+    _img[id] = '';
+    try {
+      final d = await Api.get('/products/${Uri.encodeComponent(id)}/images');
+      if (d is List && d.isNotEmpty && d.first is Map) {
+        final u = '${(d.first as Map)['url'] ?? ''}';
+        if (mounted && u.isNotEmpty) setState(() => _img[id] = u);
+      }
+    } catch (e) {
+      debugPrint('image load failed for $id: $e');
+    }
+  }
+
+  Widget _thumb(String id) {
+    final url = productImageUrl(_img[id] ?? '');
+    final box = Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8)),
+      child: const Icon(Icons.memory, size: 24),
+    );
+    if (url.isEmpty) return box;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.network(url,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => box),
+    );
   }
 
   void _msg(String s) {
@@ -100,6 +140,7 @@ class _WithdrawPageState extends State<WithdrawPage> {
           _names[id] = p is Map ? '${p['name'] ?? id}' : id;
           _qty[id] = (_qty[id] ?? 0) + 1;
         });
+        _loadImg(id);
       } catch (e) {
         if (mounted) setState(() => _error = '$e');
         return;
@@ -204,6 +245,7 @@ class _WithdrawPageState extends State<WithdrawPage> {
         for (final id in _qty.keys)
           ListTile(
             contentPadding: EdgeInsets.zero,
+            leading: _thumb(id),
             title: Text(_names[id] ?? id),
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               IconButton(
