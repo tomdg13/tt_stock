@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'withdraw_page.dart';
+import 'withdraw_bill.dart';
 import 'main_shell.dart';
 
 /// ລາຍການເບີກ + ກວດຄືນ (ໃຊ້ແລ້ວ / ຄືນ)
@@ -92,7 +93,17 @@ class _WithdrawListPageState extends State<WithdrawListPage> {
               return ListTile(
                 title: Text('${w['withdrawNo'] ?? w['id']} · ${w['branchName'] ?? ''}'),
                 subtitle: Text('${w['createdAt'] ?? ''} · ${w['status'] ?? ''}'),
-                trailing: const Icon(Icons.fact_check_outlined),
+                trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  IconButton(
+                      icon: const Icon(Icons.print_outlined),
+                      tooltip: 'ພິມໃບເບີກ',
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => WithdrawBillPage(
+                                  Map<String, dynamic>.from(w))))),
+                  const Icon(Icons.fact_check_outlined),
+                ]),
                 onTap: () => _check(w),
               );
             },

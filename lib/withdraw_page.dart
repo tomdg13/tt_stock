@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
+import 'withdraw_bill.dart';
 import 'terminal_actions.dart' show ScanBarcodePage;
 
 /// ເບີກອາໄຫຼ່: ເລືອກສາຂາ, ສະແກນອາໄຫຼ່, ບັນທຶກເປັນລາຍການ
@@ -77,7 +78,7 @@ class _WithdrawPageState extends State<WithdrawPage> {
       _error = null;
     });
     try {
-      await Api.post('/withdrawals', {
+      final r = await Api.post('/withdrawals', {
         'branchId': _branchId,
         if (widget.barcode.isNotEmpty) 'barcode': widget.barcode,
         if (widget.atmId.isNotEmpty) 'atmId': widget.atmId,
@@ -88,12 +89,35 @@ class _WithdrawPageState extends State<WithdrawPage> {
       });
       if (!mounted) return;
       _msg('ບັນທຶກລາຍການເບີກແລ້ວ');
+      await _showBill(r);
+      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// After saving: open the bill of the new withdrawal (found in GET /withdrawals).
+  Future<void> _showBill(dynamic r) async {
+    try {
+      final id = r is Map ? '${r['id']}' : '';
+      if (id.isEmpty) return;
+      final list = await Api.get('/withdrawals');
+      if (list is! List) return;
+      for (final w in list) {
+        if (w is Map && '${w['id']}' == id) {
+          if (!mounted) return;
+          await Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) =>
+                      WithdrawBillPage(Map<String, dynamic>.from(w))));
+          return;
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -165,7 +189,7 @@ class _WithdrawPageState extends State<WithdrawPage> {
           height: 48,
           child: FilledButton(
               onPressed: _busy ? null : _save,
-              child: const Text('ບັນທຶກການເບີກ')),
+              child: const Text('ສ້າງໃບເບີກ')),
         ),
       ]),
     );
