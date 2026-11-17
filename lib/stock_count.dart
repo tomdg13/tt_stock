@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'image_search.dart' show SearchTools;
 import 'api.dart';
 import 'screens.dart' show BarcodeScanPage;
 import 'dart:typed_data';
@@ -300,6 +301,13 @@ class _AuditPageState extends State<AuditPage> {
   Map<String, String> _imgById = {};
   Map<String, Map<String, dynamic>> _info = {};
   String _q = '';
+  final _qc = TextEditingController();
+
+  @override
+  void dispose() {
+    _qc.dispose();
+    super.dispose();
+  }
   int _tab = 1;
   int _filter = 0; // 0 all, 1 not counted, 2 counted, 3 differences
   bool _busy = true;
@@ -707,9 +715,23 @@ class _AuditPageState extends State<AuditPage> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                     child: TextField(
-                      decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.search),
-                          labelText: 'ຄົ້ນຫາອາໄຫຼ່'),
+                      controller: _qc,
+                      decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.search),
+                          labelText: 'ຄົ້ນຫາອາໄຫຼ່',
+                          suffixIcon:
+                              Row(mainAxisSize: MainAxisSize.min, children: [
+                            SearchTools(onResult: (v) {
+                              _qc.text = v;
+                              setState(() => _q = v);
+                            }),
+                            IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  _qc.clear();
+                                  setState(() => _q = '');
+                                }),
+                          ])),
                       onChanged: (v) => setState(() => _q = v),
                     ),
                   ),
