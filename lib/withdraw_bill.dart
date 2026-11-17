@@ -20,6 +20,13 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
   final _key = GlobalKey();
   bool _busy = false;
 
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.data;
+    debugPrint('[WD] bill page open: no=${d['withdrawNo']} id=${d['id']} branch=${d['branchName']} barcode=${d['barcode']} atm=${d['atmId']} items=${(d['items'] as List?)?.length ?? 0}');
+  }
+
   String get _name => '${widget.data['withdrawNo'] ?? 'withdraw'}';
 
   static String _s(dynamic v) => v == null ? '' : '$v';
@@ -52,8 +59,11 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
   Future<void> _run(Future<void> Function(Uint8List) fn) async {
     setState(() => _busy = true);
     try {
+      debugPrint('[WD] bill: building PDF image');
       await fn(await _pdf());
+      debugPrint('[WD] bill: print/share done');
     } catch (e) {
+      debugPrint('[WD] bill: PDF/print FAILED: $e');
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('$e')));

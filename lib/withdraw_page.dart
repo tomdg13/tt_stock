@@ -23,7 +23,9 @@ class _WithdrawPageState extends State<WithdrawPage> {
   @override
   void initState() {
     super.initState();
+    debugPrint('[WD] page open barcode=${widget.barcode} atmId=${widget.atmId}');
     Api.get('/repair/branches').then((d) {
+      debugPrint('[WD] branches loaded: ${d is List ? d.length : d}');
       if (!mounted) return;
       setState(() => _branches = d is List ? d : []);
     });
@@ -35,6 +37,7 @@ class _WithdrawPageState extends State<WithdrawPage> {
   }
 
   Future<void> _scan() async {
+    debugPrint('[WD] scan tapped branchId=$_branchId');
     if (_branchId == null) {
       _msg('ກະລຸນາເລືອກສາຂາກ່ອນ');
       return;
@@ -43,11 +46,13 @@ class _WithdrawPageState extends State<WithdrawPage> {
     while (mounted) {
       final raw = await nav.push<String>(
           MaterialPageRoute(builder: (_) => const ScanBarcodePage()));
+      debugPrint('[WD] scanner returned raw=$raw');
       if (raw == null || raw.trim().isEmpty || !mounted) return;
       try {
         final r = await Api.get(
             '/products/by-barcode/${Uri.encodeComponent(raw.trim())}');
         final id = r is Map && r['productId'] != null ? '${r['productId']}' : '';
+        debugPrint('[WD] by-barcode result=$r -> productId=$id');
         if (id.isEmpty) {
           _msg('ບໍ່ພົບສິນຄ້າ: $raw');
           continue;
@@ -58,6 +63,7 @@ class _WithdrawPageState extends State<WithdrawPage> {
           _qty[id] = (_qty[id] ?? 0) + 1;
         });
       } catch (e) {
+        debugPrint('[WD] scan FAILED: $e');
         if (mounted) setState(() => _error = '$e');
         return;
       }
@@ -65,11 +71,14 @@ class _WithdrawPageState extends State<WithdrawPage> {
   }
 
   Future<void> _save() async {
+    debugPrint('[WD] save tapped branchId=$_branchId parts=$_qty barcode=${widget.barcode} atmId=${widget.atmId}');
     if (_branchId == null) {
+      debugPrint('[WD] save blocked: no branch chosen');
       setState(() => _error = 'ກະລຸນາເລືອກສາຂາກ່ອນ');
       return;
     }
     if (_qty.isEmpty) {
+      debugPrint('[WD] save blocked: no parts added');
       setState(() => _error = 'ຍັງບໍ່ໄດ້ເລືອກອາໄຫຼ່');
       return;
     }
@@ -89,10 +98,12 @@ class _WithdrawPageState extends State<WithdrawPage> {
       });
       if (!mounted) return;
       _msg('ບັນທຶກລາຍການເບີກແລ້ວ');
+      debugPrint('[WD] POST /withdrawals response=$r');
       await _showBill(r);
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
+      debugPrint('[WD] save FAILED: $e');
       if (mounted) setState(() => _error = '$e');
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -103,9 +114,16 @@ class _WithdrawPageState extends State<WithdrawPage> {
   Future<void> _showBill(dynamic r) async {
     try {
       final id = r is Map ? '${r['id']}' : '';
-      if (id.isEmpty) return;
+      debugPrint('[WD] showBill: response id=$id');
+      if (id.isEmpty) {
+        debugPrint('[WD] showBill: no id in response, no bill');
+        return;
+      }
       final list = await Api.get('/withdrawals');
-      if (list is! List) return;
+      if (list is! List) {
+        debugPrint('[WD] showBill: /withdrawals is not a list: $list');
+        return;
+      }
       for (final w in list) {
         if (w is Map && '${w['id']}' == id) {
           if (!mounted) return;
@@ -117,7 +135,10 @@ class _WithdrawPageState extends State<WithdrawPage> {
           return;
         }
       }
-    } catch (_) {}
+      debugPrint('[WD] showBill: withdrawal $id not found in list of ${list.length}');
+    } catch (e) {
+      debugPrint('[WD] showBill error: $e');
+    }
   }
 
   @override
