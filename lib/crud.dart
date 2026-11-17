@@ -59,6 +59,7 @@ class FieldSpec {
   final String?
       nameKey; // row key holding the option label (used when the id is missing)
   final String? imageKey; // row key with a picture: the dropdown shows a thumbnail
+  final String? matchKey; // form field (key) with a list: options must share one value with it
   const FieldSpec(
     this.key,
     this.label, {
@@ -75,6 +76,7 @@ class FieldSpec {
     this.requiredUnless,
     this.nameKey,
     this.imageKey,
+    this.matchKey,
   });
 }
 
@@ -474,6 +476,7 @@ class _CrudFormState extends State<CrudForm> {
   final _v = <String, dynamic>{};
   final _opts = <String, List<Opt>>{};
   final _optImgs = <String, Map<String, String>>{}; // field key -> option value -> image
+  final _optModels = <String, Map<String, Set<String>>>{}; // field key -> option value -> model ids
   final _json = TextEditingController();
   final _imgs = ProductImagesController();
   final _bcs = ProductBarcodesController();
@@ -544,12 +547,18 @@ class _CrudFormState extends State<CrudForm> {
             Api.get(f.optionsPath!).then((d) {
               if (!mounted) return;
               final im = <String, String>{};
+              final ms = <String, Set<String>>{};
               for (final r in asList(d)) {
                 final id = '${r[f.optionValue] ?? r['id'] ?? ''}';
                 final img = '${r[f.imageKey!] ?? ''}';
                 if (id.isNotEmpty && img.isNotEmpty) im[id] = img;
+                final mi = r['modelIds'];
+                if (id.isNotEmpty && mi is List) ms[id] = {for (final x in mi) '$x'};
               }
-              setState(() => _optImgs[f.key] = im);
+              setState(() {
+                _optImgs[f.key] = im;
+                _optModels[f.key] = ms;
+              });
             }).catchError((_) {});
           }
         }
@@ -592,11 +601,25 @@ class _CrudFormState extends State<CrudForm> {
       isScrollControlled: true,
       builder: (c) {
         var q = '';
+        var all = false;
         return StatefulBuilder(builder: (c, setS) {
           final t = q.trim().toUpperCase();
+          final mine = f.matchKey == null
+              ? <String>{}
+              : {
+                  for (final x in (_v[f.matchKey!] as List? ?? const [])) '$x'
+                };
+          final models = _optModels[f.key] ?? const <String, Set<String>>{};
+          final filtering = f.matchKey != null && mine.isNotEmpty && !all;
+          final base = filtering
+              ? o.where((e) {
+                  final ms = models['${e.key}'];
+                  return ms == null || ms.any(mine.contains);
+                }).toList()
+              : o;
           final list = t.isEmpty
-              ? o
-              : o.where((e) => e.value.toUpperCase().contains(t)).toList();
+              ? base
+              : base.where((e) => e.value.toUpperCase().contains(t)).toList();
           return Padding(
             padding:
                 EdgeInsets.only(bottom: MediaQuery.of(c).viewInsets.bottom),
@@ -615,6 +638,21 @@ class _CrudFormState extends State<CrudForm> {
                 ),
                 Expanded(
                   child: ListView(children: [
+                    if (f.matchKey != null && mine.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
+                        child: Row(children: [
+                          Expanded(
+                              child: Text(
+                                  all
+                                      ? 'ສະແດງອາໄຫຼ່ເຕັມທັງໝົດ'
+                                      : 'ສະແດງສະເພາະອາໄຫຼ່ເຕັມທີ່ຕົງກັບ MODEL ຂອງອາໄຫຼ່ນີ້',
+                                  style: const TextStyle(fontSize: 12))),
+                          TextButton(
+                              onPressed: () => setS(() => all = !all),
+                              child: Text(all ? 'ສະເພາະ MODEL' : 'ສະແດງທັງໝົດ')),
+                        ]),
+                      ),
                     if (!_req(f))
                       ListTile(
                           title: const Text('-'),

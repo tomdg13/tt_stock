@@ -20,12 +20,6 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
   final _key = GlobalKey();
   bool _busy = false;
 
-  @override
-  void initState() {
-    super.initState();
-    final d = widget.data;
-  }
-
   String get _name => '${widget.data['withdrawNo'] ?? 'withdraw'}';
 
   static String _s(dynamic v) => v == null ? '' : '$v';

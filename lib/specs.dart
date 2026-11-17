@@ -233,6 +233,7 @@ CrudSpec? crudSpec(String key) {
               type: FT.select,
               optionsPath: '/products?partType=FULL&active=1&limit=1000',
               imageKey: 'imageUrl',
+              matchKey: 'modelIds',
               hideIf: ('partType', 'FULL'),
               required: false),
           FieldSpec('unit', 'ຫົວໜ່ວຍ'),
