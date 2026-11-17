@@ -234,7 +234,7 @@ CrudSpec? crudSpec(String key) {
               optionsPath: '/products?partType=FULL&active=1&limit=1000',
               imageKey: 'imageUrl',
               hideIf: ('partType', 'FULL'),
-              requiredUnless: ('partType', 'FULL')),
+              required: false),
           FieldSpec('unit', 'ຫົວໜ່ວຍ'),
           FieldSpec('minQty', 'ຈຳນວນຕ່ຳສຸດ', type: FT.number),
           FieldSpec('cost', 'ຕົ້ນທຶນ (₭)', type: FT.number),
