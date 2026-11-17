@@ -12,6 +12,7 @@ import 'lao.dart';
 import 'pages.dart';
 import 'product_images.dart';
 import 'product_barcodes.dart';
+import 'product_bins.dart';
 import 'type_image.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -76,6 +77,7 @@ class CrudSpec {
   final List<RowAction> actions;
   final bool images; // show the image picker in the form
   final bool barcodes; // barcode list in the form
+  final bool bins; // many bins (locations) in the form
   final bool typeImage; // single picture (terminal type form)
   const CrudSpec({
     required this.title,
@@ -97,6 +99,7 @@ class CrudSpec {
     this.actions = const [],
     this.images = false,
     this.barcodes = false,
+    this.bins = false,
     this.typeImage = false,
   });
 
@@ -451,6 +454,7 @@ class _CrudFormState extends State<CrudForm> {
   final _json = TextEditingController();
   final _imgs = ProductImagesController();
   final _bcs = ProductBarcodesController();
+  final _bins = ProductBinsController();
   final _timg = TypeImageController();
   bool _jsonMode = false, _busy = false;
   String? _error;
@@ -667,6 +671,17 @@ class _CrudFormState extends State<CrudForm> {
         } else {
           try {
             await _bcs.apply(savedId);
+          } catch (e) {
+            imgErr = '$e';
+          }
+        }
+      }
+      if (sp.bins && _bins.dirty) {
+        if (savedId.isEmpty) {
+          imgErr = 'ບໍ່ພົບ id';
+        } else {
+          try {
+            await _bins.apply(savedId);
           } catch (e) {
             imgErr = '$e';
           }
@@ -933,6 +948,13 @@ class _CrudFormState extends State<CrudForm> {
                 _field(f),
                 const SizedBox(height: 12)
               ],
+            if (widget.spec.bins && !_jsonMode) ...[
+              ProductBinsEditor(
+                productId: _editing ? widget.spec.idOf(widget.row!) : null,
+                controller: _bins,
+              ),
+              const SizedBox(height: 12),
+            ],
             if (widget.spec.barcodes && !_jsonMode) ...[
               ProductBarcodesEditor(
                 productId: _editing ? widget.spec.idOf(widget.row!) : null,
