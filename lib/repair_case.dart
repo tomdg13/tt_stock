@@ -668,11 +668,11 @@ class _RepairStepFormState extends State<RepairStepForm> {
     }
   }
 
-  Future<bool> _confirmStep4() async {
+  Future<bool> _confirmInstall() async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('ຢືນຢັນຂັ້ນ 4'),
+        title: const Text('ຢືນຢັນຂັ້ນ 3'),
         content: const Text(
             'ຈະຕັດສະຕັອກອາໄຫຼ່ຂອງເຄດນີ້ຈາກ Head Office ແລະຕິດຕັ້ງ terminal ຄືນເຂົ້າຕູ້ (In Use). ດຳເນີນການຕໍ່ບໍ?'),
         actions: [
@@ -694,7 +694,7 @@ class _RepairStepFormState extends State<RepairStepForm> {
       return;
     }
     if (widget.stepNo == 3) {
-      final ok = await _confirmStep4();
+      final ok = await _confirmInstall();
       if (ok == false || !mounted) return;
     }
     setState(() {
