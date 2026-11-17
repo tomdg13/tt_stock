@@ -300,6 +300,8 @@ class _AuditPageState extends State<AuditPage> {
   Map<String, dynamic> _h = {};
   List<Map<String, dynamic>> _lines = [];
   Map<String, String> _imgById = {};
+  Map<String, String> _ptById = {}; // productId -> FULL / PARTIAL
+  Map<String, String> _parentNameById = {}; // productId -> full part name
   Map<String, Map<String, dynamic>> _info = {};
   String _q = '';
   final _qc = TextEditingController();
@@ -357,7 +359,26 @@ class _AuditPageState extends State<AuditPage> {
         final id = pick(m, ['id', 'productId']);
         if (img.isNotEmpty && id.isNotEmpty) byId[id] = img;
       }
-      if (mounted) setState(() => _imgById = byId);
+      final names = <String, String>{
+        for (final m in _list(d))
+          pick(m, ['id', 'productId']): pick(m, ['name', 'productName'])
+      };
+      final pt = <String, String>{};
+      final pn = <String, String>{};
+      for (final m in _list(d)) {
+        final id = pick(m, ['id', 'productId']);
+        if (id.isEmpty) continue;
+        pt[id] = pick(m, ['partType']);
+        final par = pick(m, ['parentProductId']);
+        if (par.isNotEmpty) pn[id] = names[par] ?? '';
+      }
+      if (mounted) {
+        setState(() {
+          _imgById = byId;
+          _ptById = pt;
+          _parentNameById = pn;
+        });
+      }
     } catch (_) {}
     try {
       final d = await Api.get('/stock/balances?branchId=$branchId&limit=2000');
@@ -1190,6 +1211,9 @@ class _AuditPageState extends State<AuditPage> {
         [
           'productId',
           'ທີ່ເກັບ',
+          'ອາໄຫຼ່ຫຼັກ',
+          'ປະເພດອາໄຫຼ່',
+          'Branch',
           'brand',
           'model',
           'image',
@@ -1212,7 +1236,7 @@ class _AuditPageState extends State<AuditPage> {
         if (t != null) {
           images.add(XlImage(
               row: rows.length,
-              col: 4,
+              col: 7,
               key: u,
               bytes: t[0] as Uint8List,
               w: t[1] as int,
@@ -1222,6 +1246,9 @@ class _AuditPageState extends State<AuditPage> {
         rows.add([
           int.tryParse(id) ?? 0,
           pick(inf, ['binCode']),
+          _parentName(id),
+          _partTypeLabel(id),
+          _branchName,
           pick(inf, ['brandName']),
           pick(inf, ['modelName']),
           '',
@@ -1237,7 +1264,7 @@ class _AuditPageState extends State<AuditPage> {
         fileName: '${_h['countNo'] ?? 'count'}.xlsx',
         rows: rows,
         boldRows: {0},
-        widths: [10, 9, 11.3, 14, 10, 70, 18, 8, 12, 12],
+        widths: [10, 9, 16, 12, 12, 11.3, 14, 10, 70, 18, 8, 12, 12],
         images: images,
         rowHeights: heights,
         pageHeader: '&L Lao Development Bank&C&Bນັບສະຕັອກ $cn&B&R$br • $date',
@@ -1404,6 +1431,17 @@ class _AuditPageState extends State<AuditPage> {
     }
   }
 
+  String _partTypeLabel(String id) {
+    final t = _ptById[id] ?? '';
+    if (t == 'PARTIAL') return 'ອາໄຫຼ່ຍ່ອຍ';
+    if (t == 'FULL') return 'ອາໄຫຼ່ເຕັມ';
+    return '';
+  }
+
+  String _parentName(String id) => _parentNameById[id] ?? '';
+
+  String get _branchName => '${_h['branchName'] ?? ''}';
+
   Widget _table(List<Map<String, dynamic>> rows) {
     return SingleChildScrollView(
       child: SingleChildScrollView(
@@ -1416,6 +1454,9 @@ class _AuditPageState extends State<AuditPage> {
           columns: const [
             DataColumn(label: Text('ລາຍການ')),
             DataColumn(label: Text('ທີ່ເກັບ')),
+            DataColumn(label: Text('ອາໄຫຼ່ຫຼັກ')),
+            DataColumn(label: Text('ປະເພດ')),
+            DataColumn(label: Text('Branch')),
             DataColumn(label: Text('ໃນລະບົບ'), numeric: true),
             DataColumn(label: Text('ນັບໄດ້'), numeric: true),
             DataColumn(label: Text('ຕ່າງ'), numeric: true),
@@ -1433,6 +1474,9 @@ class _AuditPageState extends State<AuditPage> {
                     child: Text(pick(r, ['productName']),
                         maxLines: 2, overflow: TextOverflow.ellipsis))),
                 DataCell(Text(pick(inf, ['binCode']))),
+                DataCell(Text(_parentName('${r['productId']}'))),
+                DataCell(Text(_partTypeLabel('${r['productId']}'))),
+                DataCell(Text(_branchName)),
                 DataCell(Text(_s(sys))),
                 DataCell(Text(c == null ? '-' : _s(c))),
                 DataCell(Text(
