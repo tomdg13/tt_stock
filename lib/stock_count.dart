@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'image_search.dart' show SearchTools;
 import 'api.dart';
@@ -306,6 +307,7 @@ class _AuditPageState extends State<AuditPage> {
   @override
   void dispose() {
     _qc.dispose();
+    _mt?.cancel();
     super.dispose();
   }
   int _tab = 1;
@@ -479,6 +481,76 @@ class _AuditPageState extends State<AuditPage> {
     }
     final n = num.tryParse(v.trim());
     if (n != null && n >= 0) await _setQty(r, n);
+  }
+
+  Timer? _mt;
+  int _mseq = 0;
+  List<Map<String, dynamic>> _matches = [];
+
+  void _onQ(String v) {
+    setState(() => _q = v);
+    _mt?.cancel();
+    final t = v.trim();
+    if (!_isOpen || t.length < 2) {
+      if (_matches.isNotEmpty) setState(() => _matches = []);
+      return;
+    }
+    _mt = Timer(const Duration(milliseconds: 350), () async {
+      final my = ++_mseq;
+      try {
+        final d = await Api.get(
+            '/products?q=${Uri.encodeComponent(t)}&limit=15&active=1');
+        if (!mounted || my != _mseq) return;
+        final inAudit = _lines.map((r) => '${r['productId']}').toSet();
+        setState(() => _matches = [
+              for (final m in _list(d))
+                if (!inAudit.contains(pick(m, ['id', 'productId']))) m
+            ]);
+      } catch (_) {}
+    });
+  }
+
+  /// Products that match the search but are not in this count yet.
+  Widget _matchesBox() {
+    if (_matches.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Text('ຍັງບໍ່ຢູ່ໃນການນັບ - ແຕະເພື່ອເພີ່ມ',
+                    style:
+                        TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              ),
+              for (final m in _matches.take(3))
+                ListTile(
+                  dense: true,
+                  title: Text(pick(m, ['name', 'productName'])),
+                  subtitle: Text([
+                    pick(m, ['typeName']),
+                    pick(m, ['brandName']),
+                    pick(m, ['binCodes']),
+                  ].where((e) => e.isNotEmpty).join(' · ')),
+                  trailing: const Icon(Icons.add_circle_outline),
+                  onTap: () async {
+                    final pid = pick(m, ['id', 'productId']);
+                    final nm = pick(m, ['name', 'productName']);
+                    _qc.clear();
+                    setState(() {
+                      _q = '';
+                      _matches = [];
+                    });
+                    await _addProductToAudit(pid, name: nm);
+                  },
+                ),
+            ]),
+      ),
+    );
   }
 
   Future<void> _addProductToAudit(String pid,
@@ -851,18 +923,19 @@ class _AuditPageState extends State<AuditPage> {
                               Row(mainAxisSize: MainAxisSize.min, children: [
                             SearchTools(onResult: (v) {
                               _qc.text = v;
-                              setState(() => _q = v);
+                              _onQ(v);
                             }),
                             IconButton(
                                 icon: const Icon(Icons.clear),
                                 onPressed: () {
                                   _qc.clear();
-                                  setState(() => _q = '');
+                                  _onQ('');
                                 }),
                           ])),
-                      onChanged: (v) => setState(() => _q = v),
+                      onChanged: _onQ,
                     ),
                   ),
+                  _matchesBox(),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                     child: SingleChildScrollView(
