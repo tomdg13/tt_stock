@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'withdraw_bill.dart';
-import 'terminal_actions.dart' show ScanBarcodePage;
+import 'terminal_actions.dart' show ScanBarcodePage, PickProductPage;
 
 /// ເບີກອາໄຫຼ່: ເລືອກສາຂາ, ສະແກນອາໄຫຼ່, ບັນທຶກເປັນລາຍການ
 class WithdrawPage extends StatefulWidget {
@@ -23,9 +23,52 @@ class _WithdrawPageState extends State<WithdrawPage> {
   @override
   void initState() {
     super.initState();
+    _loadTerm();
     Api.get('/repair/branches').then((d) {
       if (!mounted) return;
       setState(() => _branches = d is List ? d : []);
+    });
+  }
+
+  Map<String, dynamic> _term = {};
+  Map<String, dynamic> _atm = {};
+
+  /// Terminal + ATM data: the part list is filtered by terminal type / ATM brand / model.
+  Future<void> _loadTerm() async {
+    if (widget.barcode.isEmpty) return;
+    try {
+      final t =
+          await Api.get('/terminals/${Uri.encodeComponent(widget.barcode)}');
+      if (t is Map) _term = Map<String, dynamic>.from(t);
+      final atmId =
+          widget.atmId.isNotEmpty ? widget.atmId : '${_term['atmId'] ?? ''}';
+      if (atmId.isNotEmpty) {
+        final a = await Api.get('/atms/${Uri.encodeComponent(atmId)}');
+        if (a is Map) _atm = Map<String, dynamic>.from(a);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _pick() async {
+    if (_branchId == null) {
+      _msg('ກະລຸນາເລືອກສາຂາກ່ອນ');
+      return;
+    }
+    final row = await Navigator.push<Map<String, dynamic>>(
+        context,
+        MaterialPageRoute(
+            builder: (_) => PickProductPage(
+                branchId: _branchId,
+                terminalType: '${_term['typeName'] ?? ''}',
+                terminalTypeId: '${_term['typeId'] ?? ''}',
+                terminal: _term,
+                atm: _atm)));
+    if (row == null || !mounted) return;
+    final id = '${row['id'] ?? row['productId'] ?? ''}';
+    if (id.isEmpty) return;
+    setState(() {
+      _names[id] = '${row['name'] ?? id}';
+      _qty[id] = (_qty[id] ?? 0) + 1;
     });
   }
 
@@ -80,6 +123,7 @@ class _WithdrawPageState extends State<WithdrawPage> {
     try {
       final r = await Api.post('/withdrawals', {
         'branchId': _branchId,
+        if (widget.barcode.isNotEmpty) 'draft': true,
         if (widget.barcode.isNotEmpty) 'barcode': widget.barcode,
         if (widget.atmId.isNotEmpty) 'atmId': widget.atmId,
         'items': [
@@ -88,7 +132,9 @@ class _WithdrawPageState extends State<WithdrawPage> {
         if (_note.text.trim().isNotEmpty) 'note': _note.text.trim(),
       });
       if (!mounted) return;
-      _msg('ບັນທຶກລາຍການເບີກແລ້ວ');
+      _msg(widget.barcode.isNotEmpty
+          ? 'ສ້າງໃບເບີກແລ້ວ (ຍັງບໍ່ຕັດສະຕັອກ)'
+          : 'ບັນທຶກລາຍການເບີກແລ້ວ');
       await _showBill(r);
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -180,6 +226,12 @@ class _WithdrawPageState extends State<WithdrawPage> {
           icon: const Icon(Icons.qr_code_scanner),
           label: const Text('ສະແກນ'),
           onPressed: (_busy || _branchId == null) ? null : _scan,
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.list_alt),
+          label: const Text('ເລືອກອາໄຫຼ່ຈາກລາຍການ'),
+          onPressed: (_busy || _branchId == null) ? null : _pick,
         ),
         const SizedBox(height: 12),
         TextField(

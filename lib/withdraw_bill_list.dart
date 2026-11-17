@@ -111,10 +111,13 @@ class _WithdrawBillListPageState extends State<WithdrawBillListPage> {
                   subtitle: Text(
                       '${_when(w['createdAt'])} · ${w['status'] ?? ''} · $n ລາຍການ'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => WithdrawBillPage(w))),
+                  onTap: () async {
+                    await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => WithdrawBillPage(w)));
+                    if (mounted) _reload();
+                  },
                 );
               },
             );

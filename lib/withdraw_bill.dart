@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'api.dart';
 
 /// ໃບເບີກອາໄຫຼ່: one withdrawal as a bill, print or share as PDF.
 /// [data] = one row of GET /withdrawals (withdrawNo, branchName, createdAt,
@@ -17,12 +18,21 @@ class WithdrawBillPage extends StatefulWidget {
 }
 
 class _WithdrawBillPageState extends State<WithdrawBillPage> {
+  late Map<String, dynamic> _d = widget.data;
   final _key = GlobalKey();
   bool _busy = false;
 
-  String get _name => '${widget.data['withdrawNo'] ?? 'withdraw'}';
+  String get _name => '${_d['withdrawNo'] ?? 'withdraw'}';
 
   static String _s(dynamic v) => v == null ? '' : '$v';
+
+  static String _stLabel(String st) => st == 'requested'
+      ? 'ລໍຖ້າອະນຸມັດ (ຍັງບໍ່ຕັດສະຕັອກ)'
+      : st == 'open'
+          ? 'ອະນຸມັດແລ້ວ (ຕັດສະຕັອກແລ້ວ)'
+          : st == 'closed'
+              ? 'ປິດແລ້ວ'
+              : st;
 
   static String _when(dynamic v) {
     final s = _s(v);
@@ -63,8 +73,52 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
     }
   }
 
+  Future<void> _approve() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('ອະນຸມັດເບີກ'),
+        content: const Text('ຈະຕັດສະຕັອກອາໄຫຼ່ຕາມໃບນີ້ທັນທີ. ດຳເນີນການຕໍ່ບໍ?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('ຍົກເລີກ')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('ຢືນຢັນ')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    try {
+      await Api.post('/withdrawals/${_d['id']}/approve', {});
+      final list = await Api.get('/withdrawals');
+      if (list is List) {
+        for (final w in list) {
+          if (w is Map && '${w['id']}' == '${_d['id']}') {
+            _d = Map<String, dynamic>.from(w);
+            break;
+          }
+        }
+      }
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('ອະນຸມັດແລ້ວ ຕັດສະຕັອກແລ້ວ')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Widget _sheet() {
-    final d = widget.data;
+    final d = _d;
     final items = d['items'] is List ? d['items'] as List : const [];
     const base = TextStyle(color: Colors.black, fontSize: 14, height: 1.4);
     const bold = TextStyle(
@@ -121,6 +175,7 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
               kv('ວັນທີ', _when(d['createdAt'])),
               kv('ສາຂາ', _s(d['branchName'])),
               kv('ຜູ້ບັນທຶກ', _s(d['createdBy'])),
+              kv('ສະຖານະ', _stLabel(_s(d['status']))),
               if (atm.isNotEmpty) kv('ຕູ້ ATM', atm),
               if (bc.isNotEmpty) kv('Terminal', bc),
               const SizedBox(height: 12),
@@ -163,10 +218,24 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
       appBar: AppBar(title: Text('ໃບເບີກອາໄຫຼ່ · $_name')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(12),
-        child: FittedBox(
-          fit: BoxFit.fitWidth,
-          child: RepaintBoundary(key: _key, child: _sheet()),
-        ),
+        child: Column(children: [
+          FittedBox(
+            fit: BoxFit.fitWidth,
+            child: RepaintBoundary(key: _key, child: _sheet()),
+          ),
+          if ('${_d['status']}' == 'requested') ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: FilledButton.icon(
+                onPressed: _busy ? null : _approve,
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('ອະນຸມັດເບີກ (ຕັດສະຕັອກ)'),
+              ),
+            ),
+          ],
+        ]),
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(

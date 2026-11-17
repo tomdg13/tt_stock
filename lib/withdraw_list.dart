@@ -17,6 +17,14 @@ class _WithdrawListPageState extends State<WithdrawListPage> {
   void _reload() => setState(() => _f = Api.get('/withdrawals'));
 
   Future<void> _check(Map w) async {
+    if ('${w['status']}' == 'requested') {
+      await Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => WithdrawBillPage(Map<String, dynamic>.from(w))));
+      if (mounted) _reload();
+      return;
+    }
     final items = (w['items'] as List? ?? []).cast<Map>();
     final used = {for (final i in items) '${i['id']}': TextEditingController(text: '${i['qtyUsed'] ?? 0}')};
     final ret = {for (final i in items) '${i['id']}': TextEditingController(text: '${i['qtyReturned'] ?? 0}')};
