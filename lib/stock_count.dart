@@ -481,6 +481,123 @@ class _AuditPageState extends State<AuditPage> {
     if (n != null && n >= 0) await _setQty(r, n);
   }
 
+  Future<void> _addProductToAudit(String pid,
+      {bool ask = false, String name = ''}) async {
+    if (!_isOpen) return;
+    if (ask) {
+      final head = name.isEmpty ? '' : '$name\n';
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (d) => AlertDialog(
+          title: const Text('ເພີ່ມເຂົ້າການນັບ?'),
+          content: Text(
+              '${head}ອາໄຫຼ່ນີ້ຍັງບໍ່ຢູ່ໃນການນັບ. ເພີ່ມເຂົ້າການນັບແລ້ວໃສ່ຈຳນວນ?'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(d, false),
+                child: const Text('ຍົກເລີກ')),
+            FilledButton(
+                onPressed: () => Navigator.pop(d, true),
+                child: const Text('ເພີ່ມ')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    try {
+      await Api.post('/stock/audits/${widget.auditId}/lines',
+          {'productId': int.tryParse(pid) ?? pid});
+      await _load();
+      final hit = _lines.where((r) => '${r['productId']}' == pid).toList();
+      if (hit.isNotEmpty && mounted) await _askQty(hit.first);
+    } catch (e) {
+      _snack('ເພີ່ມບໍ່ສຳເລັດ: $e');
+    }
+  }
+
+  /// Pick any product from the product list and add it to this count.
+  Future<void> _pickProduct() async {
+    if (!_isOpen) return;
+    late final List<Map<String, dynamic>> all;
+    try {
+      all = _list(await Api.get('/products?limit=2000&active=1'));
+    } catch (e) {
+      _snack('ໂຫຼດສິນຄ້າບໍ່ໄດ້: $e');
+      return;
+    }
+    if (!mounted) return;
+    final inAudit = _lines.map((r) => '${r['productId']}').toSet();
+    final picked = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (c) {
+        var q = '';
+        return StatefulBuilder(builder: (c, setS) {
+          final t = q.trim().toUpperCase();
+          final f = t.isEmpty
+              ? all
+              : all
+                  .where((m) =>
+                      '${m['name']} ${m['partNo'] ?? ''} ${m['binCodes'] ?? ''}'
+                          .toUpperCase()
+                          .contains(t))
+                  .toList();
+          return Padding(
+            padding:
+                EdgeInsets.only(bottom: MediaQuery.of(c).viewInsets.bottom),
+            child: SizedBox(
+              height: MediaQuery.of(c).size.height * 0.8,
+              child: Column(children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: TextField(
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        labelText: 'ຄົ້ນຫາອາໄຫຼ່ (ຊື່ / ບ່ອນເກັບ)'),
+                    onChanged: (v) => setS(() => q = v),
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: f.length,
+                    itemBuilder: (_, i) {
+                      final m = f[i];
+                      final id = pick(m, ['id', 'productId']);
+                      final sub = [
+                        pick(m, ['typeName']),
+                        pick(m, ['brandName']),
+                        pick(m, ['binCodes']),
+                      ].where((e) => e.isNotEmpty).join(' · ');
+                      return ListTile(
+                        title: Text(pick(m, ['name', 'productName'])),
+                        subtitle: sub.isEmpty ? null : Text(sub),
+                        trailing: inAudit.contains(id)
+                            ? const Text('ຢູ່ໃນການນັບແລ້ວ',
+                                style: TextStyle(fontSize: 11))
+                            : null,
+                        onTap: () => Navigator.pop(c, m),
+                      );
+                    },
+                  ),
+                ),
+              ]),
+            ),
+          );
+        });
+      },
+    );
+    if (picked == null || !mounted) return;
+    final pid = pick(picked, ['id', 'productId']);
+    final hit = _lines.where((r) => '${r['productId']}' == pid).toList();
+    if (hit.isNotEmpty) {
+      await _askQty(hit.first);
+    } else {
+      await _addProductToAudit(pid,
+          name: pick(picked, ['name', 'productName']));
+    }
+  }
+
   Future<void> _scan() async {
     final code = await Navigator.push<String>(
         context, MaterialPageRoute(builder: (_) => const BarcodeScanPage()));
@@ -494,7 +611,12 @@ class _AuditPageState extends State<AuditPage> {
           : '';
       final hit = _lines.where((r) => '${r['productId']}' == pid).toList();
       if (hit.isEmpty) {
-        _snack('ບໍ່ພົບອາໄຫຼ່ໃນການນັບນີ້: $code');
+        if (pid.isEmpty) {
+          _snack('ບໍ່ພົບສິນຄ້າ: $code');
+          return;
+        }
+        await _addProductToAudit(pid,
+            ask: true, name: pr is Map ? '${pr['name'] ?? ''}' : '');
         return;
       }
       await _askQty(hit.first);
@@ -635,6 +757,12 @@ class _AuditPageState extends State<AuditPage> {
             ),
         ],
       ),
+      floatingActionButton: _isOpen
+          ? FloatingActionButton.extended(
+              onPressed: _pickProduct,
+              icon: const Icon(Icons.add),
+              label: const Text('ເພີ່ມອາໄຫຼ່'))
+          : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab == 2 ? 2 : 1,
         onDestinationSelected: (i) {
