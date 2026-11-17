@@ -1435,7 +1435,7 @@ class _AuditPageState extends State<AuditPage> {
     final t = _ptById[id] ?? '';
     if (t == 'PARTIAL') return 'ອາໄຫຼ່ຍ່ອຍ';
     if (t == 'FULL') return 'ອາໄຫຼ່ເຕັມ';
-    return '';
+    return 'null';
   }
 
   String _parentName(String id) => _parentNameById[id] ?? '';
