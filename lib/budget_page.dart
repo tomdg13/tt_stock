@@ -29,6 +29,9 @@ class BudgetPage extends StatefulWidget {
 }
 
 class _BudgetPageState extends State<BudgetPage> {
+  bool _asTable = true; // true = table, false = old cards
+  int _sortCol = -1;
+  bool _sortAsc = true;
   final _pct = TextEditingController(text: '0');
   int _fm = 10;
   int _toYear = DateTime.now().year + 2;
@@ -533,6 +536,217 @@ class _BudgetPageState extends State<BudgetPage> {
     );
   }
 
+  Object? _itemSortKey(Map<String, dynamic> it) {
+    switch (_sortCol) {
+      case 1:
+        return pick(it, ['productName']).toLowerCase();
+      case 2:
+        return num0(it['stock']);
+      case 3:
+        return it['counted'] == null ? null : num0(it['counted']);
+      case 4:
+        return num0(it['ratePerYear']);
+      case 5:
+        return num0(it['totalBuy']);
+      case 6:
+        return pick(it, ['unit']).toLowerCase();
+      case 7:
+        return num0(it['ordered']);
+      case 8:
+        return num0(it['totalAmount']);
+    }
+    return null;
+  }
+
+  void _showItemDetail(
+      Map<String, dynamic> it, List<Map<String, dynamic>> past) {
+    final bought = (it['bought'] as List?) ?? const [];
+    final used = (it['used'] as List?) ?? const [];
+    final plan = asList(it['plan']);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (c) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(pick(it, ['productName']),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 16)),
+                const SizedBox(height: 4),
+                Text('ລາຄາຕໍ່ໜ່ວຍ ${_money(num0(it['unitCost']))}',
+                    style: const TextStyle(fontSize: 12)),
+                const SizedBox(height: 10),
+                _table([
+                  'ປີທີ່ຜ່ານມາ',
+                  'ຊື້ແລ້ວ',
+                  'ໃຊ້ໄປ'
+                ], [
+                  for (var i = 0; i < past.length; i++)
+                    [
+                      '${past[i]['label']}',
+                      i < bought.length ? _n(num0(bought[i])) : '0',
+                      i < used.length ? _n(num0(used[i])) : '0',
+                    ]
+                ]),
+                const SizedBox(height: 10),
+                _table([
+                  'ປີຕໍ່ໄປ',
+                  'ຕ້ອງໃຊ້',
+                  'ຕ້ອງຊື້',
+                  'ເງິນ'
+                ], [
+                  for (final x in plan)
+                    [
+                      '${x['label']}',
+                      _n(num0(x['need'])),
+                      _n(num0(x['buy'])),
+                      _money(num0(x['amount'])),
+                    ]
+                ]),
+              ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _itemsTable(
+      List<Map<String, dynamic>> items, List<Map<String, dynamic>> past) {
+    final cs = Theme.of(context).colorScheme;
+    const w = <double>[56, 260, 80, 90, 80, 80, 60, 90, 110];
+    const heads = <String>[
+      'ຮູບ',
+      'ລາຍການ',
+      'ສະຕັອກ',
+      'ນັບຕົວຈິງ',
+      'ໃຊ້/ປີ',
+      'ຕ້ອງຊື້',
+      'ໜ່ວຍ',
+      'PO ຄ້າງຮັບ',
+      'ເງິນ'
+    ];
+    const right = <int>{2, 3, 4, 5, 7, 8};
+    final total = w.fold<double>(0, (a, b) => a + b) + 16;
+    Widget cell(int i, Widget child) => SizedBox(
+        width: w[i],
+        child: Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Align(
+                alignment: right.contains(i)
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+                child: child)));
+    const headStyle = TextStyle(fontWeight: FontWeight.w700, fontSize: 13);
+    final sorted = [...items];
+    if (_sortCol > 0) {
+      sorted.sort((a, b) {
+        final ka = _itemSortKey(a);
+        final kb = _itemSortKey(b);
+        if (ka == null && kb == null) return 0;
+        if (ka == null) return 1; // empty values always last
+        if (kb == null) return -1;
+        final c = (ka is num && kb is num)
+            ? ka.compareTo(kb)
+            : '$ka'.compareTo('$kb');
+        return _sortAsc ? c : -c;
+      });
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SizedBox(
+        width: total,
+        child: Column(children: [
+          Container(
+            height: 40,
+            color: cs.surfaceContainerHighest,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(children: [
+              for (var i = 0; i < heads.length; i++)
+                i == 0
+                    ? cell(i, const Text('ຮູບ', style: headStyle))
+                    : InkWell(
+                        onTap: () => setState(() {
+                          _sortAsc = _sortCol == i ? !_sortAsc : true;
+                          _sortCol = i;
+                        }),
+                        child: SizedBox(
+                          width: w[i],
+                          height: 40,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Row(
+                                mainAxisAlignment: right.contains(i)
+                                    ? MainAxisAlignment.end
+                                    : MainAxisAlignment.start,
+                                children: [
+                                  Flexible(
+                                      child: Text(heads[i],
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: headStyle)),
+                                  if (_sortCol == i)
+                                    Icon(
+                                        _sortAsc
+                                            ? Icons.arrow_upward
+                                            : Icons.arrow_downward,
+                                        size: 14),
+                                ]),
+                          ),
+                        ),
+                      ),
+            ]),
+          ),
+          for (final it in sorted)
+            InkWell(
+              onTap: () => _showItemDetail(it, past),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 56),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                    border: Border(
+                        bottom: BorderSide(
+                            color: Theme.of(context).dividerColor))),
+                child: Row(children: [
+                  cell(0, _thumb(pick(it, ['imageUrl']))),
+                  cell(
+                      1,
+                      Text(pick(it, ['productName']),
+                          maxLines: 2, overflow: TextOverflow.ellipsis)),
+                  cell(2, Text(_n(num0(it['stock'])))),
+                  cell(
+                      3,
+                      Text(it['counted'] == null
+                          ? '-'
+                          : _n(num0(it['counted'])))),
+                  cell(4, Text(_n(num0(it['ratePerYear'])))),
+                  cell(
+                      5,
+                      Text(_n(num0(it['totalBuy'])),
+                          style:
+                              const TextStyle(fontWeight: FontWeight.w600))),
+                  cell(6, Text(pick(it, ['unit']))),
+                  cell(
+                      7,
+                      Text(num0(it['ordered']) > 0
+                          ? _n(num0(it['ordered']))
+                          : '-')),
+                  cell(
+                      8,
+                      Text(_money(num0(it['totalAmount'])),
+                          style:
+                              const TextStyle(fontWeight: FontWeight.bold))),
+                ]),
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
+
   Widget _result(Map<String, dynamic> d) {
     final past = asList(d['pastYears']);
     final items = asList(d['items']);
@@ -544,7 +758,27 @@ class _BudgetPageState extends State<BudgetPage> {
             padding: EdgeInsets.all(24),
             child: Center(child: Text('ບໍ່ມີຂໍ້ມູນ')))
       else
-        for (final it in items) _item(it, past),
+        ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 4),
+            child: Row(children: [
+              SegmentedButton<bool>(
+                showSelectedIcon: false,
+                style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                segments: const [
+                  ButtonSegment(value: true, label: Text('ຕາຕະລາງ')),
+                  ButtonSegment(value: false, label: Text('ບັດ')),
+                ],
+                selected: {_asTable},
+                onSelectionChanged: (v) => setState(() => _asTable = v.first),
+              ),
+            ]),
+          ),
+          if (_asTable)
+            _itemsTable(items, past)
+          else
+            for (final it in items) _item(it, past),
+        ],
     ]);
   }
 
