@@ -37,6 +37,7 @@ class _ProductBarcodesEditorState extends State<ProductBarcodesEditor> {
   @override
   void initState() {
     super.initState();
+    debugPrint('[COPY] barcode editor ready (tap a chip to copy)');
     if (widget.productId != null && widget.productId!.isNotEmpty) _load();
   }
 
@@ -198,7 +199,20 @@ class _ProductBarcodesEditorState extends State<ProductBarcodesEditor> {
   }
 
   Future<void> _copy(String text) async {
-    await Clipboard.setData(ClipboardData(text: text));
+    try {
+      debugPrint('[COPY] -> "$text" (${text.length} chars)');
+      await Clipboard.setData(ClipboardData(text: text));
+      final back = await Clipboard.getData('text/plain');
+      final status = back?.text == text ? 'OK' : 'MISMATCH';
+      debugPrint('[COPY] <- $status, clipboard now: "${back?.text}"');
+    } catch (e) {
+      debugPrint('[COPY] <- ERROR $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('ຄັດລອກບໍ່ສຳເລັດ: $e')));
+      }
+      return;
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('ຄັດລອກແລ້ວ: $text'),
@@ -257,7 +271,10 @@ class _ProductBarcodesEditorState extends State<ProductBarcodesEditor> {
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
-            onPressed: () => _copy(c.codes.join(', ')),
+            onPressed: () {
+              debugPrint('[COPY] tap on copy-all');
+              _copy(c.codes.join(', '));
+            },
             icon: const Icon(Icons.copy_all, size: 18),
             label: const Text('ຄັດລອກທັງໝົດ'),
           ),
@@ -268,21 +285,13 @@ class _ProductBarcodesEditorState extends State<ProductBarcodesEditor> {
           child: Wrap(spacing: 6, runSpacing: 6, children: [
             for (final b in c.codes)
               InputChip(
-                avatar: const Icon(Icons.qr_code_2, size: 18),
-                label: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text(b),
-                  const SizedBox(width: 6),
-                  Tooltip(
-                    message: 'ຄັດລອກ',
-                    child: InkWell(
-                      onTap: () => _copy(b),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                        child: Icon(Icons.copy, size: 16),
-                      ),
-                    ),
-                  ),
-                ]),
+                avatar: const Icon(Icons.copy, size: 18),
+                label: Text(b),
+                tooltip: 'ແຕະເພື່ອຄັດລອກ',
+                onPressed: () {
+                  debugPrint('[COPY] tap on chip "$b"');
+                  _copy(b);
+                },
                 onDeleted: () => setState(() {
                   c.codes.remove(b);
                   c.dirty = true;
