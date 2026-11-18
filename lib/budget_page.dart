@@ -32,6 +32,7 @@ class _BudgetPageState extends State<BudgetPage> {
   bool _asTable = true; // true = table, false = old cards
   int _yearsSpan = 0, _yearFrom = 0, _yearTo = 0, _pctShown = 0;
   double _yearsEff = 0;
+  int _yearsFull = 1;
   String _usageFrom = '', _usageTo = '';
   int _sortCol = -1;
   bool _sortAsc = true;
@@ -548,14 +549,16 @@ class _BudgetPageState extends State<BudgetPage> {
       case 3:
         return it['counted'] == null ? null : num0(it['counted']);
       case 4:
-        return num0(it['ratePerYear']);
+        return num0(it['need1']);
       case 5:
-        return num0(it['totalBuy']);
+        return num0(it['buy1']);
       case 6:
-        return pick(it, ['unit']).toLowerCase();
+        return num0(it['totalBuy']);
       case 7:
-        return num0(it['ordered']);
+        return pick(it, ['unit']).toLowerCase();
       case 8:
+        return num0(it['ordered']);
+      case 9:
         return num0(it['totalAmount']);
     }
     return null;
@@ -621,19 +624,20 @@ class _BudgetPageState extends State<BudgetPage> {
   Widget _itemsTable(
       List<Map<String, dynamic>> items, List<Map<String, dynamic>> past) {
     final cs = Theme.of(context).colorScheme;
-    const w = <double>[56, 260, 80, 90, 80, 80, 60, 90, 110];
-    const heads = <String>[
+    const w = <double>[56, 260, 80, 90, 110, 110, 100, 60, 90, 110];
+    final heads = <String>[
       'ຮູບ',
       'ລາຍການ',
       'ສະຕັອກ',
       'ນັບຕົວຈິງ',
-      'ໃຊ້/ປີ',
-      'ຕ້ອງຊື້',
+      'ໃຊ້/1 ປີ +$_pctShown%',
+      'ຕ້ອງຊື້ 1 ປີ',
+      'ຕ້ອງຊື້ ທັງໝົດ',
       'ໜ່ວຍ',
       'PO ຄ້າງຮັບ',
       'ເງິນ'
     ];
-    const right = <int>{2, 3, 4, 5, 7, 8};
+    const right = <int>{2, 3, 4, 5, 6, 8, 9};
     final total = w.fold<double>(0, (a, b) => a + b) + 16;
     Widget cell(int i, Widget child) => SizedBox(
         width: w[i],
@@ -727,20 +731,21 @@ class _BudgetPageState extends State<BudgetPage> {
                       Text(it['counted'] == null
                           ? '-'
                           : _n(num0(it['counted'])))),
-                  cell(4, Text(_n(num0(it['ratePerYear'])))),
+                  cell(4, Text(_n(num0(it['need1'])))),
                   cell(
                       5,
-                      Text(_n(num0(it['totalBuy'])),
+                      Text(_n(num0(it['buy1'])),
                           style:
-                              const TextStyle(fontWeight: FontWeight.w600))),
-                  cell(6, Text(pick(it, ['unit']))),
+                              const TextStyle(fontWeight: FontWeight.w700))),
+                  cell(6, Text(_n(num0(it['totalBuy'])))),
+                  cell(7, Text(pick(it, ['unit']))),
                   cell(
-                      7,
+                      8,
                       Text(num0(it['ordered']) > 0
                           ? _n(num0(it['ordered']))
                           : '-')),
                   cell(
-                      8,
+                      9,
                       Text(_money(num0(it['totalAmount'])),
                           style:
                               const TextStyle(fontWeight: FontWeight.bold))),
@@ -755,13 +760,11 @@ class _BudgetPageState extends State<BudgetPage> {
   Widget _yearsInfo(Map<String, dynamic> d) {
     final a = num0(d['yearFrom']).toInt();
     final b = num0(d['yearTo']).toInt();
+    final n = num0(d['yearsFull']).toInt();
     final pct = num0(d['pct']).toInt();
-    final eff = num0(d['yearsEff']).toDouble();
-    final from = '${d['usageFrom'] ?? ''}';
-    final to = '${d['usageTo'] ?? ''}';
     final txt = a > 0
-        ? 'PO ປີ $a–$b  •  ສູດ: ໃຊ້/ປີ = ໃຊ້ທັງໝົດ ($from → $to) ÷ ${eff.toStringAsFixed(2)} ປີ  •  ຕ້ອງຊື້ = ໃຊ້/ປີ + $pct%'
-        : 'ສູດ: ໃຊ້/ປີ = ໃຊ້ 12 ເດືອນຜ່ານມາ (ບໍ່ໄດ້ເລືອກ PO)  •  ຕ້ອງຊື້ = ໃຊ້/ປີ + $pct%';
+        ? 'PO ປີ $a–$b = $n ປີ  •  ໃຊ້/ປີ = ໃຊ້ທັງໝົດ ÷ $n ປີ  •  ໃຊ້/1 ປີ +$pct% = ໃຊ້/ປີ × (1 + $pct%)  •  ຕ້ອງຊື້ 1 ປີ = ໃຊ້/1 ປີ +$pct% − (ສະຕັອກ + PO ຄ້າງຮັບ)'
+        : 'ບໍ່ໄດ້ເລືອກ PO: ໃຊ້/ປີ = ໃຊ້ 12 ເດືອນຜ່ານມາ  •  ໃຊ້/1 ປີ +$pct% = ໃຊ້/ປີ × (1 + $pct%)  •  ຕ້ອງຊື້ 1 ປີ = ໃຊ້/1 ປີ +$pct% − (ສະຕັອກ + PO ຄ້າງຮັບ)';
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
       child: Text(txt, style: const TextStyle(fontSize: 12)),
@@ -771,11 +774,22 @@ class _BudgetPageState extends State<BudgetPage> {
   Widget _formulaText(Map<String, dynamic> it) {
     final rate = num0(it['ratePerYear']);
     final used = num0(it['usedTotal']);
-    final withPct = (rate * (1 + _pctShown / 100)).ceil();
-    final line = _yearFrom > 0
-        ? 'ໃຊ້ ${_n(used)} ÷ ${_yearsEff.toStringAsFixed(2)} ປີ ($_usageFrom → $_usageTo) = ${_n(rate)}/ປີ → +$_pctShown% = ${_n(withPct)}'
-        : 'ໃຊ້ 12 ເດືອນຜ່ານມາ ${_n(used)} = ${_n(rate)}/ປີ → +$_pctShown% = ${_n(withPct)}';
-    return Text(line, style: const TextStyle(fontSize: 12));
+    final need1 = num0(it['need1']);
+    final buy1 = num0(it['buy1']);
+    final have = (it['counted'] != null
+            ? num0(it['counted'])
+            : num0(it['stock'])) +
+        num0(it['ordered']);
+    final line1 = _yearFrom > 0
+        ? 'ໃຊ້ ${_n(used)} ÷ $_yearsFull ປີ ($_yearFrom–$_yearTo) = ${_n(rate)}/ປີ'
+        : 'ໃຊ້ 12 ເດືອນຜ່ານມາ ${_n(used)} = ${_n(rate)}/ປີ';
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(line1, style: const TextStyle(fontSize: 12)),
+      Text('ໃຊ້/1 ປີ +$_pctShown% = ${_n(need1)}',
+          style: const TextStyle(fontSize: 12)),
+      Text('ຕ້ອງຊື້ 1 ປີ = ${_n(need1)} − ${_n(have)} (ສະຕັອກ + PO) = ${_n(buy1)}',
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+    ]);
   }
 
   Widget _result(Map<String, dynamic> d) {
@@ -784,6 +798,7 @@ class _BudgetPageState extends State<BudgetPage> {
     _yearFrom = num0(d['yearFrom']).toInt();
     _yearTo = num0(d['yearTo']).toInt();
     _pctShown = num0(d['pct']).toInt();
+    _yearsFull = num0(d['yearsFull']).toInt();
     _yearsEff = num0(d['yearsEff']).toDouble();
     _usageFrom = '${d['usageFrom'] ?? ''}';
     _usageTo = '${d['usageTo'] ?? ''}';
