@@ -31,6 +31,8 @@ class BudgetPage extends StatefulWidget {
 class _BudgetPageState extends State<BudgetPage> {
   bool _asTable = true; // true = table, false = old cards
   int _yearsSpan = 0, _yearFrom = 0, _yearTo = 0, _pctShown = 0;
+  double _yearsEff = 0;
+  String _usageFrom = '', _usageTo = '';
   int _sortCol = -1;
   bool _sortAsc = true;
   final _pct = TextEditingController(text: '0');
@@ -751,12 +753,14 @@ class _BudgetPageState extends State<BudgetPage> {
   }
 
   Widget _yearsInfo(Map<String, dynamic> d) {
-    final n = num0(d['yearsSpan']).toInt();
     final a = num0(d['yearFrom']).toInt();
     final b = num0(d['yearTo']).toInt();
     final pct = num0(d['pct']).toInt();
+    final eff = num0(d['yearsEff']).toDouble();
+    final from = '${d['usageFrom'] ?? ''}';
+    final to = '${d['usageTo'] ?? ''}';
     final txt = a > 0
-        ? 'ສູດ: ໃຊ້/ປີ = ໃຊ້ທັງໝົດ ປີ $a–$b ÷ $n ປີ  •  ຕ້ອງຊື້ = ໃຊ້/ປີ + $pct%'
+        ? 'PO ປີ $a–$b  •  ສູດ: ໃຊ້/ປີ = ໃຊ້ທັງໝົດ ($from → $to) ÷ ${eff.toStringAsFixed(2)} ປີ  •  ຕ້ອງຊື້ = ໃຊ້/ປີ + $pct%'
         : 'ສູດ: ໃຊ້/ປີ = ໃຊ້ 12 ເດືອນຜ່ານມາ (ບໍ່ໄດ້ເລືອກ PO)  •  ຕ້ອງຊື້ = ໃຊ້/ປີ + $pct%';
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
@@ -769,7 +773,7 @@ class _BudgetPageState extends State<BudgetPage> {
     final used = num0(it['usedTotal']);
     final withPct = (rate * (1 + _pctShown / 100)).ceil();
     final line = _yearFrom > 0
-        ? 'ໃຊ້ ${_n(used)} ÷ $_yearsSpan ປີ ($_yearFrom–$_yearTo) = ${_n(rate)}/ປີ → +$_pctShown% = ${_n(withPct)}'
+        ? 'ໃຊ້ ${_n(used)} ÷ ${_yearsEff.toStringAsFixed(2)} ປີ ($_usageFrom → $_usageTo) = ${_n(rate)}/ປີ → +$_pctShown% = ${_n(withPct)}'
         : 'ໃຊ້ 12 ເດືອນຜ່ານມາ ${_n(used)} = ${_n(rate)}/ປີ → +$_pctShown% = ${_n(withPct)}';
     return Text(line, style: const TextStyle(fontSize: 12));
   }
@@ -780,6 +784,9 @@ class _BudgetPageState extends State<BudgetPage> {
     _yearFrom = num0(d['yearFrom']).toInt();
     _yearTo = num0(d['yearTo']).toInt();
     _pctShown = num0(d['pct']).toInt();
+    _yearsEff = num0(d['yearsEff']).toDouble();
+    _usageFrom = '${d['usageFrom'] ?? ''}';
+    _usageTo = '${d['usageTo'] ?? ''}';
     final items = asList(d['items']);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       _summary(d),
