@@ -1,6 +1,7 @@
 // Many barcodes per product.
 // Server: GET/PUT /products/:id/barcodes, GET /products/by-barcode/:code
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
@@ -196,6 +197,14 @@ class _ProductBarcodesEditorState extends State<ProductBarcodesEditor> {
     }
   }
 
+  Future<void> _copy(String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('ຄັດລອກແລ້ວ: $text'),
+        duration: const Duration(seconds: 2)));
+  }
+
   Future<void> _scan() async {
     final s = await Navigator.push<String>(
         context, MaterialPageRoute(builder: (_) => const BarcodeScanPage()));
@@ -244,6 +253,15 @@ class _ProductBarcodesEditorState extends State<ProductBarcodesEditor> {
           child: Text(_err!,
               style: const TextStyle(color: Colors.red, fontSize: 13)),
         ),
+      if (c.codes.length > 1)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => _copy(c.codes.join(', ')),
+            icon: const Icon(Icons.copy_all, size: 18),
+            label: const Text('ຄັດລອກທັງໝົດ'),
+          ),
+        ),
       if (c.codes.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(top: 8),
@@ -251,7 +269,20 @@ class _ProductBarcodesEditorState extends State<ProductBarcodesEditor> {
             for (final b in c.codes)
               InputChip(
                 avatar: const Icon(Icons.qr_code_2, size: 18),
-                label: Text(b),
+                label: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(b),
+                  const SizedBox(width: 6),
+                  Tooltip(
+                    message: 'ຄັດລອກ',
+                    child: InkWell(
+                      onTap: () => _copy(b),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        child: Icon(Icons.copy, size: 16),
+                      ),
+                    ),
+                  ),
+                ]),
                 onDeleted: () => setState(() {
                   c.codes.remove(b);
                   c.dirty = true;
