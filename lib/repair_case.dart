@@ -18,6 +18,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'api.dart';
+import 'ldb_letterhead.dart' show LdbLetterhead, loadLetterhead, ldbPdfBackground;
 import 'crud.dart' show toastMsg;
 import 'product_images.dart' show productImageUrl;
 import 'purchase_orders.dart' show kPoDocExt;
@@ -795,50 +796,104 @@ class RepairRequestFormPage extends StatefulWidget {
 class _RepairRequestFormPageState extends State<RepairRequestFormPage> {
   final _key = GlobalKey();
   late final Future<Map<String, String>> _f = _info();
+  LdbLetterhead? _lh;
   bool _busy = false;
+
+  // ---- fixed wording of the letter (edit here if a word is wrong) ----
+  static const _titleText = 'ໜັງສືສະເໜີ';
+  static const _toText =
+      'ຮຽນ: ທ່ານ ຫົວໜ້າຝ່າຍເຕັກໂນໂລຊີຂໍ້ມູນຂ່າວສານທີ່ນັບຖືຢ່າງສູງ';
+  static const _subjectText = 'ເລື່ອງ: ຂໍອາໄຫຼ່ເອທີເອັມ ATM';
+  static const _refText =
+      '- ອີງຕາມ ການກວດກາຕິດຕາມຕູ້ ATM ຄືຈິງໃນຄັ້ງວັນທີ່ ';
+  static const _bodyText =
+      'ຂໍຖືເປັນກຽດສະເໜີມາຍັງທ່ານເພື່ອຂໍອາໄຫຼ່ເອທີເອັມເນື່ອງຈາກອຸປະກອນຂອງຕູ້ໃຊ້ງານບໍ່ໄດ້ ເຊິ່ງລາຍລະອຽດດັ່ງລຸ່ມນີ້:';
+  static const _closeText =
+      'ດັ່ງນັ້ນ ຈຶ່ງສະເໜີມາຍັງທ່ານເພື່ອພິຈາລະນາ ແລະ ແກ້ໄຂຕາມຄວາມເໝາະສົມດ້ວຍ.';
+  static const _respectText = 'ຮຽນມາດ້ວຍຄວາມເຄົາລົບ ແລະ ນັບຖືຢ່າງສູງ.';
+
+  static const _months = [
+    'ມັງກອນ',
+    'ກຸມພາ',
+    'ມີນາ',
+    'ເມສາ',
+    'ພຶດສະພາ',
+    'ມິຖຸນາ',
+    'ກໍລະກົດ',
+    'ສິງຫາ',
+    'ກັນຍາ',
+    'ຕຸລາ',
+    'ພະຈິກ',
+    'ທັນວາ',
+  ];
 
   String get _name => '${widget.data['reqNo'] ?? 'repair-request'}';
 
+  static String _laoDate(dynamic v) {
+    final dt = DateTime.tryParse('${v ?? ''}');
+    if (dt == null) return '';
+    final l = dt.toLocal();
+    return '${l.day} ${_months[l.month - 1]} ${l.year}';
+  }
+
   Future<Map<String, String>> _info() async {
     final d = widget.data;
-    final out = {'branch': '', 'atm': '', 'type': ''};
+    final out = {'branch': '', 'location': '', 'model': ''};
+    try {
+      _lh = await loadLetterhead();
+    } catch (e) {
+      debugPrint('[REQ] letterhead failed: $e');
+    }
     try {
       for (final b in asList(await Api.get('/repair/branches'))) {
-        if ('${b['id']}' == '${d['branchId']}')
+        if ('${b['id']}' == '${d['branchId']}') {
           out['branch'] = pick(b, ['name']);
+        }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[REQ] branches failed: $e');
+    }
     final atmId = '${d['atmId'] ?? ''}';
     if (atmId.isNotEmpty) {
       try {
         final a = await Api.get('/atms/${Uri.encodeComponent(atmId)}');
         if (a is Map) {
-          out['atm'] = pick(Map<String, dynamic>.from(a), ['atmLocation']);
+          final m = Map<String, dynamic>.from(a);
+          out['location'] = pick(m, ['atmLocation']);
+          out['model'] = pick(m, ['atmVersion']);
         }
-      } catch (_) {}
-    }
-    try {
-      final t = await Api.get(
-          '/terminals/${Uri.encodeComponent('${d['barcode'] ?? ''}')}');
-      if (t is Map) {
-        out['type'] = pick(Map<String, dynamic>.from(t), ['typeName']);
+      } catch (e) {
+        debugPrint('[REQ] atm failed: $e');
       }
-    } catch (_) {}
+    }
     return out;
   }
 
+  /// The letter body is captured as a transparent picture and placed on an A4 page
+  /// whose background is the LDB letterhead (same method as the price report).
   Future<Uint8List> _pdf() async {
     final obj = _key.currentContext?.findRenderObject();
     if (obj is! RenderRepaintBoundary) throw Exception('ໜ້າຍັງບໍ່ພ້ອມ');
+    final lh = _lh ?? await loadLetterhead();
     final image = await obj.toImage(pixelRatio: 3);
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     if (data == null) throw Exception('ສ້າງຮູບບໍ່ໄດ້');
-    final img = pw.MemoryImage(data.buffer.asUint8List());
+    final pic = pw.MemoryImage(data.buffer.asUint8List());
+    final w = PdfPageFormat.a4.width;
+    final top = w * lh.headerRatio + 10;
+    final bottom = w * lh.footerRatio + 8;
     final doc = pw.Document();
     doc.addPage(pw.Page(
-      pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.all(20),
-      build: (_) => pw.Center(child: pw.Image(img, fit: pw.BoxFit.contain)),
+      pageTheme: pw.PageTheme(
+        pageFormat: PdfPageFormat.a4,
+        margin: pw.EdgeInsets.fromLTRB(0, top, 0, bottom),
+        buildBackground: (ctx) => ldbPdfBackground(lh),
+      ),
+      build: (_) => pw.Image(pic,
+          width: w,
+          height: PdfPageFormat.a4.height - top - bottom,
+          fit: pw.BoxFit.contain,
+          alignment: pw.Alignment.topCenter),
     ));
     return doc.save();
   }
@@ -854,102 +909,138 @@ class _RepairRequestFormPageState extends State<RepairRequestFormPage> {
     }
   }
 
-  Widget _sheet(Map<String, String> info) {
+  Widget _letter(Map<String, String> info) {
     final d = widget.data;
     final parts = asList(d['parts']);
-    const base = TextStyle(color: Colors.black, fontSize: 14, height: 1.4);
+    final branch = info['branch'] ?? '';
+    final bname = branch.isEmpty ? 'ສາຂາ' : 'ສາຂາ $branch';
+    final date = _laoDate(d['openedAt']);
+    const base = TextStyle(color: Colors.black, fontSize: 13, height: 1.5);
     const bold = TextStyle(
         color: Colors.black,
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: FontWeight.w700,
-        height: 1.4);
-    Widget kv(String k, String v) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SizedBox(width: 120, child: Text(k, style: bold)),
-            Expanded(child: Text(v.isEmpty ? '-' : v, style: base)),
-          ]),
-        );
+        height: 1.5);
     Widget cell(String t, {bool head = false}) => Padding(
-          padding: const EdgeInsets.all(6),
-          child: Text(t, style: head ? bold : base),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Text(t,
+              textAlign: TextAlign.center, style: head ? bold : base),
         );
-    Widget sign(String title) => Expanded(
-          child: Column(children: [
-            const SizedBox(height: 64),
-            Container(
-                height: 1,
-                color: Colors.black54,
-                margin: const EdgeInsets.symmetric(horizontal: 16)),
-            const SizedBox(height: 4),
-            Text(title, style: bold),
-            const SizedBox(height: 4),
-            const Text('ວັນທີ ........../........../..........', style: base),
-          ]),
-        );
-    final date = _dt(d['openedAt']);
     return Container(
       width: 595,
-      color: Colors.white,
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.symmetric(horizontal: 36),
       child: DefaultTextStyle(
         style: base,
         child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('ໃບຂໍອາໄຫຼ່',
+              Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(bname),
+                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      const Text('ເລກທີ່: ...............'),
+                      Text('${branch.isEmpty ? '' : '$branch, '}ວັນທີ $date'),
+                    ]),
+                  ]),
+              const SizedBox(height: 18),
+              const Text(_titleText,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       color: Colors.black,
-                      fontSize: 24,
+                      fontSize: 22,
                       fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text('ເລກທີ່: ${d['reqNo'] ?? ''}',
-                  textAlign: TextAlign.center, style: bold),
-              const SizedBox(height: 16),
-              kv('ວັນທີ', date.length >= 10 ? date.substring(0, 10) : date),
-              kv('ສາຂາ', info['branch'] ?? ''),
-              kv('ຕູ້ ATM', '${d['atmId'] ?? ''}  ${info['atm'] ?? ''}'.trim()),
-              kv('Terminal',
-                  '${d['barcode'] ?? ''}  ${info['type'] ?? ''}'.trim()),
-              const SizedBox(height: 12),
-              const Text('ລາຍການອາໄຫຼ່ທີ່ຂໍ', style: bold),
-              const SizedBox(height: 6),
+              const SizedBox(height: 14),
+              const Text(_toText),
+              const Text(_subjectText),
+              Text('$_refText$date.'),
+              const SizedBox(height: 10),
+              Text('      $bname $_bodyText'),
+              const SizedBox(height: 10),
               Table(
-                border: TableBorder.all(color: Colors.black54),
+                border: TableBorder.all(color: Colors.black),
+                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                 columnWidths: const {
-                  0: FixedColumnWidth(56),
-                  1: FlexColumnWidth(3),
-                  2: FlexColumnWidth(2),
-                  3: FixedColumnWidth(70),
-                  4: FixedColumnWidth(60),
+                  0: FixedColumnWidth(36),
+                  1: FlexColumnWidth(1.3),
+                  2: FlexColumnWidth(1.3),
+                  3: FlexColumnWidth(1.6),
+                  4: FlexColumnWidth(1.7),
+                  5: FixedColumnWidth(54),
+                  6: FixedColumnWidth(72),
                 },
                 children: [
                   TableRow(children: [
                     cell('ລຳດັບ', head: true),
-                    cell('ຊື່ອາໄຫຼ່', head: true),
-                    cell('Part No', head: true),
-                    cell('ຫົວໜ່ວຍ', head: true),
+                    cell('ສາຂາ', head: true),
+                    cell('ລຸ້ນຕູ້', head: true),
+                    cell('ທີ່ຕັ້ງຕູ້', head: true),
+                    cell('ອາໄຫຼ່', head: true),
                     cell('ຈຳນວນ', head: true),
+                    cell('ວັນເດືອນປີ', head: true),
                   ]),
                   for (var i = 0; i < parts.length; i++)
                     TableRow(children: [
                       cell('${i + 1}'),
+                      cell(branch),
+                      cell(info['model'] ?? ''),
+                      cell(info['location'] ?? ''),
                       cell(pick(parts[i], ['name'])),
-                      cell(pick(parts[i], ['partNo'])),
-                      cell(pick(parts[i], ['unit'])),
                       cell(pick(parts[i], ['qty'])),
+                      cell(date),
                     ]),
                 ],
               ),
               const SizedBox(height: 12),
-              kv('ໝາຍເຫດ', '${d['remark'] ?? ''}'),
-              const SizedBox(height: 24),
-              Row(children: [sign('ຜູ້ຂໍ'), sign('ຫົວໜ້າສາຂາ')]),
-              const SizedBox(height: 16),
+              Text('      $_closeText'),
+              Text('      $_respectText', textAlign: TextAlign.right),
+              const SizedBox(height: 28),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                    child: Column(children: [
+                  Text('ຫົວໜ້າ$bname',
+                      textAlign: TextAlign.center, style: bold),
+                  const SizedBox(height: 110),
+                ])),
+                Expanded(
+                    child: Column(children: const [
+                  Text('ຜູ້ສະເໜີ', style: bold),
+                  SizedBox(height: 110),
+                ])),
+              ]),
             ]),
       ),
+    );
+  }
+
+  Widget _preview(Map<String, String> info) {
+    final lh = _lh;
+    final top = (lh == null ? 0.0 : 595 * lh.headerRatio) + 10;
+    return Container(
+      width: 595,
+      height: 842,
+      color: Colors.white,
+      child: Stack(children: [
+        if (lh != null)
+          Positioned(
+              left: 0,
+              top: 0,
+              child: Image.memory(lh.headerPng,
+                  width: 595, height: 595 * lh.headerRatio, fit: BoxFit.fill)),
+        if (lh != null)
+          Positioned(
+              left: 0,
+              bottom: 0,
+              child: Image.memory(lh.footerPng,
+                  width: 595, height: 595 * lh.footerRatio, fit: BoxFit.fill)),
+        Positioned(
+            left: 0,
+            right: 0,
+            top: top,
+            child: RepaintBoundary(key: _key, child: _letter(info))),
+      ]),
     );
   }
 
@@ -966,12 +1057,7 @@ class _RepairRequestFormPageState extends State<RepairRequestFormPage> {
           return SingleChildScrollView(
             padding: const EdgeInsets.all(12),
             child: FittedBox(
-              fit: BoxFit.fitWidth,
-              child: RepaintBoundary(
-                key: _key,
-                child: _sheet(snap.data ?? {}),
-              ),
-            ),
+                fit: BoxFit.fitWidth, child: _preview(snap.data ?? {})),
           );
         },
       ),
