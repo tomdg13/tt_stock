@@ -557,9 +557,7 @@ class _BudgetPageState extends State<BudgetPage> {
       case 7:
         return pick(it, ['unit']).toLowerCase();
       case 8:
-        return num0(it['ordered']);
-      case 9:
-        return num0(it['totalAmount']);
+        return num0(it['poTotal']);
     }
     return null;
   }
@@ -624,7 +622,7 @@ class _BudgetPageState extends State<BudgetPage> {
   Widget _itemsTable(
       List<Map<String, dynamic>> items, List<Map<String, dynamic>> past) {
     final cs = Theme.of(context).colorScheme;
-    const w = <double>[56, 260, 80, 90, 110, 110, 100, 60, 90, 110];
+    const w = <double>[56, 260, 80, 90, 110, 110, 100, 60, 110];
     final heads = <String>[
       'ຮູບ',
       'ລາຍການ',
@@ -634,10 +632,9 @@ class _BudgetPageState extends State<BudgetPage> {
       'ຕ້ອງຊື້ 1 ປີ',
       'ຕ້ອງຊື້ ທັງໝົດ',
       'ໜ່ວຍ',
-      'PO ຄ້າງຮັບ',
-      'ເງິນ'
+      'ຊື້ຕົວຈິງ (PO)'
     ];
-    const right = <int>{2, 3, 4, 5, 6, 8, 9};
+    const right = <int>{2, 3, 4, 5, 6, 8};
     final total = w.fold<double>(0, (a, b) => a + b) + 16;
     Widget cell(int i, Widget child) => SizedBox(
         width: w[i],
@@ -741,14 +738,9 @@ class _BudgetPageState extends State<BudgetPage> {
                   cell(7, Text(pick(it, ['unit']))),
                   cell(
                       8,
-                      Text(num0(it['ordered']) > 0
-                          ? _n(num0(it['ordered']))
+                      Text(num0(it['poTotal']) > 0
+                          ? _n(num0(it['poTotal']))
                           : '-')),
-                  cell(
-                      9,
-                      Text(_money(num0(it['totalAmount'])),
-                          style:
-                              const TextStyle(fontWeight: FontWeight.bold))),
                 ]),
               ),
             ),
