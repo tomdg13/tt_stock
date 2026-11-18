@@ -1,16 +1,15 @@
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'api.dart';
+import 'ldb_letterhead.dart' show LdbLetterhead, loadLetterhead;
+import 'price_report_export.dart' show buildWithdrawalPdf;
 import 'product_images.dart' show productImageUrl;
 
-/// ໃບເບີກອາໄຫຼ່: one withdrawal as a bill, print or share as PDF.
-/// [data] = one row of GET /withdrawals (withdrawNo, branchName, createdAt,
-/// createdBy, note, barcode, atmId, items[]).
+/// ໃບເບີກອາໄຫຼ່: one withdrawal as a bill. The preview shows the LDB letterhead;
+/// print / share build the PDF with buildWithdrawalPdf (same method as the price
+/// report: letterhead as page background, Lao words as images).
+/// [data] = one row of GET /withdrawals.
 class WithdrawBillPage extends StatefulWidget {
   final Map<String, dynamic> data;
   const WithdrawBillPage(this.data, {super.key});
@@ -20,52 +19,10 @@ class WithdrawBillPage extends StatefulWidget {
 
 class _WithdrawBillPageState extends State<WithdrawBillPage> {
   late Map<String, dynamic> _d = widget.data;
-  final _key = GlobalKey();
   bool _busy = false;
   final Map<String, String> _img = {};
-  Future<void>? _imgLoad;
-
-  @override
-  void initState() {
-    super.initState();
-    _imgLoad = _loadImages();
-  }
-
-  /// First image of every part on the bill (GET /products/:id/images).
-  Future<void> _loadImages() async {
-    final items = _d['items'] is List ? _d['items'] as List : const [];
-    for (final it in items) {
-      if (it is! Map) continue;
-      final id = '${it['productId'] ?? ''}';
-      if (id.isEmpty || _img.containsKey(id)) continue;
-      _img[id] = '';
-      try {
-        final d = await Api.get('/products/${Uri.encodeComponent(id)}/images');
-        if (d is List && d.isNotEmpty && d.first is Map) {
-          final u = '${(d.first as Map)['url'] ?? ''}';
-          if (u.isNotEmpty) _img[id] = u;
-        }
-      } catch (_) {
-        _img[id] = '';
-      }
-    }
-    if (mounted) setState(() {});
-  }
-
-  /// The PDF is a picture of the sheet: wait until every part image is loaded.
-  Future<void> _waitImages() async {
-    await _imgLoad;
-    if (!mounted) return;
-    for (final u in _img.values) {
-      if (u.isEmpty) continue;
-      try {
-        await precacheImage(NetworkImage(productImageUrl(u)), context)
-            .timeout(const Duration(seconds: 8));
-      } catch (_) {}
-      if (!mounted) return;
-    }
-    await WidgetsBinding.instance.endOfFrame;
-  }
+  LdbLetterhead? _lh;
+  Future<void>? _loading;
 
   String get _name => '${_d['withdrawNo'] ?? 'withdraw'}';
 
@@ -88,21 +45,51 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
     return '${l.year}-${t(l.month)}-${t(l.day)} ${t(l.hour)}:${t(l.minute)}';
   }
 
+  @override
+  void initState() {
+    super.initState();
+    debugPrint(
+        '[WD] bill page open: no=${_d['withdrawNo']} status=${_d['status']} items=${(_d['items'] as List?)?.length ?? 0}');
+    _loading = _loadAll();
+  }
+
+  /// Letterhead (same as the price report) + first image of every part.
+  Future<void> _loadAll() async {
+    try {
+      final l = await loadLetterhead();
+      if (mounted) setState(() => _lh = l);
+      debugPrint('[WD] bill: letterhead ready');
+    } catch (e) {
+      debugPrint('[WD] bill: letterhead FAILED: $e');
+    }
+    final items = _d['items'] is List ? _d['items'] as List : const [];
+    for (final it in items) {
+      if (it is! Map) continue;
+      final id = '${it['productId'] ?? ''}';
+      if (id.isEmpty || _img.containsKey(id)) continue;
+      _img[id] = '';
+      try {
+        final d = await Api.get('/products/${Uri.encodeComponent(id)}/images');
+        if (d is List && d.isNotEmpty && d.first is Map) {
+          _img[id] = '${(d.first as Map)['url'] ?? ''}';
+        }
+      } catch (e) {
+        debugPrint('[WD] bill: image $id FAILED: $e');
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
   Future<Uint8List> _pdf() async {
-    await _waitImages();
-    final obj = _key.currentContext?.findRenderObject();
-    if (obj is! RenderRepaintBoundary) throw Exception('ໜ້າຍັງບໍ່ພ້ອມ');
-    final image = await obj.toImage(pixelRatio: 3);
-    final data = await image.toByteData(format: ui.ImageByteFormat.png);
-    if (data == null) throw Exception('ສ້າງຮູບບໍ່ໄດ້');
-    final img = pw.MemoryImage(data.buffer.asUint8List());
-    final doc = pw.Document();
-    doc.addPage(pw.Page(
-      pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.all(20),
-      build: (_) => pw.Center(child: pw.Image(img, fit: pw.BoxFit.contain)),
-    ));
-    return doc.save();
+    await _loading;
+    final urls = <String, String>{
+      for (final e in _img.entries)
+        if (e.value.isNotEmpty) e.key: productImageUrl(e.value),
+    };
+    debugPrint('[WD] bill: buildWithdrawalPdf no=$_name images=${urls.length}');
+    final bytes = await buildWithdrawalPdf(_d, urls);
+    debugPrint('[WD] bill: PDF built ${bytes.length} bytes');
+    return bytes;
   }
 
   Future<void> _run(Future<void> Function(Uint8List) fn) async {
@@ -110,6 +97,7 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
     try {
       await fn(await _pdf());
     } catch (e) {
+      debugPrint('[WD] bill: PDF/print FAILED: $e');
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('$e')));
@@ -215,66 +203,91 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
         );
     final bc = _s(d['barcode']);
     final atm = _s(d['atmId']);
+    final lh = _lh;
     return Container(
       width: 595,
+      constraints: const BoxConstraints(minHeight: 842),
       color: Colors.white,
-      padding: const EdgeInsets.all(32),
-      child: DefaultTextStyle(
-        style: base,
-        child: Column(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('ໃບເບີກອາໄຫຼ່',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text('ເລກທີ່: ${_s(d['withdrawNo'])}',
-                  textAlign: TextAlign.center, style: bold),
-              const SizedBox(height: 16),
-              kv('ວັນທີ', _when(d['createdAt'])),
-              kv('ສາຂາ', _s(d['branchName'])),
-              kv('ຜູ້ບັນທຶກ', _s(d['createdBy'])),
-              kv('ສະຖານະ', _stLabel(_s(d['status']))),
-              if (atm.isNotEmpty) kv('ຕູ້ ATM', atm),
-              if (bc.isNotEmpty) kv('Terminal', bc),
-              const SizedBox(height: 12),
-              const Text('ລາຍການອາໄຫຼ່ທີ່ເບີກ', style: bold),
-              const SizedBox(height: 6),
-              Table(
-                border: TableBorder.all(color: Colors.black54),
-                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-                columnWidths: const {
-                  0: FixedColumnWidth(48),
-                  1: FixedColumnWidth(60),
-                  2: FlexColumnWidth(3),
-                  3: FixedColumnWidth(64),
-                },
-                children: [
-                  TableRow(children: [
-                    cell('ລຳດັບ', head: true),
-                    cell('ຮູບ', head: true),
-                    cell('ຊື່ອາໄຫຼ່', head: true),
-                    cell('ຈຳນວນ', head: true),
-                  ]),
-                  for (var n = 0; n < items.length; n++)
-                    TableRow(children: [
-                      cell('${n + 1}'),
-                      pic('${(items[n] as Map)['productId'] ?? ''}'),
-                      cell(_s((items[n] as Map)['productName'])),
-                      cell(_s((items[n] as Map)['qty'])),
-                    ]),
-                ],
+              if (lh != null)
+                Image.memory(lh.headerPng,
+                    width: 595, height: 595 * lh.headerRatio, fit: BoxFit.fill),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(32, 16, 32, 16),
+                child: DefaultTextStyle(
+                  style: base,
+                  child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text('ໃບເບີກອາໄຫຼ່',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: Colors.black,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 4),
+                        Text('ເລກທີ່: ${_s(d['withdrawNo'])}',
+                            textAlign: TextAlign.center, style: bold),
+                        const SizedBox(height: 16),
+                        kv('ວັນທີ', _when(d['createdAt'])),
+                        kv('ສາຂາ', _s(d['branchName'])),
+                        kv('ຜູ້ບັນທຶກ', _s(d['createdBy'])),
+                        kv('ສະຖານະ', _stLabel(_s(d['status']))),
+                        if (atm.isNotEmpty) kv('ຕູ້ ATM', atm),
+                        if (bc.isNotEmpty) kv('Terminal', bc),
+                        const SizedBox(height: 12),
+                        const Text('ລາຍການອາໄຫຼ່ທີ່ເບີກ', style: bold),
+                        const SizedBox(height: 6),
+                        Table(
+                          border: TableBorder.all(color: Colors.black54),
+                          defaultVerticalAlignment:
+                              TableCellVerticalAlignment.middle,
+                          columnWidths: const {
+                            0: FixedColumnWidth(48),
+                            1: FixedColumnWidth(60),
+                            2: FlexColumnWidth(3),
+                            3: FixedColumnWidth(64),
+                          },
+                          children: [
+                            TableRow(children: [
+                              cell('ລຳດັບ', head: true),
+                              cell('ຮູບ', head: true),
+                              cell('ຊື່ອາໄຫຼ່', head: true),
+                              cell('ຈຳນວນ', head: true),
+                            ]),
+                            for (var n = 0; n < items.length; n++)
+                              TableRow(children: [
+                                cell('${n + 1}'),
+                                pic('${(items[n] as Map)['productId'] ?? ''}'),
+                                cell(_s((items[n] as Map)['productName'])),
+                                cell(_s((items[n] as Map)['qty'])),
+                              ]),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        kv('ໝາຍເຫດ', _s(d['note'])),
+                        const SizedBox(height: 24),
+                        Row(children: [
+                          sign('ຜູ້ເບີກ'),
+                          sign('ຜູ້ອະນຸມັດ'),
+                        ]),
+                      ]),
+                ),
               ),
-              const SizedBox(height: 12),
-              kv('ໝາຍເຫດ', _s(d['note'])),
-              const SizedBox(height: 24),
-              Row(children: [sign('ຜູ້ເບີກ'), sign('ຜູ້ອະນຸມັດ')]),
-              const SizedBox(height: 16),
-            ]),
+            ],
+          ),
+          if (lh != null)
+            Image.memory(lh.footerPng,
+                width: 595, height: 595 * lh.footerRatio, fit: BoxFit.fill),
+        ],
       ),
     );
   }
@@ -286,10 +299,7 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(12),
         child: Column(children: [
-          FittedBox(
-            fit: BoxFit.fitWidth,
-            child: RepaintBoundary(key: _key, child: _sheet()),
-          ),
+          FittedBox(fit: BoxFit.fitWidth, child: _sheet()),
           if ('${_d['status']}' == 'requested') ...[
             const SizedBox(height: 16),
             SizedBox(

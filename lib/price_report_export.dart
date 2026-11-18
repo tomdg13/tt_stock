@@ -871,3 +871,209 @@ Future<void> shareTransferPdf(
   await Printing.sharePdf(
       bytes: bytes, filename: 'Transfer_${no.isEmpty ? _stamp() : no}.pdf');
 }
+
+/// PDF of one withdrawal bill (ໃບເບີກອາໄຫຼ່): letterhead, info, parts table with
+/// thumbnails, signatures. Same method as [shareTransferPdf]; Lao words are images.
+/// [imageUrls]: productId -> full image url.
+Future<Uint8List> buildWithdrawalPdf(
+    Map<String, dynamic> w, Map<String, String> imageUrls) async {
+  String g(dynamic m, List<String> keys) {
+    for (final k in keys) {
+      final v = m is Map ? m[k] : null;
+      if (v != null && '$v'.isNotEmpty) return '$v';
+    }
+    return '';
+  }
+
+  String when(String s) {
+    final d = DateTime.tryParse(s);
+    if (d == null) return s;
+    final l = d.toLocal();
+    String t(int n) => n.toString().padLeft(2, '0');
+    return '${l.year}-${t(l.month)}-${t(l.day)} ${t(l.hour)}:${t(l.minute)}';
+  }
+
+  final st = g(w, ['status']);
+  final status = st == 'requested'
+      ? 'ລໍຖ້າອະນຸມັດ (ຍັງບໍ່ຕັດສະຕັອກ)'
+      : st == 'open'
+          ? 'ອະນຸມັດແລ້ວ (ຕັດສະຕັອກແລ້ວ)'
+          : st == 'closed'
+              ? 'ປິດແລ້ວ'
+              : st;
+  final no = g(w, ['withdrawNo', 'id']);
+  final date = when(g(w, ['createdAt']));
+  final branch = g(w, ['branchName', 'branchId']);
+  final by = g(w, ['createdBy']);
+  final atm = g(w, ['atmId']);
+  final bc = g(w, ['barcode']);
+  final note = g(w, ['note']);
+  final items = w['items'] is List
+      ? [for (final e in w['items'] as List) e as Map]
+      : <Map>[];
+
+  final urls = <String>{
+    for (final i in items)
+      if ((imageUrls['${i['productId']}'] ?? '').isNotEmpty)
+        imageUrls['${i['productId']}']!
+  };
+  final thumbs = await _loadThumbs(urls);
+
+  double total = 0;
+  final data = <List<String>>[];
+  final imgs = <Uint8List?>[];
+  var n = 0;
+  for (final i in items) {
+    n++;
+    final q = double.tryParse('${i['qty'] ?? 0}') ?? 0;
+    total += q;
+    imgs.add(thumbs[imageUrls['${i['productId']}'] ?? '']?.bytes);
+    data.add([
+      '$n',
+      g(i, ['productName', 'name', 'productId']),
+      q == q.roundToDouble() ? q.toInt().toString() : q.toStringAsFixed(2),
+    ]);
+  }
+
+  final texts = <String>{
+    'ໃບເບີກອາໄຫຼ່',
+    'ເລກທີ: ',
+    'ວັນທີ: ',
+    'ສາຂາ: ',
+    'ຜູ້ບັນທຶກ: ',
+    'ສະຖານະ: ',
+    'ຕູ້ ATM: ',
+    'Terminal: ',
+    'ໝາຍເຫດ: ',
+    'ສິນຄ້າ',
+    'ຈຳນວນ',
+    'ລວມ',
+    'ຜູ້ເບີກ',
+    'ຜູ້ອະນຸມັດ',
+    'ລາຍເຊັນ',
+    'ວັນທີ / Date',
+    no,
+    date,
+    branch,
+    by,
+    status,
+    note,
+    for (final r in data) ...r,
+  };
+  await _prepLao(texts);
+  for (final sz in [16.0, 9.0, 12.0]) {
+    for (final tx in texts) {
+      if (_laoRe.hasMatch(tx)) {
+        await _renderLao(tx, sz, true);
+        await _renderLao(tx, sz, false);
+      }
+    }
+  }
+
+  final fBase = await PdfGoogleFonts.notoSansRegular();
+  final fBold = await PdfGoogleFonts.notoSansBold();
+  final doc =
+      pw.Document(theme: pw.ThemeData.withFont(base: fBase, bold: fBold));
+  final lh = await loadLetterhead();
+  final pageW = PdfPageFormat.a4.width;
+
+  pw.Widget sign(String role) => pw.Expanded(
+          child: pw.Column(children: [
+        _txt(role, size: 9, bold: true),
+        pw.SizedBox(height: 44),
+        pw.Container(height: 0.6, color: PdfColors.grey700),
+        pw.SizedBox(height: 3),
+        _txt('ລາຍເຊັນ', size: 9),
+        pw.SizedBox(height: 6),
+        _txt('ວັນທີ / Date', size: 9),
+      ]));
+
+  pw.Widget line(String k, String v) => pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 3),
+      child: pw.Row(children: [
+        pw.SizedBox(width: 80, child: _txt(k, size: 9, bold: true)),
+        _txt(v.isEmpty ? '-' : v, size: 9),
+      ]));
+
+  doc.addPage(pw.MultiPage(
+    pageTheme: pw.PageTheme(
+      pageFormat: PdfPageFormat.a4,
+      margin: pw.EdgeInsets.fromLTRB(
+          24, pageW * lh.headerRatio + 10, 24, pageW * lh.footerRatio + 8),
+      theme: pw.ThemeData.withFont(base: fBase, bold: fBold),
+      buildBackground: (ctx) => ldbPdfBackground(lh),
+    ),
+    build: (ctx) => [
+      _txt('ໃບເບີກອາໄຫຼ່', size: 16, bold: true),
+      pw.SizedBox(height: 8),
+      line('ເລກທີ: ', no),
+      line('ວັນທີ: ', date),
+      line('ສາຂາ: ', branch),
+      line('ຜູ້ບັນທຶກ: ', by),
+      line('ສະຖານະ: ', status),
+      if (atm.isNotEmpty) line('ຕູ້ ATM: ', atm),
+      if (bc.isNotEmpty) line('Terminal: ', bc),
+      pw.SizedBox(height: 8),
+      pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.4),
+        columnWidths: {
+          0: const pw.FixedColumnWidth(26),
+          1: const pw.FixedColumnWidth(68),
+          2: const pw.FlexColumnWidth(6),
+          3: const pw.FixedColumnWidth(52),
+        },
+        children: [
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+            children: [
+              _cell('No', bold: true),
+              _cell('', bold: true),
+              _cell('ສິນຄ້າ', bold: true),
+              _cell('ຈຳນວນ', bold: true, right: true),
+            ],
+          ),
+          for (var k = 0; k < data.length; k++)
+            pw.TableRow(
+              verticalAlignment: pw.TableCellVerticalAlignment.middle,
+              children: [
+                _cell(data[k][0]),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(3),
+                  child: imgs[k] == null
+                      ? pw.SizedBox(width: 60, height: 60)
+                      : pw.Image(pw.MemoryImage(imgs[k]!),
+                          width: 60, height: 60, fit: pw.BoxFit.cover),
+                ),
+                _cell(data[k][1]),
+                _cell(data[k][2], right: true),
+              ],
+            ),
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+            children: [
+              _cell(''),
+              _cell(''),
+              _cell('ລວມ', bold: true),
+              _cell(
+                  total == total.roundToDouble()
+                      ? total.toInt().toString()
+                      : total.toStringAsFixed(2),
+                  bold: true,
+                  right: true),
+            ],
+          ),
+        ],
+      ),
+      pw.SizedBox(height: 10),
+      line('ໝາຍເຫດ: ', note),
+      pw.SizedBox(height: 40),
+      pw.Row(children: [
+        sign('ຜູ້ເບີກ'),
+        pw.SizedBox(width: 40),
+        sign('ຜູ້ອະນຸມັດ')
+      ]),
+    ],
+  ));
+
+  return doc.save();
+}
