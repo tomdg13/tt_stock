@@ -872,8 +872,78 @@ Future<void> shareTransferPdf(
       bytes: bytes, filename: 'Transfer_${no.isEmpty ? _stamp() : no}.pdf');
 }
 
-/// PDF of one withdrawal bill (ໃບເບີກອາໄຫຼ່): letterhead, info, parts table with
-/// thumbnails, signatures. Same method as [shareTransferPdf]; Lao words are images.
+// ---- withdrawal letter: Lao paragraphs with automatic line wrapping ----
+
+String _wdKey(String t, double size, bool bold, double width) =>
+    'B|${bold ? 1 : 0}|$size|${width.toStringAsFixed(1)}|$t';
+
+Future<void> _wdRenderBlock(
+    String t, double size, bool bold, double width) async {
+  final key = _wdKey(t, size, bold, width);
+  if (_txtCache.containsKey(key)) return;
+  await _ensureFont();
+  final tp = TextPainter(
+    text: TextSpan(
+        text: t,
+        style: TextStyle(
+            fontFamily: bold ? 'PhetsarathRepBold' : 'PhetsarathRep',
+            fontSize: size * _sc,
+            height: 1.45,
+            color: const ui.Color(0xFF000000))),
+    textDirection: TextDirection.ltr,
+  );
+  tp.layout(maxWidth: width * _sc);
+  final w = tp.width.ceil() + 2;
+  final h = tp.height.ceil() + 2;
+  final rec = ui.PictureRecorder();
+  final cv = ui.Canvas(rec);
+  tp.paint(cv, const ui.Offset(1, 1));
+  final im = await rec.endRecording().toImage(w, h);
+  final bd = await im.toByteData(format: ui.ImageByteFormat.png);
+  if (bd == null) return;
+  _txtCache[key] =
+      _TxtImg(bd.buffer.asUint8List(), w.toDouble() / _sc, h.toDouble() / _sc);
+}
+
+Future<void> _wdPrep(String t, double size, bool bold, double width) async {
+  if (t.isEmpty || !_laoRe.hasMatch(t)) return;
+  await _wdRenderBlock(t, size, bold, width);
+}
+
+pw.Widget _wdBlock(String t, double size, bool bold, double width,
+    {pw.Alignment align = pw.Alignment.topLeft,
+    pw.TextAlign ta = pw.TextAlign.left}) {
+  final c = _txtCache[_wdKey(t, size, bold, width)];
+  final child = c == null
+      ? pw.Text(t,
+          textAlign: ta,
+          style: pw.TextStyle(
+              fontSize: size,
+              fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal))
+      : pw.Image(pw.MemoryImage(c.bytes), width: c.w, height: c.h);
+  return pw.Align(alignment: align, child: child);
+}
+
+pw.Widget _wdCell(String t, double colW, {bool bold = false}) {
+  final inner = colW - 8;
+  return pw.Padding(
+    padding: const pw.EdgeInsets.all(4),
+    child: _laoRe.hasMatch(t)
+        ? _wdBlock(t, 9, bold, inner,
+            align: pw.Alignment.topCenter, ta: pw.TextAlign.center)
+        : pw.Center(
+            child: pw.Text(t.isEmpty ? '-' : t,
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(
+                    fontSize: 9,
+                    fontWeight:
+                        bold ? pw.FontWeight.bold : pw.FontWeight.normal))),
+  );
+}
+
+/// PDF of one withdrawal bill as a formal letter (ໜັງສືສະເໜີ): LDB letterhead as the
+/// page background, header lines, request text, table, closing, two signatures.
+/// [w] = a row of GET /withdrawals, optionally with atmBranch / atmModel / atmLocation.
 /// [imageUrls]: productId -> full image url.
 Future<Uint8List> buildWithdrawalPdf(
     Map<String, dynamic> w, Map<String, String> imageUrls) async {
@@ -885,29 +955,33 @@ Future<Uint8List> buildWithdrawalPdf(
     return '';
   }
 
-  String when(String s) {
+  const months = [
+    'ມັງກອນ',
+    'ກຸມພາ',
+    'ມີນາ',
+    'ເມສາ',
+    'ພຶດສະພາ',
+    'ມິຖຸນາ',
+    'ກໍລະກົດ',
+    'ສິງຫາ',
+    'ກັນຍາ',
+    'ຕຸລາ',
+    'ພະຈິກ',
+    'ທັນວາ',
+  ];
+  String laoDate(String s) {
     final d = DateTime.tryParse(s);
     if (d == null) return s;
     final l = d.toLocal();
-    String t(int n) => n.toString().padLeft(2, '0');
-    return '${l.year}-${t(l.month)}-${t(l.day)} ${t(l.hour)}:${t(l.minute)}';
+    return '${l.day} ${months[l.month - 1]} ${l.year}';
   }
 
-  final st = g(w, ['status']);
-  final status = st == 'requested'
-      ? 'ລໍຖ້າອະນຸມັດ (ຍັງບໍ່ຕັດສະຕັອກ)'
-      : st == 'open'
-          ? 'ອະນຸມັດແລ້ວ (ຕັດສະຕັອກແລ້ວ)'
-          : st == 'closed'
-              ? 'ປິດແລ້ວ'
-              : st;
   final no = g(w, ['withdrawNo', 'id']);
-  final date = when(g(w, ['createdAt']));
-  final branch = g(w, ['branchName', 'branchId']);
-  final by = g(w, ['createdBy']);
-  final atm = g(w, ['atmId']);
-  final bc = g(w, ['barcode']);
-  final note = g(w, ['note']);
+  final date = laoDate(g(w, ['createdAt']));
+  var branch = g(w, ['atmBranch']);
+  if (branch.isEmpty) branch = g(w, ['branchName', 'branchId']);
+  final model = g(w, ['atmModel']);
+  final location = g(w, ['atmLocation']);
   final items = w['items'] is List
       ? [for (final e in w['items'] as List) e as Map]
       : <Map>[];
@@ -919,54 +993,74 @@ Future<Uint8List> buildWithdrawalPdf(
   };
   final thumbs = await _loadThumbs(urls);
 
-  double total = 0;
-  final data = <List<String>>[];
+  // ---- fixed wording of the letter (edit here if a word is wrong) ----
+  const title = 'ໜັງສືສະເໜີ';
+  const toLine = 'ຮຽນ: ທ່ານ ຫົວໜ້າຝ່າຍເຕັກໂນໂລຊີຂໍ້ມູນຂ່າວສານທີ່ນັບຖືຢ່າງສູງ';
+  const subjectLine = 'ເລື່ອງ: ເບີກອາໄຫຼ່ເອທີເອັມ ATM';
+  final refLine = '- ອີງຕາມ ການກວດກາຕິດຕາມຕູ້ ATM ຄືຈິງໃນຄັ້ງວັນທີ່ $date.';
+  final bodyText =
+      '          ສາຂາ$branch ຂໍຖືເປັນກຽດສະເໜີມາຍັງທ່ານເພື່ອເບີກອາໄຫຼ່ເອທີເອັມເນື່ອງຈາກອຸປະກອນຂອງຕູ້ໃຊ້ງານບໍ່ໄດ້ ເຊິ່ງລາຍລະອຽດດັ່ງລຸ່ມນີ້:';
+  const closeText =
+      '          ດັ່ງນັ້ນ ຈຶ່ງສະເໜີມາຍັງທ່ານເພື່ອພິຈາລະນາ ແລະ ແກ້ໄຂຕາມຄວາມເໝາະສົມດ້ວຍ.';
+  const respectText = 'ຮຽນມາດ້ວຍຄວາມເຄົາລົບ ແລະ ນັບຖືຢ່າງສູງ.';
+  final topLeft = 'ສາຂາ$branch';
+  final topNo = 'ເລກທີ່: $no';
+  final topPlace = '$branch, ວັນທີ $date';
+  final signLeft = 'ຫົວໜ້າສາຂາ$branch';
+  const signRight = 'ຜູ້ສະເໜີ';
+
+  final pageW = PdfPageFormat.a4.width;
+  const margin = 36.0;
+  final contentW = pageW - margin * 2;
+  const half = 250.0;
+  final cols = <double>[28, 84, 76, 98, 120, 40, 77];
+  const heads = [
+    'ລຳດັບ',
+    'ສາຂາ',
+    'ລຸ້ນຕູ້',
+    'ທີ່ຕັ້ງຕູ້',
+    'ອາໄຫຼ່',
+    'ຈຳນວນ',
+    'ວັນເດືອນປີ'
+  ];
+
+  final rowsData = <List<String>>[];
   final imgs = <Uint8List?>[];
   var n = 0;
   for (final i in items) {
     n++;
     final q = double.tryParse('${i['qty'] ?? 0}') ?? 0;
-    total += q;
     imgs.add(thumbs[imageUrls['${i['productId']}'] ?? '']?.bytes);
-    data.add([
+    rowsData.add([
       '$n',
+      branch,
+      model,
+      location,
       g(i, ['productName', 'name', 'productId']),
       q == q.roundToDouble() ? q.toInt().toString() : q.toStringAsFixed(2),
+      date,
     ]);
   }
 
-  final texts = <String>{
-    'ໃບເບີກອາໄຫຼ່',
-    'ເລກທີ: ',
-    'ວັນທີ: ',
-    'ສາຂາ: ',
-    'ຜູ້ບັນທຶກ: ',
-    'ສະຖານະ: ',
-    'ຕູ້ ATM: ',
-    'Terminal: ',
-    'ໝາຍເຫດ: ',
-    'ສິນຄ້າ',
-    'ຈຳນວນ',
-    'ລວມ',
-    'ຜູ້ເບີກ',
-    'ຜູ້ອະນຸມັດ',
-    'ລາຍເຊັນ',
-    'ວັນທີ / Date',
-    no,
-    date,
-    branch,
-    by,
-    status,
-    note,
-    for (final r in data) ...r,
-  };
-  await _prepLao(texts);
-  for (final sz in [16.0, 9.0, 12.0]) {
-    for (final tx in texts) {
-      if (_laoRe.hasMatch(tx)) {
-        await _renderLao(tx, sz, true);
-        await _renderLao(tx, sz, false);
-      }
+  await _ensureFont();
+  await _wdPrep(title, 18, true, contentW);
+  await _wdPrep(toLine, 11, false, contentW);
+  await _wdPrep(subjectLine, 11, false, contentW);
+  await _wdPrep(refLine, 11, false, contentW);
+  await _wdPrep(bodyText, 11, false, contentW);
+  await _wdPrep(closeText, 11, false, contentW);
+  await _wdPrep(respectText, 11, false, contentW);
+  await _wdPrep(topLeft, 11, false, half);
+  await _wdPrep(topNo, 11, false, half);
+  await _wdPrep(topPlace, 11, false, half);
+  await _wdPrep(signLeft, 11, true, 240);
+  await _wdPrep(signRight, 11, true, 240);
+  for (var c = 0; c < heads.length; c++) {
+    await _wdPrep(heads[c], 9, true, cols[c] - 8);
+  }
+  for (final r in rowsData) {
+    for (var c = 0; c < r.length; c++) {
+      await _wdPrep(r[c], 9, false, cols[c] - 8);
     }
   }
 
@@ -975,102 +1069,94 @@ Future<Uint8List> buildWithdrawalPdf(
   final doc =
       pw.Document(theme: pw.ThemeData.withFont(base: fBase, bold: fBold));
   final lh = await loadLetterhead();
-  final pageW = PdfPageFormat.a4.width;
-
-  pw.Widget sign(String role) => pw.Expanded(
-          child: pw.Column(children: [
-        _txt(role, size: 9, bold: true),
-        pw.SizedBox(height: 44),
-        pw.Container(height: 0.6, color: PdfColors.grey700),
-        pw.SizedBox(height: 3),
-        _txt('ລາຍເຊັນ', size: 9),
-        pw.SizedBox(height: 6),
-        _txt('ວັນທີ / Date', size: 9),
-      ]));
-
-  pw.Widget line(String k, String v) => pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 3),
-      child: pw.Row(children: [
-        pw.SizedBox(width: 80, child: _txt(k, size: 9, bold: true)),
-        _txt(v.isEmpty ? '-' : v, size: 9),
-      ]));
 
   doc.addPage(pw.MultiPage(
     pageTheme: pw.PageTheme(
       pageFormat: PdfPageFormat.a4,
-      margin: pw.EdgeInsets.fromLTRB(
-          24, pageW * lh.headerRatio + 10, 24, pageW * lh.footerRatio + 8),
+      margin: pw.EdgeInsets.fromLTRB(margin, pageW * lh.headerRatio + 10,
+          margin, pageW * lh.footerRatio + 8),
       theme: pw.ThemeData.withFont(base: fBase, bold: fBold),
       buildBackground: (ctx) => ldbPdfBackground(lh),
     ),
     build: (ctx) => [
-      _txt('ໃບເບີກອາໄຫຼ່', size: 16, bold: true),
+      pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.SizedBox(width: half, child: _wdBlock(topLeft, 11, false, half)),
+            pw.SizedBox(
+                width: half,
+                child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      _wdBlock(topNo, 11, false, half,
+                          align: pw.Alignment.topRight,
+                          ta: pw.TextAlign.right),
+                      _wdBlock(topPlace, 11, false, half,
+                          align: pw.Alignment.topRight,
+                          ta: pw.TextAlign.right),
+                    ])),
+          ]),
+      pw.SizedBox(height: 16),
+      _wdBlock(title, 18, true, contentW,
+          align: pw.Alignment.topCenter, ta: pw.TextAlign.center),
+      pw.SizedBox(height: 12),
+      _wdBlock(toLine, 11, false, contentW),
+      _wdBlock(subjectLine, 11, false, contentW),
+      _wdBlock(refLine, 11, false, contentW),
       pw.SizedBox(height: 8),
-      line('ເລກທີ: ', no),
-      line('ວັນທີ: ', date),
-      line('ສາຂາ: ', branch),
-      line('ຜູ້ບັນທຶກ: ', by),
-      line('ສະຖານະ: ', status),
-      if (atm.isNotEmpty) line('ຕູ້ ATM: ', atm),
-      if (bc.isNotEmpty) line('Terminal: ', bc),
+      _wdBlock(bodyText, 11, false, contentW),
       pw.SizedBox(height: 8),
       pw.Table(
-        border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.4),
+        border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
         columnWidths: {
-          0: const pw.FixedColumnWidth(26),
-          1: const pw.FixedColumnWidth(68),
-          2: const pw.FlexColumnWidth(6),
-          3: const pw.FixedColumnWidth(52),
+          for (var c = 0; c < cols.length; c++)
+            c: pw.FixedColumnWidth(cols[c])
         },
         children: [
-          pw.TableRow(
-            decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-            children: [
-              _cell('No', bold: true),
-              _cell('', bold: true),
-              _cell('ສິນຄ້າ', bold: true),
-              _cell('ຈຳນວນ', bold: true, right: true),
-            ],
-          ),
-          for (var k = 0; k < data.length; k++)
+          pw.TableRow(children: [
+            for (var c = 0; c < heads.length; c++)
+              _wdCell(heads[c], cols[c], bold: true),
+          ]),
+          for (var k = 0; k < rowsData.length; k++)
             pw.TableRow(
               verticalAlignment: pw.TableCellVerticalAlignment.middle,
               children: [
-                _cell(data[k][0]),
-                pw.Padding(
-                  padding: const pw.EdgeInsets.all(3),
-                  child: imgs[k] == null
-                      ? pw.SizedBox(width: 60, height: 60)
-                      : pw.Image(pw.MemoryImage(imgs[k]!),
-                          width: 60, height: 60, fit: pw.BoxFit.cover),
-                ),
-                _cell(data[k][1]),
-                _cell(data[k][2], right: true),
+                for (var c = 0; c < rowsData[k].length; c++)
+                  c == 4
+                      ? pw.Column(mainAxisSize: pw.MainAxisSize.min, children: [
+                          if (imgs[k] != null)
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.only(top: 4),
+                                child: pw.Image(pw.MemoryImage(imgs[k]!),
+                                    width: 40,
+                                    height: 40,
+                                    fit: pw.BoxFit.cover)),
+                          _wdCell(rowsData[k][c], cols[c]),
+                        ])
+                      : _wdCell(rowsData[k][c], cols[c]),
               ],
             ),
-          pw.TableRow(
-            decoration: const pw.BoxDecoration(color: PdfColors.grey100),
-            children: [
-              _cell(''),
-              _cell(''),
-              _cell('ລວມ', bold: true),
-              _cell(
-                  total == total.roundToDouble()
-                      ? total.toInt().toString()
-                      : total.toStringAsFixed(2),
-                  bold: true,
-                  right: true),
-            ],
-          ),
         ],
       ),
-      pw.SizedBox(height: 10),
-      line('ໝາຍເຫດ: ', note),
-      pw.SizedBox(height: 40),
-      pw.Row(children: [
-        sign('ຜູ້ເບີກ'),
-        pw.SizedBox(width: 40),
-        sign('ຜູ້ອະນຸມັດ')
+      pw.SizedBox(height: 12),
+      _wdBlock(closeText, 11, false, contentW),
+      _wdBlock(respectText, 11, false, contentW,
+          align: pw.Alignment.topRight, ta: pw.TextAlign.right),
+      pw.SizedBox(height: 26),
+      pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.Expanded(
+            child: pw.Column(children: [
+          _wdBlock(signLeft, 11, true, 240,
+              align: pw.Alignment.topCenter, ta: pw.TextAlign.center),
+          pw.SizedBox(height: 100),
+        ])),
+        pw.Expanded(
+            child: pw.Column(children: [
+          _wdBlock(signRight, 11, true, 240,
+              align: pw.Alignment.topCenter, ta: pw.TextAlign.center),
+          pw.SizedBox(height: 100),
+        ])),
       ]),
     ],
   ));

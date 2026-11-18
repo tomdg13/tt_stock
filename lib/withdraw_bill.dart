@@ -80,6 +80,26 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
     if (mounted) setState(() {});
   }
 
+  /// Adds the ATM's model / location / branch (GET /atms/:id) for the letter table.
+  Future<Map<String, dynamic>> _withAtm() async {
+    final m = Map<String, dynamic>.from(_d);
+    final atmId = '${_d['atmId'] ?? ''}';
+    if (atmId.isNotEmpty) {
+      try {
+        final a = await Api.get('/atms/${Uri.encodeComponent(atmId)}');
+        if (a is Map) {
+          m['atmModel'] = '${a['atmVersion'] ?? ''}';
+          m['atmLocation'] = '${a['atmLocation'] ?? ''}';
+          m['atmBranch'] = '${a['atmBranchId'] ?? ''}'
+              .replaceFirst(RegExp(r'^[A-Z0-9]+-\d+\s+'), '');
+        }
+      } catch (e) {
+        debugPrint('[WD] bill: atm lookup failed: $e');
+      }
+    }
+    return m;
+  }
+
   Future<Uint8List> _pdf() async {
     await _loading;
     final urls = <String, String>{
@@ -87,7 +107,7 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
         if (e.value.isNotEmpty) e.key: productImageUrl(e.value),
     };
     debugPrint('[WD] bill: buildWithdrawalPdf no=$_name images=${urls.length}');
-    final bytes = await buildWithdrawalPdf(_d, urls);
+    final bytes = await buildWithdrawalPdf(await _withAtm(), urls);
     debugPrint('[WD] bill: PDF built ${bytes.length} bytes');
     return bytes;
   }
