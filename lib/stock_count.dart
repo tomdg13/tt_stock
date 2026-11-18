@@ -1464,6 +1464,7 @@ class _AuditPageState extends State<AuditPage> {
           dataRowMinHeight: 44,
           dataRowMaxHeight: 60,
           columns: const [
+            DataColumn(label: Text('ຮູບ')),
             DataColumn(label: Text('ລາຍການ')),
             DataColumn(label: Text('ທີ່ເກັບ')),
             DataColumn(label: Text('ອາໄຫຼ່ຫຼັກ')),
@@ -1481,6 +1482,7 @@ class _AuditPageState extends State<AuditPage> {
             return DataRow(
               onSelectChanged: _isOpen ? (_) => _askQty(r) : null,
               cells: [
+                DataCell(_thumb(_imgOf(r), size: 40)),
                 DataCell(SizedBox(
                     width: 200,
                     child: Text(pick(r, ['productName']),
