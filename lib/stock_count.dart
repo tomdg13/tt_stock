@@ -1527,33 +1527,28 @@ class _AuditPageState extends State<AuditPage> {
     if (!_isOpen) return const SizedBox.shrink();
     final sp = crudSpec('prod');
     final canEdit = sp != null && sp.canEdit;
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      alignment: Alignment.centerLeft,
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        FilledButton.tonalIcon(
-          onPressed: () => _askQty(r),
-          icon: const Icon(Icons.edit_note, size: 18),
-          label: const Text('ໃສ່ຈຳນວນ'),
-          style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      IconButton.filledTonal(
+        tooltip: 'ໃສ່ຈຳນວນ',
+        visualDensity: VisualDensity.compact,
+        onPressed: () => _askQty(r),
+        icon: const Icon(Icons.edit_note, size: 22),
+      ),
+      if (canEdit) ...[
+        const SizedBox(width: 6),
+        IconButton.outlined(
+          tooltip: 'ແກ້ໄຂສິນຄ້າ',
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _editProduct(r),
+          icon: const Icon(Icons.edit_outlined, size: 20),
         ),
-        if (canEdit) ...[
-          const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: () => _editProduct(r),
-            icon: const Icon(Icons.edit_outlined, size: 18),
-            label: const Text('ແກ້ໄຂສິນຄ້າ'),
-            style:
-                OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-          ),
-        ],
-      ]),
-    );
+      ],
+    ]);
   }
 
   Widget _table(List<Map<String, dynamic>> rows) {
     final cs = Theme.of(context).colorScheme;
-    const w = <double>[56, 200, 70, 120, 90, 100, 80, 80, 70, 280];
+    const w = <double>[56, 200, 70, 120, 90, 100, 80, 80, 70, 112];
     const heads = <String>[
       'ຮູບ',
       'ລາຍການ',
