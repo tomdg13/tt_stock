@@ -1454,6 +1454,7 @@ class _AuditPageState extends State<AuditPage> {
     return pick(_info[id] ?? const <String, dynamic>{}, ['typeName']);
   }
 
+  bool _tableFull = true; // true = all columns, false = short view
   int _sortCol = -1;
   bool _sortAsc = true;
 
@@ -1565,8 +1566,15 @@ class _AuditPageState extends State<AuditPage> {
       'ຕ່າງ',
       'ຈັດການ'
     ];
-    final total = w.fold<double>(0, (a, b) => a + b) + 16;
-    Widget cell(int i, Widget child) => SizedBox(
+    bool vis(int i) =>
+        _tableFull || const [0, 1, 2, 6, 7, 8, 9].contains(i);
+    var total = 16.0;
+    for (var i = 0; i < w.length; i++) {
+      if (vis(i)) total += w[i];
+    }
+    Widget cell(int i, Widget child) => !vis(i)
+        ? const SizedBox.shrink()
+        : SizedBox(
         width: w[i],
         child: Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -1576,7 +1584,7 @@ class _AuditPageState extends State<AuditPage> {
                 child: child)));
     const headStyle = TextStyle(fontWeight: FontWeight.w700, fontSize: 13);
     final sorted = _sortedTableRows(rows);
-    return SingleChildScrollView(
+    final body = SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: SizedBox(
         width: total,
@@ -1588,6 +1596,7 @@ class _AuditPageState extends State<AuditPage> {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(children: [
               for (var i = 0; i < heads.length; i++)
+                if (vis(i))
                 (i == 0 || i == 9)
                     ? cell(i, Text(heads[i], style: headStyle))
                     : InkWell(
@@ -1677,6 +1686,24 @@ class _AuditPageState extends State<AuditPage> {
         ]),
       ),
     );
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+        child: Row(children: [
+          SegmentedButton<bool>(
+            showSelectedIcon: false,
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            segments: const [
+              ButtonSegment(value: true, label: Text('ເຕັມ')),
+              ButtonSegment(value: false, label: Text('ສັ້ນ')),
+            ],
+            selected: {_tableFull},
+            onSelectionChanged: (v) => setState(() => _tableFull = v.first),
+          ),
+        ]),
+      ),
+      Expanded(child: body),
+    ]);
   }
 
   Widget _sum(String label, String value) => Column(children: [
