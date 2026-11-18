@@ -30,6 +30,7 @@ class BudgetPage extends StatefulWidget {
 
 class _BudgetPageState extends State<BudgetPage> {
   bool _asTable = true; // true = table, false = old cards
+  int _yearsSpan = 0, _yearFrom = 0, _yearTo = 0, _pctShown = 0;
   int _sortCol = -1;
   bool _sortAsc = true;
   final _pct = TextEditingController(text: '0');
@@ -153,11 +154,6 @@ class _BudgetPageState extends State<BudgetPage> {
           ),
           actions: [
             TextButton(
-                onPressed: () => setD(() => sel.addAll([
-                      for (final p in _pos) _poId(p)
-                    ])),
-                child: const Text('ເລືອກທັງໝົດ')),
-            TextButton(
                 onPressed: () => setD(() => sel.clear()),
                 child: const Text('ລ້າງ')),
             TextButton(
@@ -227,11 +223,6 @@ class _BudgetPageState extends State<BudgetPage> {
                   ]),
           ),
           actions: [
-            TextButton(
-                onPressed: () => setD(() => sel.addAll([
-                      for (final a in _audits) _auditId(a)
-                    ])),
-                child: const Text('ເລືອກທັງໝົດ')),
             TextButton(
                 onPressed: () => setD(() => sel.clear()),
                 child: const Text('ລ້າງ')),
@@ -590,6 +581,8 @@ class _BudgetPageState extends State<BudgetPage> {
                 Text('ລາຄາຕໍ່ໜ່ວຍ ${_money(num0(it['unitCost']))}',
                     style: const TextStyle(fontSize: 12)),
                 const SizedBox(height: 10),
+                _formulaText(it),
+                const SizedBox(height: 10),
                 _table([
                   'ປີທີ່ຜ່ານມາ',
                   'ຊື້ແລ້ວ',
@@ -757,11 +750,40 @@ class _BudgetPageState extends State<BudgetPage> {
     );
   }
 
+  Widget _yearsInfo(Map<String, dynamic> d) {
+    final n = num0(d['yearsSpan']).toInt();
+    final a = num0(d['yearFrom']).toInt();
+    final b = num0(d['yearTo']).toInt();
+    final pct = num0(d['pct']).toInt();
+    final txt = a > 0
+        ? 'ສູດ: ໃຊ້/ປີ = ໃຊ້ທັງໝົດ ປີ $a–$b ÷ $n ປີ  •  ຕ້ອງຊື້ = ໃຊ້/ປີ + $pct%'
+        : 'ສູດ: ໃຊ້/ປີ = ໃຊ້ 12 ເດືອນຜ່ານມາ (ບໍ່ໄດ້ເລືອກ PO)  •  ຕ້ອງຊື້ = ໃຊ້/ປີ + $pct%';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
+      child: Text(txt, style: const TextStyle(fontSize: 12)),
+    );
+  }
+
+  Widget _formulaText(Map<String, dynamic> it) {
+    final rate = num0(it['ratePerYear']);
+    final used = num0(it['usedTotal']);
+    final withPct = (rate * (1 + _pctShown / 100)).ceil();
+    final line = _yearFrom > 0
+        ? 'ໃຊ້ ${_n(used)} ÷ $_yearsSpan ປີ ($_yearFrom–$_yearTo) = ${_n(rate)}/ປີ → +$_pctShown% = ${_n(withPct)}'
+        : 'ໃຊ້ 12 ເດືອນຜ່ານມາ ${_n(used)} = ${_n(rate)}/ປີ → +$_pctShown% = ${_n(withPct)}';
+    return Text(line, style: const TextStyle(fontSize: 12));
+  }
+
   Widget _result(Map<String, dynamic> d) {
     final past = asList(d['pastYears']);
+    _yearsSpan = num0(d['yearsSpan']).toInt();
+    _yearFrom = num0(d['yearFrom']).toInt();
+    _yearTo = num0(d['yearTo']).toInt();
+    _pctShown = num0(d['pct']).toInt();
     final items = asList(d['items']);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       _summary(d),
+      _yearsInfo(d),
       const SizedBox(height: 4),
       if (items.isEmpty)
         const Padding(
