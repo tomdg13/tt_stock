@@ -1454,27 +1454,100 @@ class _AuditPageState extends State<AuditPage> {
     return pick(_info[id] ?? const <String, dynamic>{}, ['typeName']);
   }
 
+  int _sortCol = -1;
+  bool _sortAsc = true;
+
+  void _setSort(int col, bool asc) => setState(() {
+        _sortCol = col;
+        _sortAsc = asc;
+      });
+
+  int _natCmp(String a, String b) {
+    final re = RegExp(r'(\d+|\D+)');
+    final x = [for (final m in re.allMatches(a.toLowerCase())) m.group(0)!];
+    final y = [for (final m in re.allMatches(b.toLowerCase())) m.group(0)!];
+    for (var i = 0; i < x.length && i < y.length; i++) {
+      final nx = int.tryParse(x[i]);
+      final ny = int.tryParse(y[i]);
+      final c = (nx != null && ny != null)
+          ? nx.compareTo(ny)
+          : x[i].compareTo(y[i]);
+      if (c != 0) return c;
+    }
+    return x.length.compareTo(y.length);
+  }
+
+  Object? _sortKey(Map<String, dynamic> r) {
+    final id = '${r['productId']}';
+    switch (_sortCol) {
+      case 1:
+        return pick(r, ['productName']);
+      case 2:
+        return pick(_info[id] ?? const <String, dynamic>{}, ['binCode']);
+      case 3:
+        return _parentName(id);
+      case 4:
+        return _partTypeLabel(id);
+      case 5:
+        return _branchName;
+      case 6:
+        return num0(r['systemQty']);
+      case 7:
+        return r['countedQty'] == null ? null : num0(r['countedQty']);
+      case 8:
+        return r['countedQty'] == null
+            ? null
+            : num0(r['countedQty']) - num0(r['systemQty']);
+    }
+    return null;
+  }
+
+  List<Map<String, dynamic>> _sortedTableRows(
+      List<Map<String, dynamic>> rows) {
+    if (_sortCol < 0) return rows;
+    final out = [...rows];
+    out.sort((a, b) {
+      var ka = _sortKey(a);
+      var kb = _sortKey(b);
+      if (ka is String && ka.isEmpty) ka = null;
+      if (kb is String && kb.isEmpty) kb = null;
+      if (ka == null && kb == null) return 0;
+      if (ka == null) return 1; // empty values always last
+      if (kb == null) return -1;
+      final c = (ka is num && kb is num)
+          ? ka.compareTo(kb)
+          : _natCmp('$ka', '$kb');
+      return _sortAsc ? c : -c;
+    });
+    return out;
+  }
+
   Widget _table(List<Map<String, dynamic>> rows) {
     return SingleChildScrollView(
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: DataTable(
           columnSpacing: 16,
+          sortColumnIndex: _sortCol < 0 ? null : _sortCol,
+          sortAscending: _sortAsc,
           headingRowHeight: 40,
           dataRowMinHeight: 44,
           dataRowMaxHeight: 60,
-          columns: const [
-            DataColumn(label: Text('ຮູບ')),
-            DataColumn(label: Text('ລາຍການ')),
-            DataColumn(label: Text('ທີ່ເກັບ')),
-            DataColumn(label: Text('ອາໄຫຼ່ຫຼັກ')),
-            DataColumn(label: Text('ປະເພດ')),
-            DataColumn(label: Text('Branch')),
-            DataColumn(label: Text('ໃນລະບົບ'), numeric: true),
-            DataColumn(label: Text('ນັບໄດ້'), numeric: true),
-            DataColumn(label: Text('ຕ່າງ'), numeric: true),
+          columns: [
+            const DataColumn(label: Text('ຮູບ')),
+            DataColumn(label: const Text('ລາຍການ'), onSort: _setSort),
+            DataColumn(label: const Text('ທີ່ເກັບ'), onSort: _setSort),
+            DataColumn(label: const Text('ອາໄຫຼ່ຫຼັກ'), onSort: _setSort),
+            DataColumn(label: const Text('ປະເພດ'), onSort: _setSort),
+            DataColumn(label: const Text('Branch'), onSort: _setSort),
+            DataColumn(
+                label: const Text('ໃນລະບົບ'), numeric: true, onSort: _setSort),
+            DataColumn(
+                label: const Text('ນັບໄດ້'), numeric: true, onSort: _setSort),
+            DataColumn(
+                label: const Text('ຕ່າງ'), numeric: true, onSort: _setSort),
           ],
-          rows: rows.map((r) {
+          rows: _sortedTableRows(rows).map((r) {
             final sys = num0(r['systemQty']);
             final c = r['countedQty'] == null ? null : num0(r['countedQty']);
             final diff = c == null ? null : c - sys;
