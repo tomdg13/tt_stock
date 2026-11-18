@@ -1523,58 +1523,128 @@ class _AuditPageState extends State<AuditPage> {
   }
 
   Widget _table(List<Map<String, dynamic>> rows) {
+    final cs = Theme.of(context).colorScheme;
+    const w = <double>[56, 200, 70, 120, 90, 100, 80, 80, 70];
+    const heads = <String>[
+      'ຮູບ',
+      'ລາຍການ',
+      'ທີ່ເກັບ',
+      'ອາໄຫຼ່ຫຼັກ',
+      'ປະເພດ',
+      'Branch',
+      'ໃນລະບົບ',
+      'ນັບໄດ້',
+      'ຕ່າງ'
+    ];
+    final total = w.fold<double>(0, (a, b) => a + b) + 16;
+    Widget cell(int i, Widget child) => SizedBox(
+        width: w[i],
+        child: Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Align(
+                alignment:
+                    i >= 6 ? Alignment.centerRight : Alignment.centerLeft,
+                child: child)));
+    const headStyle = TextStyle(fontWeight: FontWeight.w700, fontSize: 13);
+    final sorted = _sortedTableRows(rows);
     return SingleChildScrollView(
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          columnSpacing: 16,
-          sortColumnIndex: _sortCol < 0 ? null : _sortCol,
-          sortAscending: _sortAsc,
-          headingRowHeight: 40,
-          dataRowMinHeight: 44,
-          dataRowMaxHeight: 60,
-          columns: [
-            const DataColumn(label: Text('ຮູບ')),
-            DataColumn(label: const Text('ລາຍການ'), onSort: _setSort),
-            DataColumn(label: const Text('ທີ່ເກັບ'), onSort: _setSort),
-            DataColumn(label: const Text('ອາໄຫຼ່ຫຼັກ'), onSort: _setSort),
-            DataColumn(label: const Text('ປະເພດ'), onSort: _setSort),
-            DataColumn(label: const Text('Branch'), onSort: _setSort),
-            DataColumn(
-                label: const Text('ໃນລະບົບ'), numeric: true, onSort: _setSort),
-            DataColumn(
-                label: const Text('ນັບໄດ້'), numeric: true, onSort: _setSort),
-            DataColumn(
-                label: const Text('ຕ່າງ'), numeric: true, onSort: _setSort),
-          ],
-          rows: _sortedTableRows(rows).map((r) {
-            final sys = num0(r['systemQty']);
-            final c = r['countedQty'] == null ? null : num0(r['countedQty']);
-            final diff = c == null ? null : c - sys;
-            final inf = _info['${r['productId']}'] ?? const <String, dynamic>{};
-            return DataRow(
-              onSelectChanged: _isOpen ? (_) => _askQty(r) : null,
-              cells: [
-                DataCell(_thumb(_imgOf(r), size: 40)),
-                DataCell(SizedBox(
-                    width: 200,
-                    child: Text(pick(r, ['productName']),
-                        maxLines: 2, overflow: TextOverflow.ellipsis))),
-                DataCell(Text(pick(inf, ['binCode']))),
-                DataCell(Text(_parentName('${r['productId']}'))),
-                DataCell(Text(_partTypeLabel('${r['productId']}'))),
-                DataCell(Text(_branchName)),
-                DataCell(Text(_s(sys))),
-                DataCell(Text(c == null ? '-' : _s(c))),
-                DataCell(Text(
-                    diff == null ? '-' : '${diff > 0 ? '+' : ''}${_s(diff)}',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: diff == null || diff == 0 ? null : Colors.red))),
-              ],
-            );
-          }).toList(),
-        ),
+      scrollDirection: Axis.horizontal,
+      child: SizedBox(
+        width: total,
+        child: Column(children: [
+          // fixed header: stays on screen while the rows scroll
+          Container(
+            height: 40,
+            color: cs.surfaceContainerHighest,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(children: [
+              for (var i = 0; i < heads.length; i++)
+                i == 0
+                    ? cell(i, Text(heads[i], style: headStyle))
+                    : InkWell(
+                        onTap: () =>
+                            _setSort(i, _sortCol == i ? !_sortAsc : true),
+                        child: SizedBox(
+                          width: w[i],
+                          height: 40,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Row(
+                                mainAxisAlignment: i >= 6
+                                    ? MainAxisAlignment.end
+                                    : MainAxisAlignment.start,
+                                children: [
+                                  Flexible(
+                                      child: Text(heads[i],
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: headStyle)),
+                                  if (_sortCol == i)
+                                    Icon(
+                                        _sortAsc
+                                            ? Icons.arrow_upward
+                                            : Icons.arrow_downward,
+                                        size: 14),
+                                ]),
+                          ),
+                        ),
+                      ),
+            ]),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: sorted.length,
+              itemBuilder: (_, k) {
+                final r = sorted[k];
+                final id = '${r['productId']}';
+                final sys = num0(r['systemQty']);
+                final c =
+                    r['countedQty'] == null ? null : num0(r['countedQty']);
+                final diff = c == null ? null : c - sys;
+                final inf = _info[id] ?? const <String, dynamic>{};
+                return InkWell(
+                  onTap: _isOpen ? () => _askQty(r) : null,
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 52),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                        border: Border(
+                            bottom: BorderSide(
+                                color: Theme.of(context).dividerColor))),
+                    child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          cell(0, _thumb(_imgOf(r), size: 40)),
+                          cell(
+                              1,
+                              Text(pick(r, ['productName']),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis)),
+                          cell(2, Text(pick(inf, ['binCode']))),
+                          cell(3, Text(_parentName(id))),
+                          cell(4, Text(_partTypeLabel(id))),
+                          cell(5, Text(_branchName)),
+                          cell(6, Text(_s(sys))),
+                          cell(7, Text(c == null ? '-' : _s(c))),
+                          cell(
+                              8,
+                              Text(
+                                  diff == null
+                                      ? '-'
+                                      : '${diff > 0 ? '+' : ''}${_s(diff)}',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: diff == null || diff == 0
+                                          ? null
+                                          : Colors.red))),
+                        ]),
+                  ),
+                );
+              },
+            ),
+          ),
+        ]),
       ),
     );
   }
