@@ -1532,7 +1532,7 @@ class _AuditPageState extends State<AuditPage> {
         tooltip: 'ໃສ່ຈຳນວນ',
         visualDensity: VisualDensity.compact,
         onPressed: () => _askQty(r),
-        icon: const Icon(Icons.edit_note, size: 22),
+        icon: const Icon(Icons.task_alt, size: 22),
       ),
       if (canEdit) ...[
         const SizedBox(width: 6),
