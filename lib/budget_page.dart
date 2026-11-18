@@ -153,6 +153,11 @@ class _BudgetPageState extends State<BudgetPage> {
           ),
           actions: [
             TextButton(
+                onPressed: () => setD(() => sel.addAll([
+                      for (final p in _pos) _poId(p)
+                    ])),
+                child: const Text('ເລືອກທັງໝົດ')),
+            TextButton(
                 onPressed: () => setD(() => sel.clear()),
                 child: const Text('ລ້າງ')),
             TextButton(
@@ -222,6 +227,11 @@ class _BudgetPageState extends State<BudgetPage> {
                   ]),
           ),
           actions: [
+            TextButton(
+                onPressed: () => setD(() => sel.addAll([
+                      for (final a in _audits) _auditId(a)
+                    ])),
+                child: const Text('ເລືອກທັງໝົດ')),
             TextButton(
                 onPressed: () => setD(() => sel.clear()),
                 child: const Text('ລ້າງ')),
