@@ -1522,9 +1522,37 @@ class _AuditPageState extends State<AuditPage> {
     return out;
   }
 
+  Widget _tableActions(Map<String, dynamic> r) {
+    if (!_isOpen) return const SizedBox.shrink();
+    final sp = crudSpec('prod');
+    final canEdit = sp != null && sp.canEdit;
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        FilledButton.tonalIcon(
+          onPressed: () => _askQty(r),
+          icon: const Icon(Icons.edit_note, size: 18),
+          label: const Text('ໃສ່ຈຳນວນ'),
+          style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+        ),
+        if (canEdit) ...[
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: () => _editProduct(r),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('ແກ້ໄຂສິນຄ້າ'),
+            style:
+                OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+          ),
+        ],
+      ]),
+    );
+  }
+
   Widget _table(List<Map<String, dynamic>> rows) {
     final cs = Theme.of(context).colorScheme;
-    const w = <double>[56, 200, 70, 120, 90, 100, 80, 80, 70];
+    const w = <double>[56, 200, 70, 120, 90, 100, 80, 80, 70, 280];
     const heads = <String>[
       'ຮູບ',
       'ລາຍການ',
@@ -1534,7 +1562,8 @@ class _AuditPageState extends State<AuditPage> {
       'Branch',
       'ໃນລະບົບ',
       'ນັບໄດ້',
-      'ຕ່າງ'
+      'ຕ່າງ',
+      'ຈັດການ'
     ];
     final total = w.fold<double>(0, (a, b) => a + b) + 16;
     Widget cell(int i, Widget child) => SizedBox(
@@ -1543,7 +1572,7 @@ class _AuditPageState extends State<AuditPage> {
             padding: const EdgeInsets.only(right: 8),
             child: Align(
                 alignment:
-                    i >= 6 ? Alignment.centerRight : Alignment.centerLeft,
+                    (i >= 6 && i <= 8) ? Alignment.centerRight : Alignment.centerLeft,
                 child: child)));
     const headStyle = TextStyle(fontWeight: FontWeight.w700, fontSize: 13);
     final sorted = _sortedTableRows(rows);
@@ -1559,7 +1588,7 @@ class _AuditPageState extends State<AuditPage> {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(children: [
               for (var i = 0; i < heads.length; i++)
-                i == 0
+                (i == 0 || i == 9)
                     ? cell(i, Text(heads[i], style: headStyle))
                     : InkWell(
                         onTap: () =>
@@ -1638,6 +1667,7 @@ class _AuditPageState extends State<AuditPage> {
                                       color: diff == null || diff == 0
                                           ? null
                                           : Colors.red))),
+                          cell(9, _tableActions(r)),
                         ]),
                   ),
                 );
