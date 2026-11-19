@@ -12,6 +12,10 @@ import 'crud.dart' show openEdit;
 import 'specs.dart' show crudSpec;
 import 'dart:convert' as cv;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'plan_excel.dart';
+import 'plan_checked.dart';
+import 'plan_bar.dart';
+import 'plan_pdf.dart';
 
 String _n(num v) => v % 1 == 0 ? v.toInt().toString() : v.toStringAsFixed(1);
 
@@ -1479,6 +1483,58 @@ class _PlanItemsPageState extends State<_PlanItemsPage> {
 
   void _onQ(String v) => setState(() => _q = v.trim().toLowerCase());
 
+  Future<void> _persistPlan() async {
+    final all = await widget.host._loadBuyPlans();
+    for (final pl in all) {
+      if (pl['id'] == widget.plan['id']) pl['items'] = widget.items;
+    }
+    await widget.host._storeBuyPlans(all);
+  }
+
+  Widget _planBar() {
+    return PlanBar(
+      onSave: _persistPlan,
+      onList: _openChecked,
+      onExport: () => exportPlanXlsx(widget.plan, widget.items),
+      onPdf: () => exportPlanPdf(widget.plan, widget.items),
+    );
+  }
+
+  Future<void> _openChecked() async {
+    final budget = <String, Map<String, dynamic>>{};
+    for (final b in asList(widget.host._last?['items'])) {
+      budget[widget.host._keyOf(b)] = b;
+    }
+    for (final x in widget.items) {
+      final b = budget['${x['key']}'];
+      if (b is Map<String, dynamic>) {
+        x['stock'] = num0(b['stock']);
+        x['counted'] = b['counted'] == null ? null : num0(b['counted']); x['used'] = b['counted'] == null ? 0 : num0(b['stock']) - num0(b['counted']);
+        x['must'] = widget.host._mustBuy(b);
+        x['po'] = widget.host._actualOf(b);
+      }
+    }
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => PlanCheckedPage(
+            plan: widget.plan,
+            items: widget.items,
+            onExport: () => exportPlanXlsx(widget.plan, widget.items),
+            onSave: () async {
+              final all = await widget.host._loadBuyPlans();
+              for (final pl in all) {
+                if (pl['id'] == widget.plan['id']) pl['items'] = widget.items;
+              }
+              await widget.host._storeBuyPlans(all);
+            })));
+    if (mounted) setState(() {});
+  }
+
+
+
+
+
+
+
   Future<void> _toggle(Map<String, dynamic> x, bool on) async {
     setState(() => x['done'] = on);
     final all = await widget.host._loadBuyPlans();
@@ -1545,6 +1601,7 @@ class _PlanItemsPageState extends State<_PlanItemsPage> {
     final brands = groups.keys.toList()..sort();
     return Scaffold(
       appBar: AppBar(title: Text('${widget.plan['name']}')),
+      bottomNavigationBar: _planBar(),
       body: Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
