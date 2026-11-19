@@ -550,7 +550,15 @@ class _CrudFormState extends State<CrudForm> {
               final ms = <String, Set<String>>{};
               for (final r in asList(d)) {
                 final id = '${r[f.optionValue] ?? r['id'] ?? ''}';
-                final img = '${r[f.imageKey!] ?? ''}';
+                var img = '${r[f.imageKey!] ?? ''}';
+                if (img.isNotEmpty && !img.startsWith('/') && !img.startsWith('http')) {
+                  final fo = f.optionsPath!.contains('brands')
+                      ? 'brands'
+                      : f.optionsPath!.contains('models')
+                          ? 'models'
+                          : '';
+                  if (fo.isNotEmpty) img = '/uploads/$fo/$img';
+                }
                 if (id.isNotEmpty && img.isNotEmpty) im[id] = img;
                 final mi = r['modelIds'];
                 if (id.isNotEmpty && mi is List) ms[id] = {for (final x in mi) '$x'};
@@ -851,7 +859,7 @@ class _CrudFormState extends State<CrudForm> {
           imgErr = 'ບໍ່ພົບ id';
         } else {
           try {
-            await _timg.apply(savedId);
+            await _timg.apply(savedId, sp.path);
           } catch (e) {
             imgErr = '$e';
           }
@@ -946,6 +954,10 @@ class _CrudFormState extends State<CrudForm> {
           Wrap(spacing: 6, runSpacing: 6, children: [
             for (final e in o)
               FilterChip(
+                avatar: (_optImgs[f.key]?['${e.key}'] ?? '').isEmpty
+                    ? null
+                    : _optThumb(_optImgs[f.key]!['${e.key}']!, size: 24),
+                showCheckmark: (_optImgs[f.key]?['${e.key}'] ?? '').isEmpty,
                 label: Text(e.value),
                 selected: sel.contains(e.key),
                 onSelected: (on) => setState(() {
@@ -1157,6 +1169,7 @@ class _CrudFormState extends State<CrudForm> {
               TypeImageEditor(
                 existingFile: _editing ? pick(widget.row!, ['imageFile']) : '',
                 controller: _timg,
+                folder: widget.spec.path.replaceAll('/', ''),
               ),
               const SizedBox(height: 12),
             ],
