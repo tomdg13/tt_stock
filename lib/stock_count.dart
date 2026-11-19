@@ -1492,10 +1492,16 @@ class _AuditPageState extends State<AuditPage> {
       case 5:
         return _branchName;
       case 6:
-        return num0(r['systemQty']);
+        return _typeName(id);
       case 7:
-        return r['countedQty'] == null ? null : num0(r['countedQty']);
+        return pick(_info[id] ?? const <String, dynamic>{}, ['brandName']);
       case 8:
+        return pick(_info[id] ?? const <String, dynamic>{}, ['modelName']);
+      case 9:
+        return num0(r['systemQty']);
+      case 10:
+        return r['countedQty'] == null ? null : num0(r['countedQty']);
+      case 11:
         return r['countedQty'] == null
             ? null
             : num0(r['countedQty']) - num0(r['systemQty']);
@@ -1548,7 +1554,7 @@ class _AuditPageState extends State<AuditPage> {
 
   Widget _table(List<Map<String, dynamic>> rows) {
     final cs = Theme.of(context).colorScheme;
-    const w = <double>[56, 200, 70, 120, 90, 100, 80, 80, 70, 112];
+    const w = <double>[56, 200, 70, 120, 90, 100, 110, 90, 90, 80, 80, 70, 112];
     const heads = <String>[
       'ຮູບ',
       'ລາຍການ',
@@ -1556,13 +1562,16 @@ class _AuditPageState extends State<AuditPage> {
       'ອາໄຫຼ່ຫຼັກ',
       'ປະເພດ',
       'Branch',
+      'ປະເພດສິນຄ້າ',
+      'brand',
+      'model',
       'ໃນລະບົບ',
       'ນັບໄດ້',
       'ຕ່າງ',
       'ຈັດການ'
     ];
     bool vis(int i) =>
-        _tableFull || const [0, 1, 2, 6, 7, 8, 9].contains(i);
+        _tableFull || const [0, 1, 2, 9, 10, 11, 12].contains(i);
     var total = 16.0;
     for (var i = 0; i < w.length; i++) {
       if (vis(i)) total += w[i];
@@ -1575,7 +1584,7 @@ class _AuditPageState extends State<AuditPage> {
             padding: const EdgeInsets.only(right: 8),
             child: Align(
                 alignment:
-                    (i >= 6 && i <= 8) ? Alignment.centerRight : Alignment.centerLeft,
+                    (i >= 9 && i <= 11) ? Alignment.centerRight : Alignment.centerLeft,
                 child: child)));
     const headStyle = TextStyle(fontWeight: FontWeight.w700, fontSize: 13);
     final sorted = _sortedTableRows(rows);
@@ -1592,7 +1601,7 @@ class _AuditPageState extends State<AuditPage> {
             child: Row(children: [
               for (var i = 0; i < heads.length; i++)
                 if (vis(i))
-                (i == 0 || i == 9)
+                (i == 0 || i == 12)
                     ? cell(i, Text(heads[i], style: headStyle))
                     : InkWell(
                         onTap: () =>
@@ -1603,7 +1612,7 @@ class _AuditPageState extends State<AuditPage> {
                           child: Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: Row(
-                                mainAxisAlignment: i >= 6
+                                mainAxisAlignment: i >= 9
                                     ? MainAxisAlignment.end
                                     : MainAxisAlignment.start,
                                 children: [
@@ -1658,10 +1667,13 @@ class _AuditPageState extends State<AuditPage> {
                           cell(3, Text(_parentName(id))),
                           cell(4, Text(_partTypeLabel(id))),
                           cell(5, Text(_branchName)),
-                          cell(6, Text(_s(sys))),
-                          cell(7, Text(c == null ? '-' : _s(c))),
+                          cell(6, Text(_typeName(id))),
+                          cell(7, Text(pick(inf, ['brandName']))),
+                          cell(8, Text(pick(inf, ['modelName']))),
+                          cell(9, Text(_s(sys))),
+                          cell(10, Text(c == null ? '-' : _s(c))),
                           cell(
-                              8,
+                              11,
                               Text(
                                   diff == null
                                       ? '-'
@@ -1671,7 +1683,7 @@ class _AuditPageState extends State<AuditPage> {
                                       color: diff == null || diff == 0
                                           ? null
                                           : Colors.red))),
-                          cell(9, _tableActions(r)),
+                          cell(12, _tableActions(r)),
                         ]),
                   ),
                 );

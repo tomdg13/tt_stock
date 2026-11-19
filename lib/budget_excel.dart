@@ -54,7 +54,7 @@ Future<Map<String, _Thumb>> _loadThumbs(Set<String> urls) async {
 }
 
 Future<void> exportBudgetXlsx(Map<String, dynamic> d,
-    {String branchName = '', String poText = '', String auditText = ''}) async {
+    {String branchName = '', String poText = '', String auditText = '', List<String> Function(Map<String, dynamic>)? extra, num Function(Map<String, dynamic>)? actual}) async {
   final years = asList(d['budgetByYear']);
   final items = asList(d['items']);
   final fm = num0(d['fm']).toInt();
@@ -78,65 +78,99 @@ Future<void> exportBudgetXlsx(Map<String, dynamic> d,
   }
 
   // settings + per-year budget (columns B, C)
-  add(<Object>['', 'ງົບປະມານອາໄຫຼ່'], b: true);
-  add(<Object>['', 'ສາຂາ', branchName.isEmpty ? 'ທຸກສາຂາ' : branchName]);
-  add(<Object>['', 'ປີງົບປະມານ', fm == 1 ? 'ມັງກອນ - ທັນວາ' : 'ຕຸລາ - ກັນຍາ']);
-  add(<Object>['', 'ຮອດສິ້ນປີ', num0(d['toYear']).toInt()]);
-  add(<Object>['', 'ເຜື່ອ (%)', _q(pct)]);
-  if (poText.isNotEmpty) add(<Object>['', 'PO', poText]);
-  if (auditText.isNotEmpty) add(<Object>['', 'ໃບນັບສະຕັອກ', auditText]);
-  add(<Object>['', 'ຄິດຈາກການໃຊ້ 12 ເດືອນຜ່ານມາ']);
-  add(<Object>['', 'ຕ້ອງຊື້ = ໃຊ້ x % ຕ້ອງຊື້ ເພີມ - ຍັງໃນສາງ']);
+  add(<Object>['ງົບປະມານອາໄຫຼ່'], b: true);
+  add(<Object>['ສາຂາ', branchName.isEmpty ? 'ທຸກສາຂາ' : branchName]);
+  add(<Object>['ປີງົບປະມານ', fm == 1 ? 'ມັງກອນ - ທັນວາ' : 'ຕຸລາ - ກັນຍາ']);
+  add(<Object>['ຮອດສິ້ນປີ', num0(d['toYear']).toInt()]);
+  add(<Object>['ເຜື່ອ (%)', _q(pct)]);
+  if (poText.isNotEmpty) add(<Object>['PO', poText]);
+  if (auditText.isNotEmpty) add(<Object>['ໃບນັບສະຕັອກ', auditText]);
+  add(<Object>['ຄິດຈາກການໃຊ້ 12 ເດືອນຜ່ານມາ']);
+    add(<Object>['ຕ້ອງຊື້ = ໃຊ້ + ໃຊ້ x % ຕ້ອງຊື້ ເພີມ (ໃຊ້ = ສະຕັອກ - ເຄື່ອງຕົວຈິງ)']);
   add(<Object>[]);
-  add(<Object>['', 'ປີ', 'ງົບປະມານ'], b: true);
+  add(<Object>['ປີ', 'ງົບປະມານ'], b: true);
   for (final y in years) {
-    add(<Object>['', '${y['label']}', _m(num0(y['amount']))]);
+    add(<Object>['${y['label']}', _m(num0(y['amount']))]);
   }
-  add(<Object>['', 'ລວມ', _m(num0(d['totalAmount']))], b: true);
+  add(<Object>['ລວມ', _m(num0(d['totalAmount']))], b: true);
   add(<Object>[]);
 
+  // Excel-style ROUNDUP (rounds away from zero)
+  double up(double x) =>
+      x < 0 ? -((-x).ceil()).toDouble() : x.ceil().toDouble();
+
   add(<Object>[
+    'ທີ່ເກັບ',
+    'ອາໄຫຼ່ຫຼັກ',
+    'ປະເພດອາໄຫຼ່',
+    'Branch',
+    'ປະເພດສິນຄ້າ',
+    'brand',
     'ຮຸນ',
     'ຮູບ',
     'ສິນຄ້າ',
     'Barcode',
     'ປະເພດ',
     'ໜ່ວຍ',
-    'ລາຄາ/ໜ່ວຍ',
     'ສະຕັອກ',
     'ເຄື່ອງຕົວຈິງ',
+    'ໃຊ້ = ສະຕັອກ-ເຄື່ອງຕົວຈິງ',
     'ໃຊ້',
     '% ຕ້ອງຊື້ ເພີມ',
     'ຕ້ອງຊື້',
-    'ເງິນ',
+    'ຊື້ຕົວຈິງ',
+    '% ຕ້ອງຊື້ເພີມຕົວຈິງ',
   ], b: true);
 
+  final firstRow = rows.length + 1;
+  var sumJ = 0.0, sumK = 0.0, sumM = 0.0;
   for (final it in items) {
     final u = productImageUrl(pick(it, ['imageUrl']));
     final t = thumbs[u];
     if (t != null) {
       images.add(XlImage(
-          row: rows.length, col: 1, key: u, bytes: t.bytes, w: t.w, h: t.h));
+          row: rows.length, col: 7, key: u, bytes: t.bytes, w: t.w, h: t.h));
       heights[rows.length] = 40.0;
     }
+    final r = rows.length + 1;
+    final stock = num0(it['stock']).toDouble();
+    final cnt = it['counted'] == null ? null : num0(it['counted']).toDouble();
+    final j = cnt == null ? 0.0 : stock - cnt;
+    final m = j + up(j * pct.toDouble() / 100);
+    final k = num0(it['ratePerYear']).toDouble();
+    final po = actual == null ? num0(it['poTotal']) : actual(it);
+    sumJ += j;
+    sumK += k;
+    sumM += m;
+    final ex =
+        extra == null ? const <String>['', '', '', '', '', ''] : extra(it);
     add(<Object>[
+      ...ex,
       pick(it, ['models']),
       '',
       pick(it, ['productName']),
       pick(it, ['barcodes']),
       pick(it, ['typeName']),
       pick(it, ['unit']),
-      _m(num0(it['unitCost'])),
-      _q(num0(it['stock'])),
-      it['counted'] == null ? '' : _q(num0(it['counted'])),
-      _q(num0(it['ratePerYear'])),
+      _q(stock),
+      cnt == null ? '' : _q(cnt),
+      cnt == null ? '' : XlFormula('M$r-N$r', j),
+      _q(k),
       _q(pct),
-      _q(num0(it['totalBuy'])),
-      _m(num0(it['totalAmount'])),
+      XlFormula('O$r+ROUNDUP(O$r*Q$r%,0)', m),
+      po > 0 ? _q(po) : '',
+      '',
     ]);
   }
+  final lastRow = rows.length;
 
   add(<Object>[
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
     '',
     '',
     'ລວມ',
@@ -145,14 +179,13 @@ Future<void> exportBudgetXlsx(Map<String, dynamic> d,
     '',
     '',
     '',
+    XlFormula('SUM(O$firstRow:O$lastRow)', sumJ),
+    XlFormula('SUM(P$firstRow:P$lastRow)', sumK),
     '',
-    '',
-    '',
-    '',
-    _m(num0(d['totalAmount']))
+    XlFormula('SUM(R$firstRow:R$lastRow)', sumM),
   ], b: true);
 
-  final widths = <double>[16, 12, 36, 17, 14, 10, 14, 12, 14, 12, 14, 14, 16];
+  final widths = <double>[16, 16, 14, 14, 16, 12, 30, 12, 60, 17, 14, 10, 12, 14, 16, 12, 14, 12, 12, 18];
 
   final n = DateTime.now();
   final fileName = 'budget_${n.year}${_two(n.month)}${_two(n.day)}.xlsx';

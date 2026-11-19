@@ -1488,6 +1488,43 @@ class _PlanItemsPageState extends State<_PlanItemsPage> {
     await widget.host._storeBuyPlans(all);
   }
 
+  Future<void> _toggleGroup(List<Map<String, dynamic>> g, bool on) async {
+    setState(() {
+      for (final x in g) {
+        x['done'] = on;
+      }
+    });
+    final all = await widget.host._loadBuyPlans();
+    for (final pl in all) {
+      if (pl['id'] == widget.plan['id']) pl['items'] = widget.items;
+    }
+    await widget.host._storeBuyPlans(all);
+  }
+
+  Widget _brandHeader(String b, List<Map<String, dynamic>> g) {
+    final n = g.where((x) => x['done'] == true).length;
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: () => _toggleGroup(g, n != g.length),
+      child: Container(
+        color: cs.surfaceContainerHighest,
+        child: Row(children: [
+          Checkbox(
+            tristate: true,
+            value: n == 0 ? false : (n == g.length ? true : null),
+            onChanged: (_) => _toggleGroup(g, n != g.length),
+          ),
+          Expanded(
+              child: Text(b,
+                  style: const TextStyle(fontWeight: FontWeight.w700))),
+          Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Text('$n / ${g.length}')),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final note = '${widget.plan['note'] ?? ''}';
@@ -1500,6 +1537,12 @@ class _PlanItemsPageState extends State<_PlanItemsPage> {
       return ['name', 'brand', 'bin']
           .any((k) => '${x[k] ?? ''}'.toLowerCase().contains(_q));
     }).toList();
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final x in shown) {
+      final bn = '${x['brand'] ?? ''}';
+      groups.putIfAbsent(bn.isEmpty ? '(ບໍ່ມີ Brand)' : bn, () => []).add(x);
+    }
+    final brands = groups.keys.toList()..sort();
     return Scaffold(
       appBar: AppBar(title: Text('${widget.plan['name']}')),
       body: Column(children: [
@@ -1562,16 +1605,19 @@ class _PlanItemsPageState extends State<_PlanItemsPage> {
           child: shown.isEmpty
               ? const Center(child: Text('ບໍ່ມີຂໍ້ມູນ'))
               : ListView(children: [
-                  for (final x in shown)
-                    Row(children: [
-                      Checkbox(
-                          value: x['done'] == true,
-                          onChanged: (v) => _toggle(x, v == true)),
-                      Expanded(
-                          child: Opacity(
-                              opacity: x['done'] == true ? 0.5 : 1,
-                              child: widget.host._planRow(x))),
-                    ]),
+                  for (final bn in brands) ...[
+                    _brandHeader(bn, groups[bn]!),
+                    for (final x in groups[bn]!)
+                      Row(children: [
+                        Checkbox(
+                            value: x['done'] == true,
+                            onChanged: (v) => _toggle(x, v == true)),
+                        Expanded(
+                            child: Opacity(
+                                opacity: x['done'] == true ? 0.5 : 1,
+                                child: widget.host._planRow(x))),
+                      ]),
+                  ],
                 ]),
         ),
       ]),
