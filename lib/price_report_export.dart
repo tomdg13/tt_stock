@@ -999,14 +999,14 @@ Future<Uint8List> buildWithdrawalPdf(
   const subjectLine = 'ເລື່ອງ: ເບີກອາໄຫຼ່ເອທີເອັມ ATM';
   final refLine = '- ອີງຕາມ ການກວດກາຕິດຕາມຕູ້ ATM ຄືຈິງໃນຄັ້ງວັນທີ່ $date.';
   final bodyText =
-      '          ສາຂາ$branch ຂໍຖືເປັນກຽດສະເໜີມາຍັງທ່ານເພື່ອເບີກອາໄຫຼ່ເອທີເອັມເນື່ອງຈາກອຸປະກອນຂອງຕູ້ໃຊ້ງານບໍ່ໄດ້ ເຊິ່ງລາຍລະອຽດດັ່ງລຸ່ມນີ້:';
+      '          ສາຂາ $branch ຂໍຖືເປັນກຽດສະເໜີມາຍັງທ່ານເພື່ອເບີກອາໄຫຼ່ເອທີເອັມເນື່ອງຈາກອຸປະກອນຂອງຕູ້ໃຊ້ງານບໍ່ໄດ້ ເຊິ່ງລາຍລະອຽດດັ່ງລຸ່ມນີ້:';
   const closeText =
       '          ດັ່ງນັ້ນ ຈຶ່ງສະເໜີມາຍັງທ່ານເພື່ອພິຈາລະນາ ແລະ ແກ້ໄຂຕາມຄວາມເໝາະສົມດ້ວຍ.';
   const respectText = 'ຮຽນມາດ້ວຍຄວາມເຄົາລົບ ແລະ ນັບຖືຢ່າງສູງ.';
-  final topLeft = 'ສາຂາ$branch';
-  final topNo = 'ເລກທີ່: $no';
+  final topLeft = 'ສາຂາ $branch';
+  final topNo = 'ເລກທີ່: ................................';
   final topPlace = '$branch, ວັນທີ $date';
-  final signLeft = 'ຫົວໜ້າສາຂາ$branch';
+  final signLeft = 'ຫົວໜ້າສາຂາ $branch';
   const signRight = 'ຜູ້ສະເໜີ';
 
   final pageW = PdfPageFormat.a4.width;
