@@ -1,0 +1,630 @@
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart' show ImagePicker, ImageSource;
+import 'package:url_launcher/url_launcher.dart';
+import 'api.dart';
+import 'product_images.dart' show productImageUrl;
+import 'purchase_orders.dart' show kPoDocExt;
+import 'repair_case.dart' show repairMySide;
+import 'withdraw_bill.dart' show WithdrawBillPage;
+
+/// Documents of an approved withdrawal (upload by the branch, check by Head Office).
+/// Server: POST/GET /withdrawals/:id/docs, POST /withdrawals/:id/check.
+/// DOC_STATUS: empty -> submitted -> checked | rejected.
+
+class _WdFile {
+  final String name;
+  final Uint8List bytes;
+  const _WdFile(this.name, this.bytes);
+}
+
+String _wdMime(String name) {
+  final e = name.toLowerCase().split('.').last;
+  const m = {
+    'pdf': 'application/pdf',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'webp': 'image/webp',
+    'doc': 'application/msword',
+    'docx':
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls': 'application/vnd.ms-excel',
+    'xlsx':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  };
+  return m[e] ?? 'application/octet-stream';
+}
+
+String wdDocStatusLabel(String s) => s == 'submitted'
+    ? 'ລໍຖ້າກວດ'
+    : s == 'checked'
+        ? 'ກວດແລ້ວ (ຜ່ານ)'
+        : s == 'rejected'
+            ? 'ບໍ່ຜ່ານ (ອັບໃໝ່ໄດ້)'
+            : 'ຍັງບໍ່ໄດ້ອັບເອກະສານ';
+
+Color wdDocStatusColor(String s) => s == 'submitted'
+    ? Colors.orange
+    : s == 'checked'
+        ? Colors.green
+        : s == 'rejected'
+            ? Colors.red
+            : Colors.grey;
+
+String _wdWhen(dynamic v) {
+  final s = '${v ?? ''}'.replaceFirst('T', ' ');
+  return s.length >= 16 ? s.substring(0, 16) : s;
+}
+
+// ---------------------------------------------------------------------------
+// Section shown inside the bill page: documents + upload
+// ---------------------------------------------------------------------------
+class WithdrawDocsSection extends StatefulWidget {
+  final Map<String, dynamic> w;
+  final bool canUpload;
+  final VoidCallback? onChanged;
+  const WithdrawDocsSection(this.w,
+      {super.key, this.canUpload = true, this.onChanged});
+  @override
+  State<WithdrawDocsSection> createState() => _WithdrawDocsSectionState();
+}
+
+class _WithdrawDocsSectionState extends State<WithdrawDocsSection> {
+  List<Map<String, dynamic>> _docs = [];
+  final List<_WdFile> _pending = [];
+  bool _loading = true;
+  bool _busy = false;
+  String? _error;
+
+  String get _id => '${widget.w['id']}';
+  String get _status => '${widget.w['status'] ?? ''}';
+  String get _docStatus => '${widget.w['docStatus'] ?? ''}';
+  bool get _approved => _status == 'open' || _status == 'closed';
+  bool get _mayUpload =>
+      widget.canUpload && _approved && _docStatus != 'checked';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _msg(String s) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
+  }
+
+  Future<void> _load() async {
+    try {
+      final d = await Api.get('/withdrawals/$_id/docs');
+      if (!mounted) return;
+      setState(() {
+        _docs = d is List
+            ? [
+                for (final e in d)
+                  if (e is Map) Map<String, dynamic>.from(e)
+              ]
+            : [];
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('[WD] docs load failed: $e');
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = '$e';
+      });
+    }
+  }
+
+  Future<void> _pick() async {
+    final how = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('ຖ່າຍຮູບເອກະສານ'),
+            onTap: () => Navigator.pop(c, 'camera'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('ເລືອກຮູບຈາກຄັງຮູບ'),
+            onTap: () => Navigator.pop(c, 'gallery'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.attach_file),
+            title: const Text('ເລືອກໄຟລ໌ (PDF, Word, Excel, ຮູບ)'),
+            onTap: () => Navigator.pop(c, 'file'),
+          ),
+        ]),
+      ),
+    );
+    if (how == null || !mounted) return;
+    try {
+      if (how == 'file') {
+        final files = await FilePicker.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: kPoDocExt,
+        );
+        if (files.isEmpty || !mounted) return;
+        final add = <_WdFile>[];
+        for (final f in files) {
+          add.add(_WdFile(f.name, await f.readAsBytes()));
+        }
+        if (mounted) setState(() => _pending.addAll(add));
+      } else {
+        final x = await ImagePicker().pickImage(
+            source: how == 'camera' ? ImageSource.camera : ImageSource.gallery,
+            imageQuality: 85,
+            maxWidth: 2400);
+        if (x == null || !mounted) return;
+        final bytes = await x.readAsBytes();
+        var name = x.name;
+        if (name.isEmpty) {
+          name = 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        }
+        if (!RegExp(r'\.(jpg|jpeg|png|webp)$', caseSensitive: false)
+            .hasMatch(name)) {
+          name = '$name.jpg';
+        }
+        if (mounted) setState(() => _pending.add(_WdFile(name, bytes)));
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = 'ເປີດກ້ອງ/ໄຟລ໌ບໍ່ໄດ້: $e');
+    }
+  }
+
+  Future<void> _upload() async {
+    if (_pending.isEmpty) {
+      setState(() => _error = 'ກະລຸນາເລືອກເອກະສານກ່ອນ');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final base = Api.baseUrl.replaceAll(RegExp(r'/+$'), '');
+      final req =
+          http.MultipartRequest('POST', Uri.parse('$base/withdrawals/$_id/docs'));
+      if (Api.token != null) req.headers['Authorization'] = 'Bearer ${Api.token}';
+      for (final f in _pending) {
+        req.files.add(http.MultipartFile.fromBytes('files', f.bytes,
+            filename: f.name, contentType: MediaType.parse(_wdMime(f.name))));
+      }
+      debugPrint('[WD] upload docs withdrawal=$_id files=${_pending.length}');
+      final res = await http.Response.fromStream(
+          await req.send().timeout(const Duration(seconds: 120)));
+      if (res.statusCode >= 300) {
+        var m = res.body;
+        try {
+          final j = jsonDecode(res.body);
+          if (j is Map && j['message'] != null) m = '${j['message']}';
+        } catch (_) {}
+        throw Exception(m);
+      }
+      if (!mounted) return;
+      setState(() => _pending.clear());
+      await _load();
+      widget.onChanged?.call();
+      _msg('ອັບໂຫຼດເອກະສານແລ້ວ ລໍຖ້າ HQ ກວດ');
+    } catch (e) {
+      debugPrint('[WD] upload failed: $e');
+      if (mounted) {
+        setState(() => _error = '$e'.replaceFirst('Exception: ', ''));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _open(Map<String, dynamic> d) async {
+    final url = productImageUrl('${d['url'] ?? ''}');
+    final mime = '${d['mime'] ?? ''}';
+    if (mime.startsWith('image/')) {
+      await showDialog<void>(
+        context: context,
+        builder: (c) => Dialog(
+          child: InteractiveViewer(
+            child: Image.network(url,
+                errorBuilder: (_, __, ___) => const Padding(
+                    padding: EdgeInsets.all(24), child: Text('ເປີດຮູບບໍ່ໄດ້'))),
+          ),
+        ),
+      );
+    } else {
+      final ok = await launchUrl(Uri.parse(url),
+          mode: LaunchMode.externalApplication);
+      if (!ok) _msg('ເປີດໄຟລ໌ບໍ່ໄດ້');
+    }
+  }
+
+  Widget _leading(Map<String, dynamic> d) {
+    final mime = '${d['mime'] ?? ''}';
+    if (mime.startsWith('image/')) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Image.network(productImageUrl('${d['url'] ?? ''}'),
+            width: 40,
+            height: 40,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const Icon(Icons.image_outlined)),
+      );
+    }
+    return const Icon(Icons.description_outlined, size: 32);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mut = Theme.of(context).hintColor;
+    final color = wdDocStatusColor(_docStatus);
+    final note = '${widget.w['checkNote'] ?? ''}';
+    final by = '${widget.w['checkedBy'] ?? ''}';
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            const Expanded(
+                child: Text('ເອກະສານ',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+            Chip(
+              label: Text(wdDocStatusLabel(_docStatus)),
+              backgroundColor: color.withValues(alpha: 0.15),
+              side: BorderSide(color: color),
+              visualDensity: VisualDensity.compact,
+            ),
+          ]),
+          if ((_docStatus == 'checked' || _docStatus == 'rejected') &&
+              (by.isNotEmpty || note.isNotEmpty))
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                  [if (by.isNotEmpty) 'ຜູ້ກວດ: $by', if (note.isNotEmpty) 'ໝາຍເຫດ: $note']
+                      .join('  ·  '),
+                  style: TextStyle(color: mut)),
+            ),
+          const SizedBox(height: 8),
+          if (_loading)
+            const Padding(
+                padding: EdgeInsets.all(12),
+                child: Center(child: CircularProgressIndicator()))
+          else if (_docs.isEmpty)
+            Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text('ຍັງບໍ່ມີເອກະສານ', style: TextStyle(color: mut)))
+          else
+            for (final d in _docs)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: _leading(d),
+                title: Text('${d['name'] ?? ''}',
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text('${d['by'] ?? ''} · ${_wdWhen(d['at'])}'),
+                trailing: const Icon(Icons.open_in_new, size: 18),
+                onTap: () => _open(d),
+              ),
+          if (!_approved)
+            Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('ອັບເອກະສານໄດ້ຫຼັງອະນຸມັດເບີກ',
+                    style: TextStyle(color: mut)))
+          else if (_docStatus == 'checked')
+            Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('ກວດແລ້ວ ບໍ່ສາມາດອັບເພີ່ມ', style: TextStyle(color: mut))),
+          if (_mayUpload) ...[
+            const SizedBox(height: 8),
+            if (_pending.isNotEmpty)
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                for (var i = 0; i < _pending.length; i++)
+                  InputChip(
+                    avatar: const Icon(Icons.attach_file, size: 16),
+                    label: Text(_pending[i].name),
+                    onDeleted:
+                        _busy ? null : () => setState(() => _pending.removeAt(i)),
+                  ),
+              ]),
+            if (_error != null)
+              Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(_error!, style: const TextStyle(color: Colors.redAccent))),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : _pick,
+                  icon: const Icon(Icons.add),
+                  label: const Text('ເລືອກເອກະສານ'),
+                ),
+              ),
+              if (_pending.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _busy ? null : _upload,
+                    icon: _busy
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.cloud_upload_outlined),
+                    label: const Text('ອັບໂຫຼດ'),
+                  ),
+                ),
+              ],
+            ]),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Head Office: list of withdrawals with documents
+// ---------------------------------------------------------------------------
+class WithdrawDocCheckPage extends StatefulWidget {
+  const WithdrawDocCheckPage({super.key});
+  @override
+  State<WithdrawDocCheckPage> createState() => _WithdrawDocCheckPageState();
+}
+
+class _WithdrawDocCheckPageState extends State<WithdrawDocCheckPage> {
+  late Future<List<Map<String, dynamic>>> _f = _load();
+  bool _all = false;
+
+  Future<List<Map<String, dynamic>>> _load() async {
+    final d = await Api.get('/withdrawals');
+    final out = <Map<String, dynamic>>[];
+    if (d is List) {
+      for (final w in d) {
+        if (w is Map) out.add(Map<String, dynamic>.from(w));
+      }
+    }
+    return out;
+  }
+
+  void _reload() => setState(() {
+        _f = _load();
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    final mut = Theme.of(context).hintColor;
+    return Scaffold(
+      appBar: AppBar(title: const Text('ກວດເອກະສານເບີກ')),
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          child: Row(children: [
+            ChoiceChip(
+                label: const Text('ລໍຖ້າກວດ'),
+                selected: !_all,
+                onSelected: (_) => setState(() => _all = false)),
+            const SizedBox(width: 8),
+            ChoiceChip(
+                label: const Text('ມີເອກະສານທັງໝົດ'),
+                selected: _all,
+                onSelected: (_) => setState(() => _all = true)),
+          ]),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async => _reload(),
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _f,
+              builder: (c, snap) {
+                if (snap.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snap.hasError) {
+                  return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(24),
+                      children: [
+                        Text('${snap.error}'),
+                        TextButton(
+                            onPressed: _reload, child: const Text('ລອງໃໝ່')),
+                      ]);
+                }
+                final rows = (snap.data ?? [])
+                    .where((w) {
+                      final st = '${w['docStatus'] ?? ''}';
+                      return _all ? st.isNotEmpty : st == 'submitted';
+                    })
+                    .toList();
+                if (rows.isEmpty) {
+                  return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(32),
+                      children: [
+                        Center(
+                            child: Text(
+                                _all
+                                    ? 'ຍັງບໍ່ມີລາຍການທີ່ມີເອກະສານ'
+                                    : 'ບໍ່ມີລາຍການລໍຖ້າກວດ',
+                                style: TextStyle(color: mut))),
+                      ]);
+                }
+                return ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  itemCount: rows.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final w = rows[i];
+                    final st = '${w['docStatus'] ?? ''}';
+                    return ListTile(
+                      leading: Icon(Icons.fact_check_outlined,
+                          color: wdDocStatusColor(st)),
+                      title: Text(
+                          '${w['withdrawNo'] ?? w['id']} · ${w['branchName'] ?? ''}'),
+                      subtitle: Text(
+                          '${w['barcode'] ?? ''} ${w['atmId'] ?? ''} · ${wdDocStatusLabel(st)}'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () async {
+                        final r = await Navigator.push<dynamic>(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => WithdrawDocCheckDetail(w)));
+                        if (r == true && mounted) _reload();
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+class WithdrawDocCheckDetail extends StatefulWidget {
+  final Map<String, dynamic> w;
+  const WithdrawDocCheckDetail(this.w, {super.key});
+  @override
+  State<WithdrawDocCheckDetail> createState() => _WithdrawDocCheckDetailState();
+}
+
+class _WithdrawDocCheckDetailState extends State<WithdrawDocCheckDetail> {
+  final _note = TextEditingController();
+  String _side = 'any';
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    repairMySide().then((s) {
+      if (mounted) setState(() => _side = s);
+    });
+  }
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  Future<void> _check(String result) async {
+    final note = _note.text.trim();
+    if (result == 'rejected' && note.isEmpty) {
+      setState(() => _error = 'ກະລຸນາໃສ່ໝາຍເຫດເຫດຜົນທີ່ບໍ່ຜ່ານ');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      debugPrint('[WD] check withdrawal=${widget.w['id']} result=$result');
+      await Api.post('/withdrawals/${widget.w['id']}/check', {
+        'result': result,
+        if (note.isNotEmpty) 'note': note,
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(result == 'checked' ? 'ບັນທຶກ: ຜ່ານ' : 'ບັນທຶກ: ບໍ່ຜ່ານ')));
+      Navigator.pop(context, true);
+    } catch (e) {
+      debugPrint('[WD] check failed: $e');
+      if (mounted) setState(() => _error = '$e'.replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Widget _kv(String k, String v) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(
+              width: 110,
+              child: Text(k, style: const TextStyle(fontWeight: FontWeight.w600))),
+          Expanded(child: Text(v.isEmpty ? '-' : v)),
+        ]),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final w = widget.w;
+    final st = '${w['docStatus'] ?? ''}';
+    final mut = Theme.of(context).hintColor;
+    return Scaffold(
+      appBar: AppBar(title: Text('ກວດເອກະສານ · ${w['withdrawNo'] ?? w['id']}')),
+      body: ListView(padding: const EdgeInsets.all(12), children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(children: [
+              _kv('ເລກທີ່', '${w['withdrawNo'] ?? ''}'),
+              _kv('ສາຂາ', '${w['branchName'] ?? ''}'),
+              _kv('Terminal', '${w['barcode'] ?? ''}'),
+              _kv('ຕູ້ ATM', '${w['atmId'] ?? ''}'),
+              _kv('ຜູ້ບັນທຶກ', '${w['createdBy'] ?? ''}'),
+              _kv('ວັນທີ', _wdWhen(w['createdAt'])),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) =>
+                              WithdrawBillPage(Map<String, dynamic>.from(w)))),
+                  icon: const Icon(Icons.receipt_long_outlined),
+                  label: const Text('ເບິ່ງໃບເບີກ'),
+                ),
+              ),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 8),
+        WithdrawDocsSection(w, canUpload: false),
+        const SizedBox(height: 8),
+        if (st == 'submitted' && _side != 'branch') ...[
+          TextField(
+            controller: _note,
+            maxLines: 2,
+            decoration: const InputDecoration(
+                labelText: 'ໝາຍເຫດ (ຕ້ອງໃສ່ຖ້າບໍ່ຜ່ານ)',
+                border: OutlineInputBorder()),
+          ),
+          if (_error != null)
+            Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_error!, style: const TextStyle(color: Colors.redAccent))),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _busy ? null : () => _check('rejected'),
+                icon: const Icon(Icons.close, color: Colors.red),
+                label: const Text('ບໍ່ຜ່ານ'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: _busy ? null : () => _check('checked'),
+                icon: const Icon(Icons.check),
+                label: const Text('ຜ່ານ'),
+              ),
+            ),
+          ]),
+        ] else if (st == 'submitted')
+          Text('ສະເພາະ Head Office ກວດໄດ້', style: TextStyle(color: mut)),
+      ]),
+    );
+  }
+}

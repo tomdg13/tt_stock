@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'api.dart';
+import 'withdraw_docs.dart';
 import 'ldb_letterhead.dart' show LdbLetterhead, loadLetterhead;
 import 'price_report_export.dart' show buildWithdrawalPdf;
 import 'product_images.dart' show productImageUrl;
@@ -171,6 +172,23 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
     }
   }
 
+  /// Reloads this withdrawal (document status changes after an upload).
+  Future<void> _reloadD() async {
+    try {
+      final list = await Api.get('/withdrawals');
+      if (list is List) {
+        for (final w in list) {
+          if (w is Map && '${w['id']}' == '${_d['id']}') {
+            if (mounted) setState(() => _d = Map<String, dynamic>.from(w));
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[WD] bill: reload failed: $e');
+    }
+  }
+
   Widget _sheet() {
     final d = _d;
     final items = d['items'] is List ? d['items'] as List : const [];
@@ -320,6 +338,10 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
         padding: const EdgeInsets.all(12),
         child: Column(children: [
           FittedBox(fit: BoxFit.fitWidth, child: _sheet()),
+          if ('${_d['status']}' == 'open' || '${_d['status']}' == 'closed') ...[
+            const SizedBox(height: 16),
+            WithdrawDocsSection(_d, onChanged: _reloadD),
+          ],
           if ('${_d['status']}' == 'requested') ...[
             const SizedBox(height: 16),
             SizedBox(
