@@ -976,7 +976,6 @@ Future<Uint8List> buildWithdrawalPdf(
     return '${l.day} ${months[l.month - 1]} ${l.year}';
   }
 
-  final no = g(w, ['withdrawNo', 'id']);
   final date = laoDate(g(w, ['createdAt']));
   var branch = g(w, ['atmBranch']);
   if (branch.isEmpty) branch = g(w, ['branchName', 'branchId']);
@@ -1004,7 +1003,7 @@ Future<Uint8List> buildWithdrawalPdf(
       '          ດັ່ງນັ້ນ ຈຶ່ງສະເໜີມາຍັງທ່ານເພື່ອພິຈາລະນາ ແລະ ແກ້ໄຂຕາມຄວາມເໝາະສົມດ້ວຍ.';
   const respectText = 'ຮຽນມາດ້ວຍຄວາມເຄົາລົບ ແລະ ນັບຖືຢ່າງສູງ.';
   final topLeft = 'ສາຂາ $branch';
-  final topNo = 'ເລກທີ່: ................................';
+  const topNo = 'ເລກທີ່: ................................';
   final topPlace = '$branch, ວັນທີ $date';
   final signLeft = 'ຫົວໜ້າສາຂາ $branch';
   const signRight = 'ຜູ້ສະເໜີ';
