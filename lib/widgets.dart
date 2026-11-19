@@ -324,7 +324,7 @@ class _ListPageState extends State<ListPage> {
                     context,
                     pick(m, ['imageFile']).isEmpty
                         ? ''
-                        : '/uploads/terminal-types/${pick(m, ['imageFile'])}')
+                        : '/uploads/${widget.path.contains('models') ? 'models' : widget.path.contains('brands') ? 'brands' : widget.path.contains('users') ? 'users' : 'terminal-types'}/${pick(m, ['imageFile'])}')
                 : m.containsKey('typeImage')
                     ? _thumb(
                         context,

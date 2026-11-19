@@ -1,5 +1,6 @@
 // Stock drill-down: Brand > Model > products (qty, min, low flag, branch, bin).
 // Data: GET /stock/overview (one row per product x model x branch).
+import 'type_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api.dart';
@@ -224,12 +225,15 @@ class _StockDrillState extends State<StockDrill> {
 
   Widget _groupTable(Pal p, List<Map<String, dynamic>> rows,
       {required bool byBrand}) {
+    final imgs = <String, String>{};
     final groups = <String, _Agg>{};
     final all = <String, double>{};
     final allP = <String>{};
     final allLow = <String>{};
     for (final r in rows) {
       final key = byBrand ? _brandOf(r) : _modelOf(r);
+      final im = pick(r, [byBrand ? 'brandImage' : 'modelImage']);
+      if (im.isNotEmpty) imgs.putIfAbsent(key, () => im);
       final a = groups.putIfAbsent(key, () => _Agg());
       final pid = pick(r, ['productId']);
       final pk = '$pid|${pick(r, ['branchId'])}';
@@ -261,7 +265,14 @@ class _StockDrillState extends State<StockDrill> {
             }
           }),
           cells: [
-            DataCell(Text(k, style: bold)),
+            DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
+              (imgs[k] ?? '').isEmpty
+                  ? const SizedBox(width: 34)
+                  : typeThumb(context, imgs[k]!,
+                      size: 34, folder: byBrand ? 'brands' : 'models'),
+              const SizedBox(width: 8),
+              Text(k, style: bold),
+            ])),
             DataCell(Text('${groups[k]!.products.length}')),
             DataCell(Text(_fmt(groups[k]!.total), style: bold)),
             DataCell(Text('${groups[k]!.low.length}',

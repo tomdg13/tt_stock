@@ -10,21 +10,23 @@ import 'api.dart';
 import 'product_images.dart';
 import 'theme.dart';
 
-String terminalTypeImageUrl(String file) {
+String terminalTypeImageUrl(String file, [String folder = 'terminal-types']) {
   if (file.isEmpty) return '';
   if (file.startsWith('/') || file.startsWith('http')) {
     return productImageUrl(file);
   }
-  return productImageUrl('/uploads/terminal-types/$file');
+  return productImageUrl('/uploads/$folder/$file');
 }
 
 /// Type picture, or a plain icon when the type has none.
 Widget typeThumb(BuildContext context, String file,
-    {double size = 44, IconData icon = Icons.memory}) {
+    {double size = 44,
+    IconData icon = Icons.memory,
+    String folder = 'terminal-types'}) {
   final p = pal(context);
   final ph =
       SizedBox(width: size, height: size, child: Icon(icon, color: p.mut));
-  final url = terminalTypeImageUrl(file);
+  final url = terminalTypeImageUrl(file, folder);
   if (url.isEmpty) return ph;
   return ClipRRect(
     borderRadius: BorderRadius.circular(8),
@@ -43,10 +45,10 @@ class TypeImageController {
   bool removed = false;
   bool get dirty => picked != null || removed;
 
-  Future<void> apply(String typeId) async {
+  Future<void> apply(String typeId, [String path = '/terminal-types']) async {
     final base = Api.baseUrl.replaceAll(RegExp(r'/+$'), '');
     final uri =
-        Uri.parse('$base/terminal-types/${Uri.encodeComponent(typeId)}/image');
+        Uri.parse('$base$path/${Uri.encodeComponent(typeId)}/image');
     final img = picked;
     if (img != null) {
       final req = http.MultipartRequest('POST', uri);
@@ -71,7 +73,7 @@ class TypeImageController {
         throw Exception(msg);
       }
     } else if (removed) {
-      await Api.delete('/terminal-types/${Uri.encodeComponent(typeId)}/image');
+      await Api.delete('$path/${Uri.encodeComponent(typeId)}/image');
     }
     picked = null;
     removed = false;
@@ -81,9 +83,13 @@ class TypeImageController {
 /// Picture field used in the terminal type form.
 class TypeImageEditor extends StatefulWidget {
   final String existingFile;
+  final String folder;
   final TypeImageController controller;
   const TypeImageEditor(
-      {super.key, required this.existingFile, required this.controller});
+      {super.key,
+      required this.existingFile,
+      required this.controller,
+      this.folder = 'terminal-types'});
   @override
   State<TypeImageEditor> createState() => _TypeImageEditorState();
 }
@@ -114,14 +120,14 @@ class _TypeImageEditorState extends State<TypeImageEditor> {
     if (c.picked != null) {
       preview = Image.memory(c.picked!.bytes, fit: BoxFit.cover);
     } else if (!c.removed && widget.existingFile.isNotEmpty) {
-      preview = Image.network(terminalTypeImageUrl(widget.existingFile),
+      preview = Image.network(terminalTypeImageUrl(widget.existingFile, widget.folder),
           webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) =>
               const Center(child: Icon(Icons.broken_image_outlined)));
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('ຮູບປະເພດ', style: TextStyle(color: p.mut, fontSize: 14)),
+      Text(widget.folder == 'models' ? 'ຮູບ MODEL' : widget.folder == 'brands' ? 'ຮູບ BRAND' : widget.folder == 'users' ? 'ຮູບຜູ້ໃຊ້' : 'ຮູບປະເພດ', style: TextStyle(color: p.mut, fontSize: 14)),
       const SizedBox(height: 6),
       Row(children: [
         if (preview != null)
