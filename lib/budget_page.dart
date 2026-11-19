@@ -1469,6 +1469,7 @@ class _PlanItemsPage extends StatefulWidget {
 class _PlanItemsPageState extends State<_PlanItemsPage> {
   final _qc = TextEditingController();
   String _q = '';
+  int _filter = 0;
 
   @override
   void dispose() {
@@ -1478,10 +1479,23 @@ class _PlanItemsPageState extends State<_PlanItemsPage> {
 
   void _onQ(String v) => setState(() => _q = v.trim().toLowerCase());
 
+  Future<void> _toggle(Map<String, dynamic> x, bool on) async {
+    setState(() => x['done'] = on);
+    final all = await widget.host._loadBuyPlans();
+    for (final pl in all) {
+      if (pl['id'] == widget.plan['id']) pl['items'] = widget.items;
+    }
+    await widget.host._storeBuyPlans(all);
+  }
+
   @override
   Widget build(BuildContext context) {
     final note = '${widget.plan['note'] ?? ''}';
+    final doneCount = widget.items.where((x) => x['done'] == true).length;
     final shown = widget.items.where((x) {
+      final d = x['done'] == true;
+      if (_filter == 1 && d) return false;
+      if (_filter == 2 && !d) return false;
       if (_q.isEmpty) return true;
       return ['name', 'brand', 'bin']
           .any((k) => '${x[k] ?? ''}'.toLowerCase().contains(_q));
@@ -1516,11 +1530,48 @@ class _PlanItemsPageState extends State<_PlanItemsPage> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: Align(
                   alignment: Alignment.centerLeft, child: Text(note))),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Row(children: [
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(children: [
+                  for (final f in const [
+                    [0, 'ທັງໝົດ'],
+                    [1, 'ຍັງບໍ່ຊື້'],
+                    [2, 'ຊື້ແລ້ວ'],
+                  ])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text('${f[1]}'),
+                        selected: _filter == f[0],
+                        onSelected: (_) =>
+                            setState(() => _filter = f[0] as int),
+                      ),
+                    ),
+                ]),
+              ),
+            ),
+            Text('$doneCount / ${widget.items.length}',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+          ]),
+        ),
         Expanded(
           child: shown.isEmpty
               ? const Center(child: Text('ບໍ່ມີຂໍ້ມູນ'))
               : ListView(children: [
-                  for (final x in shown) widget.host._planRow(x),
+                  for (final x in shown)
+                    Row(children: [
+                      Checkbox(
+                          value: x['done'] == true,
+                          onChanged: (v) => _toggle(x, v == true)),
+                      Expanded(
+                          child: Opacity(
+                              opacity: x['done'] == true ? 0.5 : 1,
+                              child: widget.host._planRow(x))),
+                    ]),
                 ]),
         ),
       ]),
