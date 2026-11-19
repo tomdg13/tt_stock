@@ -7,6 +7,10 @@ import 'api.dart';
 import 'budget_excel.dart';
 import 'product_images.dart' show productImageUrl;
 import 'widgets.dart';
+import 'crud.dart' show openEdit;
+import 'specs.dart' show crudSpec;
+import 'dart:convert' as cv;
+import 'package:shared_preferences/shared_preferences.dart';
 
 String _n(num v) => v % 1 == 0 ? v.toInt().toString() : v.toStringAsFixed(1);
 
@@ -30,10 +34,8 @@ class BudgetPage extends StatefulWidget {
 
 class _BudgetPageState extends State<BudgetPage> {
   bool _asTable = true; // true = table, false = old cards
-  int _yearsSpan = 0, _yearFrom = 0, _yearTo = 0, _pctShown = 0;
-  double _yearsEff = 0;
+  int _yearFrom = 0, _yearTo = 0, _pctShown = 0;
   int _yearsFull = 1;
-  String _usageFrom = '', _usageTo = '';
   int _sortCol = -1;
   bool _sortAsc = true;
   final _pct = TextEditingController(text: '0');
@@ -44,6 +46,12 @@ class _BudgetPageState extends State<BudgetPage> {
   Future<dynamic>? _f;
   Map<String, dynamic>? _last;
   bool _exporting = false;
+  Map<String, Map<String, dynamic>> _prodById = {};
+  Map<String, Map<String, dynamic>> _prodByName = {};
+  Map<String, String> _prodNameById = {};
+  final Map<String, num> _actualBuy = {};
+  String _fBrand = '';
+  String _fPart = '';
   bool _saving = false;
   Timer? _deb;
   Set<int> _poIds = {};
@@ -56,6 +64,7 @@ class _BudgetPageState extends State<BudgetPage> {
   @override
   void initState() {
     super.initState();
+    _loadProducts();
     final p = widget.plan;
     if (p != null) {
       _planId = p['id'];
@@ -125,52 +134,14 @@ class _BudgetPageState extends State<BudgetPage> {
       ].join(', ');
 
   Future<void> _pickPos() async {
-    final sel = {..._poIds};
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setD) => AlertDialog(
-          title: const Text('ເລືອກ PO'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: _pos.isEmpty
-                ? const Text('ບໍ່ມີ PO')
-                : ListView(shrinkWrap: true, children: [
-                    for (final p in _pos)
-                      CheckboxListTile(
-                        dense: true,
-                        value: sel.contains(_poId(p)),
-                        title: Text(pick(p, ['poNo'])),
-                        subtitle: Text([
-                          pick(p, ['vendor']),
-                          pick(p, ['title'])
-                        ].where((e) => e.isNotEmpty).join(' • ')),
-                        onChanged: (v) => setD(() {
-                          if (v == true) {
-                            sel.add(_poId(p));
-                          } else {
-                            sel.remove(_poId(p));
-                          }
-                        }),
-                      ),
-                  ]),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => setD(() => sel.clear()),
-                child: const Text('ລ້າງ')),
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('ຍົກເລີກ')),
-            FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('ຕົກລົງ')),
-          ],
-        ),
+    final res = await Navigator.of(context).push<Set<int>>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => _PoPickPage(pos: _pos, initial: _poIds),
       ),
     );
-    if (ok == true) {
-      _poIds = sel;
+    if (res != null) {
+      _poIds = res;
       _run();
     }
   }
@@ -348,7 +319,7 @@ class _BudgetPageState extends State<BudgetPage> {
       for (final b in _branches) {
         if ('${b['id']}' == '$_branchId') bn = pick(b, ['name']);
       }
-      await exportBudgetXlsx(d,
+      await exportBudgetXlsx(d, extra: _extraCols, actual: _actualOf,
           branchName: bn, poText: _poLabel(), auditText: _auditLabel());
     } catch (e) {
       if (mounted) {
@@ -545,19 +516,31 @@ class _BudgetPageState extends State<BudgetPage> {
       case 1:
         return pick(it, ['productName']).toLowerCase();
       case 2:
-        return num0(it['stock']);
+        return _binOf(it).toLowerCase();
       case 3:
-        return it['counted'] == null ? null : num0(it['counted']);
+        return _parentOf(it).toLowerCase();
       case 4:
-        return num0(it['need1']);
+        return _ptOf(it);
       case 5:
-        return num0(it['buy1']);
+        return _branchNameOf();
       case 6:
-        return num0(it['totalBuy']);
+        return _typeOf(it).toLowerCase();
       case 7:
-        return pick(it, ['unit']).toLowerCase();
+        return _brandOf(it).toLowerCase();
       case 8:
-        return num0(it['poTotal']);
+        return num0(it['stock']);
+      case 9:
+        return it['counted'] == null ? null : num0(it['counted']);
+      case 10:
+      return _usedJ(it);
+      case 11:
+      return _pctShown;
+      case 12:
+      return _mustBuy(it);
+      case 13:
+        return pick(it, ['unit']).toLowerCase();
+      case 14:
+        return _actualOf(it);
     }
     return null;
   }
@@ -619,22 +602,216 @@ class _BudgetPageState extends State<BudgetPage> {
     );
   }
 
+  // ໃຊ້ = ສະຕັອກ - ນັບຕົວຈິງ (ບໍ່ມີນັບ = 0)
+  num _usedJ(Map<String, dynamic> it) =>
+      it['counted'] == null ? 0 : num0(it['stock']) - num0(it['counted']);
+
+  // ຕ້ອງຊື້ = J + ROUNDUP(J * % / 100)  (ROUNDUP ຄືກັບ Excel: ປັດອອກຈາກ 0)
+  num _mustBuy(Map<String, dynamic> it) {
+    final j = _usedJ(it);
+    final x = j * _pctShown / 100;
+    return j + (x < 0 ? -((-x).ceil()) : x.ceil());
+  }
+
+  Future<void> _loadProducts() async {
+    try {
+      final d = await Api.get('/products?limit=2000');
+      final src = d is Map ? (d['items'] ?? d['data'] ?? d['rows']) : d;
+      final byId = <String, Map<String, dynamic>>{};
+      final byName = <String, Map<String, dynamic>>{};
+      final names = <String, String>{};
+      for (final m in asList(src)) {
+        final id = pick(m, ['id', 'productId']);
+        final nm = pick(m, ['name', 'productName']);
+        if (id.isNotEmpty) {
+          byId[id] = m;
+          names[id] = nm;
+        }
+        if (nm.isNotEmpty) byName[nm.toLowerCase()] = m;
+      }
+      if (mounted) {
+        setState(() {
+          _prodById = byId;
+          _prodByName = byName;
+          _prodNameById = names;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Map<String, dynamic> _prodOf(Map<String, dynamic> it) {
+    final byId = _prodById[pick(it, ['productId', 'id'])];
+    if (byId != null) return byId;
+    return _prodByName[pick(it, ['productName']).toLowerCase()] ??
+        const <String, dynamic>{};
+  }
+
+  String _binOf(Map<String, dynamic> it) {
+    final b = pick(_prodOf(it), ['binCodes', 'binCode']);
+    return b.isNotEmpty ? b : pick(it, ['binCodes', 'binCode']);
+  }
+
+  String _parentOf(Map<String, dynamic> it) =>
+      _prodNameById[pick(_prodOf(it), ['parentProductId'])] ?? '';
+
+  String _ptOf(Map<String, dynamic> it) {
+    final t = pick(_prodOf(it), ['partType']);
+    if (t == 'PARTIAL') return 'ອາໄຫຼ່ຍ່ອຍ';
+    if (t == 'FULL') return 'ອາໄຫຼ່ເຕັມ';
+    return '';
+  }
+
+  String _typeOf(Map<String, dynamic> it) {
+    final t = pick(it, ['typeName']);
+    return t.isNotEmpty ? t : pick(_prodOf(it), ['typeName']);
+  }
+
+  String _brandOf(Map<String, dynamic> it) {
+    final b = pick(it, ['brandName']);
+    return b.isNotEmpty ? b : pick(_prodOf(it), ['brandName']);
+  }
+
+  List<String> _extraCols(Map<String, dynamic> it) => [
+        _binOf(it),
+        _parentOf(it),
+        _ptOf(it),
+        _branchNameOf(),
+        _typeOf(it),
+        _brandOf(it),
+      ];
+
+  String _keyOf(Map<String, dynamic> it) {
+    final id = pick(it, ['productId', 'id']);
+    return id.isNotEmpty ? id : pick(it, ['productName']);
+  }
+
+  num _actualOf(Map<String, dynamic> it) {
+    final k = _keyOf(it);
+    if (_actualBuy.containsKey(k)) return _actualBuy[k]!;
+    return num0(it['poTotal']);
+  }
+
+  bool get _canEditProd {
+    final sp = crudSpec('prod');
+    return sp != null && sp.canEdit;
+  }
+
+  Future<void> _editProd(Map<String, dynamic> it) async {
+    final sp = crudSpec('prod');
+    final p = _prodOf(it);
+    if (sp == null || p.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('ບໍ່ພົບສິນຄ້ານີ້')));
+      return;
+    }
+    final changed = await openEdit(context, sp, {...p});
+    if (changed == true) {
+      _loadProducts();
+      _run();
+    }
+  }
+
+  Future<void> _askActual(Map<String, dynamic> it) async {
+    final k = _keyOf(it);
+    final cur = _actualBuy[k];
+    final c = TextEditingController(
+        text: cur == null ? '' : cur.toStringAsFixed(cur % 1 == 0 ? 0 : 2));
+    final v = await showDialog<String>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: Text(pick(it, ['productName'])),
+        content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: _thumb(pick(it, ['imageUrl']))),
+              const SizedBox(height: 12),
+              Text('ຕ້ອງຊື້: ${_n(_mustBuy(it))} ${pick(it, ['unit'])}'),
+              Text('PO: ${_n(num0(it['poTotal']))}'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: c,
+                autofocus: true,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration:
+                    const InputDecoration(labelText: 'ຈຳນວນທີ່ຈະຊື້ຕົວຈິງ'),
+                onSubmitted: (t) => Navigator.pop(d, t),
+              ),
+            ]),
+        actions: [
+          if (cur != null)
+            TextButton(
+                onPressed: () => Navigator.pop(d, '__clear__'),
+                child: const Text('ລຶບ')),
+          TextButton(
+              onPressed: () => Navigator.pop(d), child: const Text('ຍົກເລີກ')),
+          FilledButton(
+              onPressed: () => Navigator.pop(d, c.text),
+              child: const Text('ຕົກລົງ')),
+        ],
+      ),
+    );
+    if (v == null) return;
+    if (v == '__clear__') {
+      setState(() => _actualBuy.remove(k));
+      return;
+    }
+    final n = num.tryParse(v.trim());
+    if (n != null && n >= 0) setState(() => _actualBuy[k] = n);
+  }
+
+  Widget _filterBar(Set<String> brands, int shown, int total) {
+    final bl = brands.toList()..sort();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          for (final p in const ['', 'ອາໄຫຼ່ເຕັມ', 'ອາໄຫຼ່ຍ່ອຍ'])
+            ChoiceChip(
+              label: Text(p.isEmpty ? 'ທັງໝົດ' : p),
+              selected: _fPart == p,
+              onSelected: (_) => setState(() => _fPart = p),
+            ),
+          DropdownButton<String>(
+            value: bl.contains(_fBrand) ? _fBrand : '',
+            items: [
+              const DropdownMenuItem(value: '', child: Text('Brand: ທັງໝົດ')),
+              for (final b in bl) DropdownMenuItem(value: b, child: Text(b)),
+            ],
+            onChanged: (v) => setState(() => _fBrand = v ?? ''),
+          ),
+          Text('$shown/$total'),
+        ],
+      ),
+    );
+  }
+
   Widget _itemsTable(
       List<Map<String, dynamic>> items, List<Map<String, dynamic>> past) {
     final cs = Theme.of(context).colorScheme;
-    const w = <double>[56, 260, 80, 90, 110, 110, 100, 60, 110];
+    const w = <double>[56, 260, 90, 140, 100, 100, 110, 100, 80, 90, 110, 110, 100, 60, 110, 110];
     final heads = <String>[
       'ຮູບ',
       'ລາຍການ',
+      'ທີ່ເກັບ',
+      'ອາໄຫຼ່ຫຼັກ',
+      'ປະເພດອາໄຫຼ່',
+      'Branch',
+      'ປະເພດສິນຄ້າ',
+      'brand',
       'ສະຕັອກ',
       'ນັບຕົວຈິງ',
-      'ໃຊ້/1 ປີ +$_pctShown%',
-      'ຕ້ອງຊື້ 1 ປີ',
-      'ຕ້ອງຊື້ ທັງໝົດ',
+        'ໃຊ້',
+        '% ຕ້ອງຊື້ ເພີມ',
+        'ຕ້ອງຊື້',
       'ໜ່ວຍ',
-      'ຊື້ຕົວຈິງ (PO)'
+      'ຊື້ຕົວຈິງ (PO)', 'ຈັດການ'
     ];
-    const right = <int>{2, 3, 4, 5, 6, 8};
+    const right = <int>{8, 9, 10, 11, 12, 14};
     final total = w.fold<double>(0, (a, b) => a + b) + 16;
     Widget cell(int i, Widget child) => SizedBox(
         width: w[i],
@@ -660,7 +837,9 @@ class _BudgetPageState extends State<BudgetPage> {
         return _sortAsc ? c : -c;
       });
     }
-    return SingleChildScrollView(
+    return LayoutBuilder(builder: (ctx, cons) {
+      if (cons.maxHeight < 120) return const SizedBox.shrink();
+      return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: SizedBox(
         width: total,
@@ -670,9 +849,9 @@ class _BudgetPageState extends State<BudgetPage> {
             color: cs.surfaceContainerHighest,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(children: [
-              for (var i = 0; i < heads.length; i++)
-                i == 0
-                    ? cell(i, const Text('ຮູບ', style: headStyle))
+              for (final i in const [2, 3, 4, 5, 6, 7, 0, 1, 8, 9, 10, 11, 12, 13, 14, 15])
+                (i == 0 || i == 15)
+                    ? cell(i, Text(heads[i], style: headStyle))
                     : InkWell(
                         onTap: () => setState(() {
                           _sortAsc = _sortCol == i ? !_sortAsc : true;
@@ -705,7 +884,9 @@ class _BudgetPageState extends State<BudgetPage> {
                       ),
             ]),
           ),
-          for (final it in sorted)
+          Expanded(
+              child: ListView(children: [
+                for (final it in sorted)
             InkWell(
               onTap: () => _showItemDetail(it, past),
               child: Container(
@@ -717,36 +898,65 @@ class _BudgetPageState extends State<BudgetPage> {
                         bottom: BorderSide(
                             color: Theme.of(context).dividerColor))),
                 child: Row(children: [
+                    cell(2, Text(_binOf(it))),
+                    cell(3, Text(_parentOf(it))),
+                    cell(4, Text(_ptOf(it))),
+                    cell(5, Text(_branchNameOf())),
+                    cell(6, Text(_typeOf(it))),
+                    cell(7, Text(_brandOf(it))),
                   cell(0, _thumb(pick(it, ['imageUrl']))),
                   cell(
                       1,
                       Text(pick(it, ['productName']),
                           maxLines: 2, overflow: TextOverflow.ellipsis)),
-                  cell(2, Text(_n(num0(it['stock'])))),
+                  cell(8, Text(_n(num0(it['stock'])))),
                   cell(
-                      3,
+                      9,
                       Text(it['counted'] == null
                           ? '-'
                           : _n(num0(it['counted'])))),
-                  cell(4, Text(_n(num0(it['need1'])))),
+                    cell(10, Text(_n(_usedJ(it)))),
+                    cell(11, Text('$_pctShown%')),
+                    cell(
+                        12,
+                        Text(_n(_mustBuy(it)),
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700))),
+                  cell(13, Text(pick(it, ['unit']))),
                   cell(
-                      5,
-                      Text(_n(num0(it['buy1'])),
-                          style:
-                              const TextStyle(fontWeight: FontWeight.w700))),
-                  cell(6, Text(_n(num0(it['totalBuy'])))),
-                  cell(7, Text(pick(it, ['unit']))),
-                  cell(
-                      8,
-                      Text(num0(it['poTotal']) > 0
-                          ? _n(num0(it['poTotal']))
+                      14,
+                      Text(_actualOf(it) > 0
+                          ? _n(_actualOf(it))
                           : '-')),
+                  cell(
+                      15,
+                      Row(mainAxisSize: MainAxisSize.min, children: [
+                        IconButton.filledTonal(
+                          tooltip: 'ໃສ່ຈຳນວນຊື້ຕົວຈິງ',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => _askActual(it),
+                          icon: const Icon(Icons.shopping_cart_checkout,
+                              size: 20),
+                        ),
+                        if (_canEditProd) ...[
+                          const SizedBox(width: 6),
+                          IconButton.outlined(
+                            tooltip: 'ແກ້ໄຂສິນຄ້າ',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _editProd(it),
+                            icon: const Icon(Icons.edit_outlined, size: 20),
+                          ),
+                        ],
+                      ])),
                 ]),
               ),
+            ),
+              ]),
             ),
         ]),
       ),
     );
+    });
   }
 
   Widget _yearsInfo(Map<String, dynamic> d) {
@@ -786,46 +996,273 @@ class _BudgetPageState extends State<BudgetPage> {
 
   Widget _result(Map<String, dynamic> d) {
     final past = asList(d['pastYears']);
-    _yearsSpan = num0(d['yearsSpan']).toInt();
     _yearFrom = num0(d['yearFrom']).toInt();
     _yearTo = num0(d['yearTo']).toInt();
     _pctShown = num0(d['pct']).toInt();
     _yearsFull = num0(d['yearsFull']).toInt();
-    _yearsEff = num0(d['yearsEff']).toDouble();
-    _usageFrom = '${d['usageFrom'] ?? ''}';
-    _usageTo = '${d['usageTo'] ?? ''}';
     final items = asList(d['items']);
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _summary(d),
-      _yearsInfo(d),
-      const SizedBox(height: 4),
-      if (items.isEmpty)
-        const Padding(
-            padding: EdgeInsets.all(24),
-            child: Center(child: Text('ບໍ່ມີຂໍ້ມູນ')))
-      else
-        ...[
-          Padding(
-            padding: const EdgeInsets.only(top: 8, bottom: 4),
-            child: Row(children: [
-              SegmentedButton<bool>(
-                showSelectedIcon: false,
-                style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                segments: const [
-                  ButtonSegment(value: true, label: Text('ຕາຕະລາງ')),
-                  ButtonSegment(value: false, label: Text('ບັດ')),
-                ],
-                selected: {_asTable},
-                onSelectionChanged: (v) => setState(() => _asTable = v.first),
-              ),
-            ]),
+    final brands = <String>{for (final it in items) _brandOf(it)}..remove('');
+    final shown = [
+      for (final it in items)
+        if ((_fBrand.isEmpty || _brandOf(it) == _fBrand) &&
+            (_fPart.isEmpty || _ptOf(it) == _fPart))
+          it
+    ];
+    _shownRows = shown;
+    return NestedScrollView(
+      headerSliverBuilder: (ctx, inner) => [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _filters(),
+                  const SizedBox(height: 12),
+                  _summary(d),
+                  _yearsInfo(d),
+                  const SizedBox(height: 4),
+                  if (items.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 4),
+                      child: Row(children: [
+                        SegmentedButton<bool>(
+                          showSelectedIcon: false,
+                          style: const ButtonStyle(
+                              visualDensity: VisualDensity.compact),
+                          segments: const [
+                            ButtonSegment(value: true, label: Text('ຕາຕະລາງ')),
+                            ButtonSegment(value: false, label: Text('ບັດ')),
+                          ],
+                          selected: {_asTable},
+                          onSelectionChanged: (v) =>
+                              setState(() => _asTable = v.first),
+                        ),
+                      ]),
+                    ),
+                    _filterBar(brands, shown.length, items.length),
+                  ],
+                ]),
           ),
-          if (_asTable)
-            _itemsTable(items, past)
-          else
-            for (final it in items) _item(it, past),
+        ),
+      ],
+      body: items.isEmpty
+          ? const Center(child: Text('ບໍ່ມີຂໍ້ມູນ'))
+          : (_asTable
+              ? _itemsTable(shown, past)
+              : ListView(padding: const EdgeInsets.all(16), children: [
+                  for (final it in shown) _item(it, past),
+                ])),
+    );
+  }
+
+  List<Map<String, dynamic>> _shownRows = [];
+
+  String get _buyPlansKey =>
+      _planId == null ? 'buyplans:new' : 'buyplans:$_planId';
+
+  num _planQty(Map<String, dynamic> it) {
+    final k = _keyOf(it);
+    if (_actualBuy.containsKey(k)) return _actualBuy[k]!;
+    final m = _mustBuy(it);
+    return m > 0 ? m : 0;
+  }
+
+  num _planTotal(Map<String, dynamic> p) {
+    num t = 0;
+    for (final x in ((p['items'] as List?) ?? const [])) {
+      if (x is Map) t += num.tryParse('${x['qty']}') ?? 0;
+    }
+    return t;
+  }
+
+  String _planSub(Map<String, dynamic> p) {
+    final n = ((p['items'] as List?) ?? const []).length;
+    final d = '${p['createdAt']}';
+    final day = d.length >= 10 ? d.substring(0, 10) : d;
+    final f = '${p['filter'] ?? ''}';
+    final extra = f.isEmpty ? '' : ' • $f';
+    return '$n ລາຍການ • ລວມ ${_n(_planTotal(p))} • $day$extra';
+  }
+
+  Future<List<Map<String, dynamic>>> _loadBuyPlans() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_buyPlansKey);
+      if (raw == null || raw.isEmpty) return [];
+      final v = cv.jsonDecode(raw);
+      if (v is List) {
+        return [
+          for (final x in v)
+            if (x is Map) Map<String, dynamic>.from(x)
+        ];
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<void> _storeBuyPlans(List<Map<String, dynamic>> list) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_buyPlansKey, cv.jsonEncode(list));
+  }
+
+  Future<void> _createBuyPlan() async {
+    if (_planId == null) {
+      await _save();
+      if (_planId == null) return;
+    }
+    final rows = <Map<String, dynamic>>[];
+    for (final it in _shownRows) {
+      final q = _planQty(it);
+      if (q > 0) {
+        rows.add({
+          'key': _keyOf(it),
+          'name': pick(it, ['productName']),
+          'imageUrl': pick(it, ['imageUrl']),
+          'unit': pick(it, ['unit']),
+          'brand': _brandOf(it),
+          'bin': _binOf(it),
+          'qty': q,
+        });
+      }
+    }
+    if (!mounted) return;
+    if (rows.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ບໍ່ມີລາຍການທີ່ຕ້ອງຊື້')));
+      return;
+    }
+    final old = await _loadBuyPlans();
+    final base = _planName.isEmpty ? 'ແຜນ' : _planName;
+    final nameC = TextEditingController(text: '$base - ແຜນຊື້ ${old.length + 1}');
+    final noteC = TextEditingController();
+    final total = rows.fold<num>(0, (a, r) => a + (r['qty'] as num));
+    final flt = [if (_fBrand.isNotEmpty) _fBrand, if (_fPart.isNotEmpty) _fPart]
+        .join(' • ');
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('ສ້າງແຜນຊື້'),
+        content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${rows.length} ລາຍການ • ລວມ ${_n(total)}'),
+              if (flt.isNotEmpty) Text(flt),
+              const SizedBox(height: 8),
+              TextField(
+                  controller: nameC,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'ຊື່ແຜນ')),
+              const SizedBox(height: 8),
+              TextField(
+                  controller: noteC,
+                  decoration: const InputDecoration(labelText: 'ໝາຍເຫດ')),
+            ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(d, false),
+              child: const Text('ຍົກເລີກ')),
+          FilledButton(
+              onPressed: () => Navigator.pop(d, true),
+              child: const Text('ບັນທຶກແຜນ')),
         ],
-    ]);
+      ),
+    );
+    if (ok != true) return;
+    final name = nameC.text.trim();
+    if (name.isEmpty) return;
+    old.add({
+      'id': DateTime.now().millisecondsSinceEpoch,
+      'name': name,
+      'note': noteC.text.trim(),
+      'createdAt': DateTime.now().toIso8601String(),
+      'filter': flt,
+      'items': rows,
+    });
+    await _storeBuyPlans(old);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('ສ້າງແຜນແລ້ວ: $name')));
+  }
+
+  Future<void> _showBuyPlan(Map<String, dynamic> p) {
+    final items = [
+      for (final x in ((p['items'] as List?) ?? const []))
+        if (x is Map) Map<String, dynamic>.from(x)
+    ];
+    final byName = <String, String>{};
+    for (final it in _shownRows) {
+      final u = pick(it, ['imageUrl']);
+      if (u.isNotEmpty) byName[pick(it, ['productName'])] = u;
+    }
+    for (final x in items) {
+      if ('${x['imageUrl'] ?? ''}'.isEmpty) {
+        x['imageUrl'] = byName['${x['name']}'] ?? '';
+      }
+    }
+    final note = '${p['note'] ?? ''}';
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (c) => Scaffold(
+          appBar: AppBar(title: Text('${p['name']}')),
+          body: ListView(children: [
+            if (note.isNotEmpty)
+              Padding(
+                  padding: const EdgeInsets.all(16), child: Text(note)),
+            for (final x in items) _planRow(x),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _planRow(Map<String, dynamic> x) {
+    final q = num.tryParse('${x['qty']}') ?? 0;
+    final unit = '${x['unit'] ?? ''}';
+    final sub = ['${x['brand'] ?? ''}', '${x['bin'] ?? ''}']
+        .where((e) => e.isNotEmpty)
+        .join(' • ');
+    return ListTile(
+      leading: _thumb('${x['imageUrl'] ?? ''}'),
+      title: Text('${x['name']}'),
+      subtitle: sub.isEmpty ? null : Text(sub),
+      trailing: Text('${_n(q)} $unit'),
+    );
+  }
+
+  Future<void> _openBuyPlans() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => _BuyPlansPage(host: this)),
+    );
+  }
+
+  Widget _navItem(IconData icon, String label, VoidCallback? onTap,
+      {bool loading = false}) {
+    final cs = Theme.of(context).colorScheme;
+    final c = onTap == null ? cs.outline : cs.primary;
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            loading
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : Icon(icon, color: c),
+            const SizedBox(height: 2),
+            Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: c)),
+          ]),
+        ),
+      ),
+    );
   }
 
   Widget _bottomBar() {
@@ -833,41 +1270,18 @@ class _BudgetPageState extends State<BudgetPage> {
     final busy = _last == null || _exporting || _saving;
     return Container(
       decoration: BoxDecoration(
-        color: cs.surface,
+        color: cs.surfaceContainer,
         border: Border(top: BorderSide(color: cs.outlineVariant)),
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: Row(children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: busy ? null : _save,
-                icon: _saving
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.save_outlined),
-                label: const Text('ບັນທຶກ'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: busy ? null : _export,
-                icon: _exporting
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.table_view_outlined),
-                label: const Text('ສົ່ງອອກ Excel'),
-              ),
-            ),
-          ]),
-        ),
+        child: Row(children: [
+          _navItem(Icons.save_outlined, 'ບັນທຶກ', busy ? null : _save,
+              loading: _saving),
+          _navItem(Icons.list_alt, 'ແຜນຊື້', _openBuyPlans),
+          _navItem(Icons.table_view_outlined, 'Excel', busy ? null : _export,
+              loading: _exporting),
+        ]),
       ),
     );
   }
@@ -878,19 +1292,23 @@ class _BudgetPageState extends State<BudgetPage> {
       appBar:
           AppBar(title: Text(_planName.isEmpty ? 'ງົບປະມານອາໄຫຼ່' : _planName)),
       bottomNavigationBar: _bottomBar(),
-      body: ListView(padding: const EdgeInsets.all(16), children: [
-        _filters(),
-        const SizedBox(height: 12),
-        FutureBuilder<dynamic>(
-          future: _f,
-          builder: (context, snap) {
-            if (snap.connectionState != ConnectionState.done) {
-              return const Padding(
+      body: FutureBuilder<dynamic>(
+        future: _f,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return ListView(padding: const EdgeInsets.all(16), children: [
+              _filters(),
+              const SizedBox(height: 12),
+              const Padding(
                   padding: EdgeInsets.all(40),
-                  child: Center(child: CircularProgressIndicator()));
-            }
-            if (snap.hasError) {
-              return Padding(
+                  child: Center(child: CircularProgressIndicator())),
+            ]);
+          }
+          if (snap.hasError) {
+            return ListView(padding: const EdgeInsets.all(16), children: [
+              _filters(),
+              const SizedBox(height: 12),
+              Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(children: [
                   Text('${snap.error}',
@@ -899,15 +1317,269 @@ class _BudgetPageState extends State<BudgetPage> {
                   const SizedBox(height: 8),
                   FilledButton(onPressed: _run, child: const Text('ລອງໃໝ່')),
                 ]),
-              );
-            }
-            var d = snap.data;
-            if (d is Map && d['data'] is Map) d = d['data'];
-            if (d is! Map) return const SizedBox();
-            return _result(Map<String, dynamic>.from(d));
-          },
+              ),
+            ]);
+          }
+          var d = snap.data;
+          if (d is Map && d['data'] is Map) d = d['data'];
+          if (d is! Map) {
+            return ListView(
+                padding: const EdgeInsets.all(16), children: [_filters()]);
+          }
+          return _result(Map<String, dynamic>.from(d));
+        },
+      ),
+    );
+  }
+}
+
+class _PoPickPage extends StatefulWidget {
+  final List<Map<String, dynamic>> pos;
+  final Set<int> initial;
+  const _PoPickPage({required this.pos, required this.initial});
+  @override
+  State<_PoPickPage> createState() => _PoPickPageState();
+}
+
+class _PoPickPageState extends State<_PoPickPage> {
+  late Set<int> sel = {...widget.initial};
+
+  int _id(Map<String, dynamic> p) => int.tryParse('${p['id']}') ?? 0;
+
+  String _year(Map<String, dynamic> p) {
+    final m = RegExp(r'20[1-3]\d')
+        .firstMatch('${pick(p, ['title'])} ${pick(p, ['poNo'])}');
+    if (m != null) return m.group(0)!;
+    for (final k in const ['poDate', 'orderDate', 'createdAt', 'date']) {
+      final v = pick(p, [k]);
+      if (RegExp(r'^20[1-3]\d').hasMatch(v)) return v.substring(0, 4);
+    }
+    return 'ອື່ນໆ';
+  }
+
+  List<MapEntry<String, List<Map<String, dynamic>>>> _groups() {
+    final g = <String, List<Map<String, dynamic>>>{};
+    for (final p in widget.pos) {
+      g.putIfAbsent(_year(p), () => []).add(p);
+    }
+    final keys = g.keys.toList()
+      ..sort((a, b) {
+        if (a == 'ອື່ນໆ') return 1;
+        if (b == 'ອື່ນໆ') return -1;
+        return b.compareTo(a);
+      });
+    return [for (final k in keys) MapEntry(k, g[k]!)];
+  }
+
+  bool? _state(List<Map<String, dynamic>> list) {
+    final n = list.where((p) => sel.contains(_id(p))).length;
+    if (n == 0) return false;
+    if (n == list.length) return true;
+    return null;
+  }
+
+  void _setAll(List<Map<String, dynamic>> list, bool on) => setState(() {
+        for (final p in list) {
+          if (on) {
+            sel.add(_id(p));
+          } else {
+            sel.remove(_id(p));
+          }
+        }
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final groups = _groups();
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('ເລືອກ PO (${sel.length}/${widget.pos.length})'),
+        actions: [
+          TextButton(
+              onPressed: () => setState(() => sel.clear()),
+              child: const Text('ລ້າງ')),
+        ],
+      ),
+      body: widget.pos.isEmpty
+          ? const Center(child: Text('ບໍ່ມີ PO'))
+          : ListView(children: [
+              CheckboxListTile(
+                tristate: true,
+                value: _state(widget.pos),
+                title: const Text('ເລືອກທັງໝົດ',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+                onChanged: (_) =>
+                    _setAll(widget.pos, _state(widget.pos) != true),
+              ),
+              const Divider(height: 1),
+              for (final g in groups) ...[
+                Material(
+                  color: cs.surfaceContainerHighest,
+                  child: CheckboxListTile(
+                    tristate: true,
+                    value: _state(g.value),
+                    title: Text(
+                        'ປີ ${g.key}  (${g.value.where((p) => sel.contains(_id(p))).length}/${g.value.length})',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    onChanged: (_) => _setAll(g.value, _state(g.value) != true),
+                  ),
+                ),
+                for (final p in g.value)
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.only(left: 32, right: 16),
+                    value: sel.contains(_id(p)),
+                    title: Text(pick(p, ['poNo'])),
+                    subtitle: Text([pick(p, ['vendor']), pick(p, ['title'])]
+                        .where((e) => e.isNotEmpty)
+                        .join(' • ')),
+                    onChanged: (v) => setState(() {
+                      if (v == true) {
+                        sel.add(_id(p));
+                      } else {
+                        sel.remove(_id(p));
+                      }
+                    }),
+                  ),
+              ],
+            ]),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(children: [
+            Expanded(
+                child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('ຍົກເລີກ'))),
+            const SizedBox(width: 12),
+            Expanded(
+                child: FilledButton(
+                    onPressed: () => Navigator.pop(context, sel),
+                    child: Text('ຕົກລົງ (${sel.length})'))),
+          ]),
         ),
-      ]),
+      ),
+    );
+  }
+}
+
+class _BuyPlansPage extends StatefulWidget {
+  final _BudgetPageState host;
+  const _BuyPlansPage({required this.host});
+  @override
+  State<_BuyPlansPage> createState() => _BuyPlansPageState();
+}
+
+class _BuyPlansPageState extends State<_BuyPlansPage> {
+  List<Map<String, dynamic>> _plans = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  Future<void> _reload() async {
+    final l = await widget.host._loadBuyPlans();
+    if (!mounted) return;
+    setState(() {
+      _plans = l.reversed.toList();
+      _loading = false;
+    });
+  }
+
+  Future<void> _create() async {
+    await widget.host._createBuyPlan();
+    await _reload();
+  }
+
+  Future<void> _delete(Map<String, dynamic> p) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('ລຶບແຜນນີ້?'),
+        content: Text('${p['name']}'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(d, false),
+              child: const Text('ຍົກເລີກ')),
+          FilledButton(
+              onPressed: () => Navigator.pop(d, true),
+              child: const Text('ລຶບ')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final all = await widget.host._loadBuyPlans();
+    await widget.host
+        ._storeBuyPlans(all.where((x) => x['id'] != p['id']).toList());
+    await _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final h = widget.host;
+    final cs = Theme.of(context).colorScheme;
+    final name = h._planName;
+    return Scaffold(
+      appBar: AppBar(title: Text(name.isEmpty ? 'ແຜນຊື້' : 'ແຜນຊື້ - $name')),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(children: [
+              Container(
+                width: double.infinity,
+                color: cs.surfaceContainerHighest,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text('ແຜນຊື້ ${_plans.length} ແຜນ • ເກັບໄວ້ໃນເຄື່ອງນີ້',
+                    style: const TextStyle(fontSize: 12)),
+              ),
+              Expanded(
+                child: _plans.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(Icons.list_alt, size: 48),
+                                SizedBox(height: 12),
+                                Text('ຍັງບໍ່ມີແຜນຊື້'),
+                                SizedBox(height: 4),
+                                Text('ກົດ ສ້າງແຜນຊື້ ດ້ານລຸ່ມ'),
+                              ]),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: _plans.length,
+                        separatorBuilder: (c, i) => const Divider(height: 1),
+                        itemBuilder: (c, i) {
+                          final p = _plans[i];
+                          return ListTile(
+                            title: Text('${p['name']}'),
+                            subtitle: Text(h._planSub(p)),
+                            onTap: () => h._showBuyPlan(p),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () => _delete(p),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ]),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: FilledButton.icon(
+            onPressed: _create,
+            icon: const Icon(Icons.playlist_add),
+            label: const Text('ສ້າງແຜນຊື້'),
+          ),
+        ),
+      ),
     );
   }
 }
