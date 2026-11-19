@@ -556,7 +556,9 @@ class _CrudFormState extends State<CrudForm> {
                       ? 'brands'
                       : f.optionsPath!.contains('models')
                           ? 'models'
-                          : '';
+                          : f.optionsPath!.contains('terminal-types')
+                              ? 'terminal-types'
+                              : '';
                   if (fo.isNotEmpty) img = '/uploads/$fo/$img';
                 }
                 if (id.isNotEmpty && img.isNotEmpty) im[id] = img;

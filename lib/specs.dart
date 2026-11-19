@@ -224,6 +224,7 @@ CrudSpec? crudSpec(String key) {
               required: true,
               optionsPath: '/terminal-types',
               optionValue: 'typeId',
+              imageKey: 'imageFile',
               nameKey: 'typeName'),
           FieldSpec('brandId', 'BRAND',
               type: FT.select,
