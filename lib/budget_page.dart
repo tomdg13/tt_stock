@@ -1,6 +1,7 @@
 // Budget: bought and used per fiscal year, stock now, need until a target year, amount to buy.
 // Server: GET /stock/budget?fm=10&toYear=2028&pct=0&branchId=
 // Saved budgets: POST /stock/budget-plans, PUT /stock/budget-plans/:id
+import 'image_search.dart' show SearchTools;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'api.dart';
@@ -1202,18 +1203,9 @@ class _BudgetPageState extends State<BudgetPage> {
         x['imageUrl'] = byName['${x['name']}'] ?? '';
       }
     }
-    final note = '${p['note'] ?? ''}';
     return Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (c) => Scaffold(
-          appBar: AppBar(title: Text('${p['name']}')),
-          body: ListView(children: [
-            if (note.isNotEmpty)
-              Padding(
-                  padding: const EdgeInsets.all(16), child: Text(note)),
-            for (final x in items) _planRow(x),
-          ]),
-        ),
+        builder: (c) => _PlanItemsPage(host: this, plan: p, items: items),
       ),
     );
   }
@@ -1460,6 +1452,78 @@ class _PoPickPageState extends State<_PoPickPage> {
           ]),
         ),
       ),
+    );
+  }
+}
+
+class _PlanItemsPage extends StatefulWidget {
+  final _BudgetPageState host;
+  final Map<String, dynamic> plan;
+  final List<Map<String, dynamic>> items;
+  const _PlanItemsPage(
+      {required this.host, required this.plan, required this.items});
+  @override
+  State<_PlanItemsPage> createState() => _PlanItemsPageState();
+}
+
+class _PlanItemsPageState extends State<_PlanItemsPage> {
+  final _qc = TextEditingController();
+  String _q = '';
+
+  @override
+  void dispose() {
+    _qc.dispose();
+    super.dispose();
+  }
+
+  void _onQ(String v) => setState(() => _q = v.trim().toLowerCase());
+
+  @override
+  Widget build(BuildContext context) {
+    final note = '${widget.plan['note'] ?? ''}';
+    final shown = widget.items.where((x) {
+      if (_q.isEmpty) return true;
+      return ['name', 'brand', 'bin']
+          .any((k) => '${x[k] ?? ''}'.toLowerCase().contains(_q));
+    }).toList();
+    return Scaffold(
+      appBar: AppBar(title: Text('${widget.plan['name']}')),
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: TextField(
+            controller: _qc,
+            decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                labelText: 'ຄົ້ນຫາອາໄຫຼ່',
+                suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+                  SearchTools(onResult: (v) {
+                    _qc.text = v;
+                    _onQ(v);
+                  }),
+                  IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _qc.clear();
+                        _onQ('');
+                      }),
+                ])),
+            onChanged: _onQ,
+          ),
+        ),
+        if (note.isNotEmpty)
+          Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Align(
+                  alignment: Alignment.centerLeft, child: Text(note))),
+        Expanded(
+          child: shown.isEmpty
+              ? const Center(child: Text('ບໍ່ມີຂໍ້ມູນ'))
+              : ListView(children: [
+                  for (final x in shown) widget.host._planRow(x),
+                ]),
+        ),
+      ]),
     );
   }
 }
