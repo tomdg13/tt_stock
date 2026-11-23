@@ -10,8 +10,34 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'api.dart';
+import 'ldb_letterhead.dart';
 import 'product_images.dart' show productImageUrl;
 import 'widgets.dart';
+
+const String _branchName = 'Head Office';
+const String _toLine =
+    'ຮຽນ: ທ່ານ ຫົວໜ້າຝ່າຍເຕັກໂນໂລຊີຂໍ້ມູນຂ່າວສານທີ່ນັບຖືຢ່າງສູງ';
+const String _subjectLine = 'ເລື່ອງ: ຂໍຊື້ອາໄຫຼ່ເອທີເອັມ';
+const String _closing1 =
+    'ດັ່ງນັ້ນ ຈຶ່ງສະເໜີມາຍັງທ່ານເພື່ອພິຈາລະນາ ແລະ ແກ້ໄຂຕາມຄວາມເໝາະສົມດ້ວຍ.';
+const String _closing2 = 'ຮຽນມາດ້ວຍຄວາມເຄົາລົບ ແລະ ນັບຖືຢ່າງສູງ.';
+const String _sign1 = 'ຫົວໜ້າສາຂາ';
+const String _sign2 = 'ຜູ້ສະເໜີ';
+
+const List<String> _months = [
+  'ມັງກອນ',
+  'ກຸມພາ',
+  'ມີນາ',
+  'ເມສາ',
+  'ພຶດສະພາ',
+  'ມິຖຸນາ',
+  'ກໍລະກົດ',
+  'ສິງຫາ',
+  'ກັນຍາ',
+  'ຕຸລາ',
+  'ພະຈິກ',
+  'ທັນວາ',
+];
 
 const double _k = 3.0;
 
@@ -63,10 +89,7 @@ Future<_Ti?> _render(String t, double size, bool bold, double maxW) async {
 }
 
 Future<pw.Widget> _t(String t,
-    {double size = 8,
-    bool bold = false,
-    bool right = false,
-    double maxW = 0}) async {
+    {double size = 10, bool bold = false, double maxW = 0}) async {
   if (t.isEmpty) return pw.SizedBox(height: size + 2);
   final key = '${bold ? 1 : 0}|$size|$maxW|$t';
   final c = _cache[key] ?? await _render(t, size, bold, maxW);
@@ -74,27 +97,22 @@ Future<pw.Widget> _t(String t,
     return pw.Text(t, style: pw.TextStyle(fontSize: size));
   }
   _cache[key] = c;
-  return pw.Align(
-    alignment: right ? pw.Alignment.centerRight : pw.Alignment.centerLeft,
-    child: pw.Image(pw.MemoryImage(c.bytes), width: c.w, height: c.h),
-  );
+  return pw.Image(pw.MemoryImage(c.bytes), width: c.w, height: c.h);
 }
 
 Future<pw.Widget> _c(String t,
-    {bool bold = false, bool right = false, double maxW = 0}) async {
-  final w = await _t(t, bold: bold, right: right, maxW: maxW);
+    {bool bold = false,
+    bool right = false,
+    bool center = false,
+    double maxW = 0}) async {
+  final w = await _t(t, size: 9, bold: bold, maxW: maxW);
+  final al = right
+      ? pw.Alignment.centerRight
+      : (center ? pw.Alignment.center : pw.Alignment.centerLeft);
   return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-      child: w);
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+      child: pw.Align(alignment: al, child: w));
 }
-
-pw.Widget _imgCell(Uint8List? b) => pw.Padding(
-      padding: const pw.EdgeInsets.all(2),
-      child: b == null
-          ? pw.SizedBox(width: 30, height: 30)
-          : pw.Image(pw.MemoryImage(b),
-              width: 30, height: 30, fit: pw.BoxFit.fill),
-    );
 
 List<Object>? _makeThumb(Uint8List b) {
   final im = img.decodeImage(b);
@@ -131,6 +149,11 @@ String _q(num v) => v % 1 == 0 ? '${v.toInt()}' : '$v';
 
 String _two(int n) => n < 10 ? '0$n' : '$n';
 
+Future<pw.Widget> _sig(String title) async {
+  final t = await _t(title, size: 10, bold: true);
+  return pw.Column(children: [t, pw.SizedBox(height: 60)]);
+}
+
 Future<void> exportPlanPdf(
     Map<String, dynamic> plan, List<Map<String, dynamic>> items) async {
   await _font();
@@ -150,109 +173,347 @@ Future<void> exportPlanPdf(
   debugPrint('[PLANPDF] images ${thumbs.length}/${urls.length}');
 
   final widths = <int, pw.TableColumnWidth>{
-    0: const pw.FixedColumnWidth(22),
-    1: const pw.FixedColumnWidth(36),
-    2: const pw.FlexColumnWidth(1),
-    3: const pw.FixedColumnWidth(52),
-    4: const pw.FixedColumnWidth(36),
-    5: const pw.FixedColumnWidth(60),
-    6: const pw.FixedColumnWidth(70),
-    7: const pw.FixedColumnWidth(60),
+    0: const pw.FixedColumnWidth(34),
+    1: const pw.FlexColumnWidth(1),
+    2: const pw.FixedColumnWidth(62),
+    3: const pw.FixedColumnWidth(58),
+    4: const pw.FixedColumnWidth(50),
+    5: const pw.FixedColumnWidth(44),
   };
 
   final trs = <pw.TableRow>[];
   trs.add(pw.TableRow(
-    decoration: const pw.BoxDecoration(color: PdfColors.grey200),
     children: [
-      await _c('#', bold: true),
-      await _c('ຮູບ', bold: true),
-      await _c('ສິນຄ້າ', bold: true),
-      await _c('ຕ້ອງຊື້', bold: true, right: true),
-      await _c('ໜ່ວຍ', bold: true),
-      await _c('ຊື້ແຜນນີ້', bold: true, right: true),
-      await _c('brand', bold: true),
-      await _c('ທີ່ເກັບ', bold: true),
+      await _c('ລຳດັບ', bold: true, center: true),
+      await _c('ອາໄຫຼ່', bold: true, center: true),
+      await _c('ຍີ່ຫໍ້', bold: true, center: true),
+      await _c('ທີ່ເກັບ', bold: true, center: true),
+      await _c('ຈຳນວນ', bold: true, center: true),
+      await _c('ໜ່ວຍ', bold: true, center: true),
     ],
   ));
 
-  var sumMust = 0.0;
-  var sumBuy = 0.0;
+  var sumQty = 0.0;
   for (var i = 0; i < rows.length; i++) {
     final x = rows[i];
     final u = productImageUrl('${x['imageUrl'] ?? ''}');
-    final must = x['must'] ?? x['qty'];
-    final m = num0(must).toDouble();
-    sumMust += m;
-    var buy = '-';
-    if (x['buyQty'] is num) {
-      final b = num0(x['buyQty']).toDouble();
-      sumBuy += b;
-      buy = _q(b);
-    }
+    final th = thumbs[u];
+    final qv = x['buyQty'] ?? x['must'] ?? x['qty'];
+    final qn = num0(qv).toDouble();
+    sumQty += qn;
+    final nameW = await _t(_nm(x), size: 9, maxW: 240);
     trs.add(pw.TableRow(
       verticalAlignment: pw.TableCellVerticalAlignment.middle,
       children: [
-        await _c('${i + 1}'),
-        _imgCell(thumbs[u]),
-        await _c('${x['name'] ?? ''}', maxW: 440),
-        await _c(_q(m), bold: true, right: true),
-        await _c('${x['unit'] ?? ''}'),
-        await _c(buy, bold: true, right: true),
-        await _c('${x['brand'] ?? ''}'),
-        await _c('${x['bin'] ?? ''}'),
+        await _c('${i + 1}', center: true),
+        pw.Padding(
+          padding: const pw.EdgeInsets.all(4),
+          child: pw.Column(
+              mainAxisSize: pw.MainAxisSize.min,
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                if (th != null)
+                  pw.Image(pw.MemoryImage(th),
+                      width: 44, height: 44, fit: pw.BoxFit.fill),
+                if (th != null) pw.SizedBox(height: 3),
+                nameW,
+              ]),
+        ),
+        await _c('${x['brand'] ?? ''}', center: true),
+        await _c('${x['bin'] ?? ''}', center: true),
+        await _c(_q(qn), bold: true, center: true),
+        await _c('${x['unit'] ?? ''}', center: true),
       ],
     ));
   }
 
   trs.add(pw.TableRow(
-    decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+    decoration: const pw.BoxDecoration(color: PdfColors.grey200),
     children: [
       await _c(''),
-      await _c(''),
       await _c('ລວມ ${rows.length} ລາຍການ', bold: true),
-      await _c(_q(sumMust), bold: true, right: true),
       await _c(''),
-      await _c(_q(sumBuy), bold: true, right: true),
       await _c(''),
+      await _c(_q(sumQty), bold: true, center: true),
       await _c(''),
     ],
   ));
 
-  final created = '${plan['createdAt'] ?? ''}';
-  final note = '${plan['note'] ?? ''}';
   final n = DateTime.now();
-  final dateTxt = created.length >= 10
-      ? created.substring(0, 10)
-      : '${n.year}-${_two(n.month)}-${_two(n.day)}';
+  final dateLao = '${n.day} ${_months[n.month - 1]} ${n.year}';
+  final planName = '${plan['name'] ?? ''}';
+  final note = '${plan['note'] ?? ''}';
 
-  final head = pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-    await _t('${plan['name'] ?? ''}', size: 14, bold: true),
-    pw.SizedBox(height: 3),
-    if (note.isNotEmpty) await _t('ໝາຍເຫດ: $note', size: 9),
-    await _t('ວັນທີ: $dateTxt', size: 9),
-    pw.SizedBox(height: 8),
-  ]);
+  final left = await _t('ສາຂາ $_branchName', size: 10);
+  final noLine = await _t('ເລກທີ່: ................................', size: 10);
+  final dateLine = await _t('$_branchName, ວັນທີ $dateLao', size: 10);
+  final title = await _t('ໜັງສືສະເໜີ', size: 20, bold: true);
+  final toW = await _t(_toLine, size: 10, maxW: 520);
+  final subW = await _t(_subjectLine, size: 10, maxW: 520);
+  final planW = await _t('- ອີງຕາມແຜນຊື້: $planName', size: 10, maxW: 520);
+  final noteW = note.isEmpty
+      ? null
+      : await _t('- ໝາຍເຫດ: $note', size: 10, maxW: 520);
+  final intro = await _t(
+      'ສາຂາ $_branchName ຂໍຖືເປັນກຽດສະເໜີມາຍັງທ່ານເພື່ອຂໍຊື້ອາໄຫຼ່ເອທີເອັມ ຕາມລາຍລະອຽດດັ່ງລຸ່ມນີ້:',
+      size: 10,
+      maxW: 490);
+  final cl1 = await _t(_closing1, size: 10, maxW: 490);
+  final cl2 = await _t(_closing2, size: 10, maxW: 520);
+  final s1 = await _sig(_sign1);
+  final s2 = await _sig(_sign2);
 
-  final table = pw.Table(
-    border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.4),
-    columnWidths: widths,
-    children: trs,
-  );
-
+  final lh = await loadLetterhead();
+  final pageW = PdfPageFormat.a4.width;
   final doc = pw.Document();
   doc.addPage(pw.MultiPage(
-    pageFormat: PdfPageFormat.a4.landscape,
-    margin: const pw.EdgeInsets.all(24),
-    footer: (ctx) => pw.Align(
-      alignment: pw.Alignment.centerRight,
-      child: pw.Text('${ctx.pageNumber} / ${ctx.pagesCount}',
-          style: const pw.TextStyle(fontSize: 8)),
+    pageTheme: pw.PageTheme(
+      pageFormat: PdfPageFormat.a4,
+      margin: pw.EdgeInsets.fromLTRB(
+          24, pageW * lh.headerRatio + 10, 24, pageW * lh.footerRatio + 8),
+      buildBackground: (ctx) => ldbPdfBackground(lh),
     ),
-    build: (ctx) => [head, table],
+    build: (ctx) => [
+      pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            left,
+            pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [noLine, pw.SizedBox(height: 3), dateLine]),
+          ]),
+      pw.SizedBox(height: 14),
+      pw.Center(child: title),
+      pw.SizedBox(height: 14),
+      toW,
+      pw.SizedBox(height: 4),
+      subW,
+      pw.SizedBox(height: 4),
+      planW,
+      if (noteW != null) pw.SizedBox(height: 4),
+      if (noteW != null) noteW,
+      pw.SizedBox(height: 8),
+      pw.Padding(padding: const pw.EdgeInsets.only(left: 30), child: intro),
+      pw.SizedBox(height: 8),
+      pw.Table(
+        border: pw.TableBorder.all(width: 0.5),
+        columnWidths: widths,
+        children: trs,
+      ),
+      pw.SizedBox(height: 10),
+      pw.Padding(padding: const pw.EdgeInsets.only(left: 30), child: cl1),
+      pw.SizedBox(height: 4),
+      pw.Align(alignment: pw.Alignment.centerRight, child: cl2),
+      pw.SizedBox(height: 24),
+      pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+          children: [s1, s2]),
+    ],
   ));
 
   final bytes = await doc.save();
   await Printing.sharePdf(
       bytes: bytes,
       filename: 'buyplan_${n.year}${_two(n.month)}${_two(n.day)}.pdf');
+}
+
+Future<pw.TableRow> _sheetHead() async {
+  return pw.TableRow(
+    decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+    children: [
+      await _c('ລຳດັບ', bold: true, center: true),
+      await _c('ຮູບ', bold: true, center: true),
+      await _c('ສິນຄ້າ', bold: true, center: true),
+      await _c('ສະຕັອກ', bold: true, center: true),
+      await _c('ນັບຕົວຈິງ', bold: true, center: true),
+      await _c('ໃຊ້', bold: true, center: true),
+      await _c('ຕ້ອງຊື້', bold: true, center: true),
+      await _c('ຊື້ແຜນນີ້', bold: true, center: true),
+    ],
+  );
+}
+
+String _num(dynamic v) => v is num ? _q(v) : '-';
+
+Future<void> exportPlanSheetPdf(
+    Map<String, dynamic> plan, List<Map<String, dynamic>> items) async {
+  await _font();
+  final rows = items.where((x) => x['done'] == true).toList();
+  rows.sort((a, b) {
+    final c = '${a['brand'] ?? ''}'.compareTo('${b['brand'] ?? ''}');
+    if (c == 0) return '${a['name'] ?? ''}'.compareTo('${b['name'] ?? ''}');
+    return c;
+  });
+
+  final urls = <String>{};
+  for (final it in rows) {
+    final u = productImageUrl('${it['imageUrl'] ?? ''}');
+    if (u.isNotEmpty) urls.add(u);
+  }
+  final thumbs = await _loadThumbs(urls);
+
+  final widths = <int, pw.TableColumnWidth>{
+    0: const pw.FixedColumnWidth(30),
+    1: const pw.FixedColumnWidth(46),
+    2: const pw.FlexColumnWidth(1),
+    3: const pw.FixedColumnWidth(44),
+    4: const pw.FixedColumnWidth(52),
+    5: const pw.FixedColumnWidth(36),
+    6: const pw.FixedColumnWidth(48),
+    7: const pw.FixedColumnWidth(52),
+  };
+
+  var sumMust = 0.0;
+  var sumBuy = 0.0;
+  final chunks = <List<pw.TableRow>>[];
+  var cur = <pw.TableRow>[];
+  for (var i = 0; i < rows.length; i++) {
+    final x = rows[i];
+    final u = productImageUrl('${x['imageUrl'] ?? ''}');
+    final th = thumbs[u];
+    final must = x['isNew'] == true ? null : (x['must'] ?? x['qty']);
+    if (must is num) sumMust += must.toDouble();
+    final buy = x['buyQty'];
+    if (buy is num) sumBuy += buy.toDouble();
+    cur.add(pw.TableRow(
+      verticalAlignment: pw.TableCellVerticalAlignment.middle,
+      children: [
+        await _c('${i + 1}', center: true),
+        pw.Padding(
+          padding: const pw.EdgeInsets.all(3),
+          child: th is Uint8List
+              ? pw.Image(pw.MemoryImage(th),
+                  width: 38, height: 38, fit: pw.BoxFit.fill)
+              : pw.SizedBox(width: 38, height: 38),
+        ),
+        await _c(_nm(x), maxW: 230),
+        await _c(_num(x['stock']), center: true),
+        await _c(_num(x['counted']), center: true),
+        await _c(_num(x['used']), center: true),
+        await _c(_num(must), bold: true, center: true),
+        await _c(_num(buy), bold: true, center: true),
+      ],
+    ));
+    if (cur.length == 12) {
+      chunks.add(cur);
+      cur = <pw.TableRow>[];
+    }
+  }
+  if (cur.isNotEmpty) chunks.add(cur);
+
+  final n = DateTime.now();
+  final body = <pw.Widget>[...await _letterTop(plan)];
+  for (var k = 0; k < chunks.length; k++) {
+    final head = await _sheetHead();
+    final list = <pw.TableRow>[head, ...chunks[k]];
+    if (k == chunks.length - 1) {
+      list.add(pw.TableRow(
+        decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+        children: [
+          await _c(''),
+          await _c(''),
+          await _c('ລວມ', bold: true),
+          await _c(''),
+          await _c(''),
+          await _c(''),
+          await _c(_q(sumMust), bold: true, center: true),
+          await _c(_q(sumBuy), bold: true, center: true),
+        ],
+      ));
+    }
+    body.add(pw.Table(
+      border: pw.TableBorder.all(width: 0.5),
+      columnWidths: widths,
+      children: list,
+    ));
+  }
+
+  body.add(await _letterBottom());
+
+  final lh = await loadLetterhead();
+  final pageW = PdfPageFormat.a4.width;
+  final doc = pw.Document();
+  doc.addPage(pw.MultiPage(
+    pageTheme: pw.PageTheme(
+      pageFormat: PdfPageFormat.a4,
+      margin: pw.EdgeInsets.fromLTRB(
+          24, pageW * lh.headerRatio + 10, 24, pageW * lh.footerRatio + 8),
+      buildBackground: (ctx) => ldbPdfBackground(lh),
+    ),
+    build: (ctx) => body,
+  ));
+
+  final bytes = await doc.save();
+  await Printing.sharePdf(
+      bytes: bytes,
+      filename:
+          'buyplan_sheet_${n.year}${_two(n.month)}${_two(n.day)}.pdf');
+}
+
+Future<List<pw.Widget>> _letterTop(Map<String, dynamic> plan) async {
+  final n = DateTime.now();
+  final dateLao = '${n.day} ${_months[n.month - 1]} ${n.year}';
+  final planName = '${plan['name'] ?? ''}';
+  final note = '${plan['note'] ?? ''}';
+  final left = await _t('ສາຂາ $_branchName', size: 10);
+  final noLine = await _t('ເລກທີ່: ................................', size: 10);
+  final dateLine = await _t('$_branchName, ວັນທີ $dateLao', size: 10);
+  final title = await _t('ໜັງສືສະເໜີ', size: 20, bold: true);
+  final toW = await _t(_toLine, size: 10, maxW: 520);
+  final subW = await _t(_subjectLine, size: 10, maxW: 520);
+  final planW = await _t('- ອີງຕາມແຜນຊື້: $planName', size: 10, maxW: 520);
+  final pw.Widget? noteW =
+      note.isEmpty ? null : await _t('- ໝາຍເຫດ: $note', size: 10, maxW: 520);
+  final intro = await _t(
+      'ສາຂາ $_branchName ຂໍຖືເປັນກຽດສະເໜີມາຍັງທ່ານເພື່ອຂໍຊື້ອາໄຫຼ່ເອທີເອັມ ຕາມລາຍລະອຽດດັ່ງລຸ່ມນີ້:',
+      size: 10,
+      maxW: 490);
+  return <pw.Widget>[
+    pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          left,
+          pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [noLine, pw.SizedBox(height: 3), dateLine]),
+        ]),
+    pw.SizedBox(height: 14),
+    pw.Center(child: title),
+    pw.SizedBox(height: 14),
+    toW,
+    pw.SizedBox(height: 4),
+    subW,
+    pw.SizedBox(height: 4),
+    planW,
+    if (noteW is pw.Widget) pw.SizedBox(height: 4),
+    if (noteW is pw.Widget) noteW,
+    pw.SizedBox(height: 8),
+    pw.Padding(padding: const pw.EdgeInsets.only(left: 30), child: intro),
+    pw.SizedBox(height: 8),
+  ];
+}
+
+Future<pw.Widget> _letterBottom() async {
+  final cl1 = await _t(_closing1, size: 10, maxW: 490);
+  final cl2 = await _t(_closing2, size: 10, maxW: 520);
+  final s1 = await _sig(_sign1);
+  final s2 = await _sig(_sign2);
+  return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+    pw.SizedBox(height: 12),
+    pw.Padding(padding: const pw.EdgeInsets.only(left: 30), child: cl1),
+    pw.SizedBox(height: 4),
+    pw.Align(alignment: pw.Alignment.centerRight, child: cl2),
+    pw.SizedBox(height: 24),
+    pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
+      s1,
+      s2,
+    ]),
+  ]);
+}
+
+String _nm(Map<String, dynamic> x) {
+  final n = '${x['name'] ?? ''}';
+  return x['isNew'] == true ? '$n\n(ເຄື່ອງທີ່ບໍ່ເຄີຍຊື້)' : n;
 }

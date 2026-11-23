@@ -3,7 +3,8 @@ import 'api.dart';
 import 'image_search.dart' show SearchTools;
 import 'plan_bar.dart';
 import 'plan_pick.dart';
-import 'plan_pdf.dart';
+import 'plan_product_pick.dart';
+import 'plan_pdf_menu.dart';
 import 'product_images.dart' show productImageUrl;
 import 'widgets.dart';
 
@@ -59,6 +60,120 @@ class _PlanCheckedPageState extends State<PlanCheckedPage> {
 
   String _q(num v) => v % 1 == 0 ? '${v.toInt()}' : '$v';
 
+  Future<void> _addMenu() async {
+    final r = await showModalBottomSheet<int>(
+      context: context,
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.inventory_2_outlined),
+            title: const Text('ເລືອກຈາກສິນຄ້າ'),
+            subtitle: const Text('ຄົ້ນຫາຈາກລາຍການສິນຄ້າ'),
+            onTap: () => Navigator.pop(c, 1),
+          ),
+          ListTile(
+            leading: const Icon(Icons.edit_outlined),
+            title: const Text('ພິມເອງ'),
+            subtitle: const Text('ສິນຄ້າທີ່ຍັງບໍ່ມີໃນລະບົບ'),
+            onTap: () => Navigator.pop(c, 2),
+          ),
+        ]),
+      ),
+    );
+    if (r == 1) await _addFromCatalog();
+    if (r == 2) await _addNew();
+  }
+
+  Future<void> _addFromCatalog() async {
+    final have = <String>{for (final x in widget.items) '${x['key']}'};
+    final r = await Navigator.of(context).push<List<Map<String, dynamic>>>(
+        MaterialPageRoute(
+            builder: (_) => PlanProductPickPage(existing: have)));
+    if (r == null || r.isEmpty) return;
+    setState(() {
+      widget.items.addAll(r);
+    });
+    await widget.onSave();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'ເພີ່ມແລ້ວ ${r.length} ລາຍການ • ກົດແຖວເພື່ອໃສ່ຈຳນວນຊື້')));
+    }
+  }
+
+  String _nm(Map<String, dynamic> x) {
+    final n = '${x['name'] ?? ''}';
+    return x['isNew'] == true ? '$n\n(ເຄື່ອງທີ່ບໍ່ເຄີຍຊື້)' : n;
+  }
+
+  Future<void> _addNew() async {
+    final nameC = TextEditingController();
+    final brandC = TextEditingController();
+    final unitC = TextEditingController();
+    final qtyC = TextEditingController();
+    final r = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('ເພີ່ມສິນຄ້າໃໝ່'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('ຈະສະແດງເປັນ ເຄື່ອງທີ່ບໍ່ເຄີຍຊື້',
+                    style: TextStyle(fontSize: 12))),
+            TextField(
+                controller: nameC,
+                autofocus: true,
+                decoration:
+                    const InputDecoration(labelText: 'ຊື່ສິນຄ້າ / ລະຫັດ')),
+            TextField(
+                controller: brandC,
+                decoration: const InputDecoration(labelText: 'brand')),
+            TextField(
+                controller: unitC,
+                decoration: const InputDecoration(labelText: 'ໜ່ວຍ')),
+            TextField(
+                controller: qtyC,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'ຈຳນວນຊື້')),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(d, false),
+              child: const Text('ຍົກເລີກ')),
+          FilledButton(
+              onPressed: () => Navigator.pop(d, true),
+              child: const Text('ເພີ່ມ')),
+        ],
+      ),
+    );
+    final name = nameC.text.trim();
+    if (r != true || name.isEmpty) return;
+    final q = num.tryParse(qtyC.text.trim()) ?? 0;
+    final unit = unitC.text.trim();
+    setState(() {
+      widget.items.add({
+        'key': 'new_${DateTime.now().millisecondsSinceEpoch}',
+        'name': name,
+        'brand': brandC.text.trim(),
+        'bin': '',
+        'unit': unit.isEmpty ? 'ອັນ' : unit,
+        'imageUrl': '',
+        'qty': q,
+        'buyQty': q,
+        'done': true,
+        'isNew': true,
+      });
+    });
+    await widget.onSave();
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('ເພີ່ມແລ້ວ: $name')));
+    }
+  }
+
   String _cell(Map<String, dynamic> x, String k) {
     final v = x[k];
     if (v == null) return '-';
@@ -92,7 +207,7 @@ class _PlanCheckedPageState extends State<PlanCheckedPage> {
   Future<void> _edit(Map<String, dynamic> x) async {
     final c = TextEditingController(
         text: x['buyQty'] == null ? '' : _q(num0(x['buyQty'])));
-    final must = x['must'] ?? x['qty'];
+    final must = x['isNew'] == true ? null : (x['must'] ?? x['qty']);
     final r = await showDialog<String>(
       context: context,
       builder: (d) => AlertDialog(
@@ -167,12 +282,12 @@ class _PlanCheckedPageState extends State<PlanCheckedPage> {
       DataCell(_thumb('${r['imageUrl'] ?? ''}')),
       DataCell(ConstrainedBox(
           constraints: BoxConstraints(maxWidth: _full ? 200 : 170),
-          child: Text('${r['name'] ?? ''}',
-              maxLines: 2, overflow: TextOverflow.ellipsis))),
+          child: Text(_nm(r),
+              maxLines: 3, overflow: TextOverflow.ellipsis))),
       if (_full) DataCell(Text(_cell(r, 'stock'))),
       if (_full) DataCell(Text(_cell(r, 'counted'))),
       if (_full) DataCell(Text(_cell(r, 'used'))),
-      DataCell(Text(r['must'] == null ? _cell(r, 'qty') : _cell(r, 'must'),
+      DataCell(Text(r['isNew'] == true ? '-' : (r['must'] == null ? _cell(r, 'qty') : _cell(r, 'must')),
           style: const TextStyle(fontWeight: FontWeight.w700))),
       DataCell(Text('${r['unit'] ?? ''}')),
       if (_full) DataCell(Text(_poCell(r))),
@@ -243,6 +358,11 @@ class _PlanCheckedPageState extends State<PlanCheckedPage> {
                 label: const Text('ເຕັມ'),
                 selected: _full,
                 onSelected: (_) => setState(() => _full = true)),
+            const Spacer(),
+            TextButton.icon(
+                onPressed: _addMenu,
+                icon: const Icon(Icons.add_box_outlined),
+                label: const Text('ສິນຄ້າໃໝ່')),
           ]),
         ),
         Expanded(
@@ -276,7 +396,7 @@ class _PlanCheckedPageState extends State<PlanCheckedPage> {
             'ລວມ ${rows.length} ລາຍການ • ໃສ່ແລ້ວ $filled • ຊື້ແຜນນີ້ ${_q(total)}$shownTxt',
         onSave: widget.onSave,
         onExport: widget.onExport,
-        onPdf: () => exportPlanPdf(widget.plan, widget.items),
+        onPdf: () => pickPlanPdf(context, widget.plan, widget.items),
         onAdd: _addMore,
       ),
     );

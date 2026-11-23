@@ -2,6 +2,7 @@
 // Server: GET /stock/budget?fm=10&toYear=2028&pct=0&branchId=
 // Saved budgets: POST /stock/budget-plans, PUT /stock/budget-plans/:id
 import 'image_search.dart' show SearchTools;
+import 'plan_product_pick.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'api.dart';
@@ -10,12 +11,10 @@ import 'product_images.dart' show productImageUrl;
 import 'widgets.dart';
 import 'crud.dart' show openEdit;
 import 'specs.dart' show crudSpec;
-import 'dart:convert' as cv;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'plan_excel.dart';
 import 'plan_checked.dart';
 import 'plan_bar.dart';
-import 'plan_pdf.dart';
+import 'plan_pdf_menu.dart';
 
 String _n(num v) => v % 1 == 0 ? v.toInt().toString() : v.toStringAsFixed(1);
 
@@ -57,6 +56,8 @@ class _BudgetPageState extends State<BudgetPage> {
   final Map<String, num> _actualBuy = {};
   String _fBrand = '';
   String _fPart = '';
+  final _bq = TextEditingController();
+  String _bs = '';
   bool _saving = false;
   Timer? _deb;
   Set<int> _poIds = {};
@@ -225,6 +226,7 @@ class _BudgetPageState extends State<BudgetPage> {
   void dispose() {
     _deb?.cancel();
     _pct.dispose();
+    _bq.dispose();
     super.dispose();
   }
 
@@ -766,33 +768,180 @@ class _BudgetPageState extends State<BudgetPage> {
     if (n != null && n >= 0) setState(() => _actualBuy[k] = n);
   }
 
-  Widget _filterBar(Set<String> brands, int shown, int total) {
-    final bl = brands.toList()..sort();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          for (final p in const ['', 'ອາໄຫຼ່ເຕັມ', 'ອາໄຫຼ່ຍ່ອຍ'])
-            ChoiceChip(
-              label: Text(p.isEmpty ? 'ທັງໝົດ' : p),
-              selected: _fPart == p,
-              onSelected: (_) => setState(() => _fPart = p),
+  void _onBq(String v) => setState(() => _bs = v.trim().toLowerCase());
+
+  Widget _noMatch() {
+    final t = _bq.text.trim();
+    return ListView(padding: const EdgeInsets.all(24), children: [
+      const SizedBox(height: 24),
+      const Icon(Icons.search_off, size: 40),
+      const SizedBox(height: 12),
+      Text('ບໍ່ພົບ "$t" ໃນງົບ',
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontWeight: FontWeight.w700)),
+      const SizedBox(height: 4),
+      const Text('ສິນຄ້ານີ້ອາດຈະບໍ່ເຄີຍຊື້', textAlign: TextAlign.center),
+      const SizedBox(height: 16),
+      Center(
+        child: FilledButton.icon(
+          onPressed: _searchAllProducts,
+          icon: const Icon(Icons.inventory_2_outlined),
+          label: const Text('ຄົ້ນຫາໃນສິນຄ້າທັງໝົດ'),
+        ),
+      ),
+    ]);
+  }
+
+  Future<List<Map<String, dynamic>>?> _fetchPlanItems(
+      Map<String, dynamic> p) async {
+    final items = <Map<String, dynamic>>[];
+    try {
+      var d = await Api.get('/stock/buy-plans/${p['id']}');
+      if (d is Map && d['data'] is Map) d = d['data'];
+      if (d is Map && d['items'] is List) {
+        for (final x in (d['items'] as List)) {
+          if (x is Map) {
+            items.add({
+              'key': '${x['itemKey'] ?? x['productId'] ?? x['productName']}',
+              'productId': x['productId'],
+              'name': x['productName'],
+              'unit': x['unit'],
+              'brand': x['brand'],
+              'bin': x['binCode'],
+              'qty': x['qty'],
+              'done': '${x['done']}' == '1',
+              'buyQty': x['buyQty'],
+              'isNew': '${x['isNew']}' == '1',
+              'imageUrl': x['imageUrl'] ?? '',
+            });
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('ເປີດແຜນບໍ່ສຳເລັດ: $e')));
+      }
+      return null;
+    }
+    return items;
+  }
+
+  Future<void> _searchAllProducts() async {
+    final picked = await Navigator.of(context)
+        .push<List<Map<String, dynamic>>>(MaterialPageRoute(
+            builder: (_) => PlanProductPickPage(
+                existing: const <String>{}, initialQuery: _bq.text.trim())));
+    if (picked == null || picked.isEmpty || !mounted) return;
+    final plans = await _loadBuyPlans();
+    if (!mounted) return;
+    if (plans.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('ຍັງບໍ່ມີແຜນຊື້ ກົດ ແຜນຊື້ ເພື່ອສ້າງແຜນກ່ອນ')));
+      return;
+    }
+    final plan = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      builder: (c) => SafeArea(
+        child: ListView(shrinkWrap: true, children: [
+          const ListTile(
+              title: Text('ເພີ່ມເຂົ້າແຜນໃດ',
+                  style: TextStyle(fontWeight: FontWeight.w700))),
+          for (final p in plans)
+            ListTile(
+              leading: const Icon(Icons.list_alt),
+              title: Text('${p['name']}'),
+              subtitle: Text(_planSub(p)),
+              onTap: () => Navigator.pop(c, p),
             ),
-          DropdownButton<String>(
-            value: bl.contains(_fBrand) ? _fBrand : '',
-            items: [
-              const DropdownMenuItem(value: '', child: Text('Brand: ທັງໝົດ')),
-              for (final b in bl) DropdownMenuItem(value: b, child: Text(b)),
-            ],
-            onChanged: (v) => setState(() => _fBrand = v ?? ''),
-          ),
-          Text('$shown/$total'),
-        ],
+        ]),
       ),
     );
+    if (plan == null) return;
+    final items = await _fetchPlanItems(plan);
+    if (items == null) return;
+    final have = <String>{for (final x in items) '${x['key']}'};
+    var added = 0;
+    for (final x in picked) {
+      if (have.add('${x['key']}')) {
+        items.add(x);
+        added++;
+      }
+    }
+    await _savePlanItems(plan, items);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'ເພີ່ມ $added ລາຍການເຂົ້າ ${plan['name']} • ເປີດແຜນ ແລ້ວກົດ ລາຍການ ເພື່ອໃສ່ຈຳນວນ')));
+    }
+  }
+
+  bool _matchBudgetQ(Map<String, dynamic> it) {
+    if (_bs.isEmpty) return true;
+    final f = <String>[
+      pick(it, ['productName']),
+      pick(it, ['barcodes']),
+      pick(it, ['models']),
+      _brandOf(it),
+      _binOf(it),
+      ..._extraCols(it),
+    ];
+    return f.any((s) => s.toLowerCase().contains(_bs));
+  }
+
+  Widget _filterBar(Set<String> brands, int shown, int total) {
+    final bl = brands.toList()..sort();
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: TextField(
+          controller: _bq,
+          decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search),
+              labelText: 'ຄົ້ນຫາອາໄຫຼ່',
+              suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+                SearchTools(onResult: (v) {
+                  _bq.text = v;
+                  _onBq(v);
+                }),
+                IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _bq.clear();
+                      _onBq('');
+                    }),
+              ])),
+          onChanged: _onBq,
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (final p in const ['', 'ອາໄຫຼ່ເຕັມ', 'ອາໄຫຼ່ຍ່ອຍ'])
+              ChoiceChip(
+                label: Text(p.isEmpty ? 'ທັງໝົດ' : p),
+                selected: _fPart == p,
+                onSelected: (_) => setState(() => _fPart = p),
+              ),
+            DropdownButton<String>(
+              value: bl.contains(_fBrand) ? _fBrand : '',
+              items: [
+                const DropdownMenuItem(
+                    value: '', child: Text('Brand: ທັງໝົດ')),
+                for (final b in bl)
+                  DropdownMenuItem(value: b, child: Text(b)),
+              ],
+              onChanged: (v) => setState(() => _fBrand = v ?? ''),
+            ),
+            Text('$shown/$total'),
+          ],
+        ),
+      ),
+    ]);
   }
 
   Widget _itemsTable(
@@ -1010,7 +1159,7 @@ class _BudgetPageState extends State<BudgetPage> {
     final shown = [
       for (final it in items)
         if ((_fBrand.isEmpty || _brandOf(it) == _fBrand) &&
-            (_fPart.isEmpty || _ptOf(it) == _fPart))
+            (_fPart.isEmpty || _ptOf(it) == _fPart) && _matchBudgetQ(it))
           it
     ];
     _shownRows = shown;
@@ -1053,7 +1202,7 @@ class _BudgetPageState extends State<BudgetPage> {
       ],
       body: items.isEmpty
           ? const Center(child: Text('ບໍ່ມີຂໍ້ມູນ'))
-          : (_asTable
+          : (shown.isEmpty && _bs.isNotEmpty ? _noMatch() : _asTable
               ? _itemsTable(shown, past)
               : ListView(padding: const EdgeInsets.all(16), children: [
                   for (final it in shown) _item(it, past),
@@ -1063,8 +1212,6 @@ class _BudgetPageState extends State<BudgetPage> {
 
   List<Map<String, dynamic>> _shownRows = [];
 
-  String get _buyPlansKey =>
-      _planId == null ? 'buyplans:new' : 'buyplans:$_planId';
 
   num _planQty(Map<String, dynamic> it) {
     final k = _keyOf(it);
@@ -1073,43 +1220,74 @@ class _BudgetPageState extends State<BudgetPage> {
     return m > 0 ? m : 0;
   }
 
-  num _planTotal(Map<String, dynamic> p) {
-    num t = 0;
-    for (final x in ((p['items'] as List?) ?? const [])) {
-      if (x is Map) t += num.tryParse('${x['qty']}') ?? 0;
-    }
-    return t;
-  }
+
 
   String _planSub(Map<String, dynamic> p) {
-    final n = ((p['items'] as List?) ?? const []).length;
+    final n = num.tryParse('${p['itemCount']}') ?? 0;
+    final dn = num.tryParse('${p['doneCount']}') ?? 0;
+    final t = num.tryParse('${p['totalQty']}') ?? 0;
     final d = '${p['createdAt']}';
     final day = d.length >= 10 ? d.substring(0, 10) : d;
     final f = '${p['filter'] ?? ''}';
     final extra = f.isEmpty ? '' : ' • $f';
-    return '$n ລາຍການ • ລວມ ${_n(_planTotal(p))} • $day$extra';
+    return '${_n(dn)}/${_n(n)} ລາຍການ • ລວມ ${_n(t)} • $day$extra';
   }
 
   Future<List<Map<String, dynamic>>> _loadBuyPlans() async {
+    if (_planId == null) return [];
     try {
-      final p = await SharedPreferences.getInstance();
-      final raw = p.getString(_buyPlansKey);
-      if (raw == null || raw.isEmpty) return [];
-      final v = cv.jsonDecode(raw);
-      if (v is List) {
-        return [
-          for (final x in v)
-            if (x is Map) Map<String, dynamic>.from(x)
-        ];
+      var d = await Api.get('/stock/budget-plans/$_planId/buy-plans');
+      if (d is Map && d['data'] != null) d = d['data'];
+      final out = <Map<String, dynamic>>[];
+      if (d is List) {
+        for (final x in d) {
+          if (x is Map) {
+            final m = Map<String, dynamic>.from(x);
+            m['filter'] = m['filterText'];
+            out.add(m);
+          }
+        }
       }
-    } catch (_) {}
+      return out;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('ໂຫຼດແຜນຊື້ບໍ່ສຳເລັດ: $e')));
+      }
+    }
     return [];
   }
 
-  Future<void> _storeBuyPlans(List<Map<String, dynamic>> list) async {
-    final p = await SharedPreferences.getInstance();
-    await p.setString(_buyPlansKey, cv.jsonEncode(list));
+  Future<void> _savePlanItems(
+      Map<String, dynamic> plan, List<Map<String, dynamic>> items) async {
+    try {
+      await Api.put('/stock/buy-plans/${plan['id']}/items', {
+        'items': [
+          for (final x in items)
+            {
+              'key': '${x['key']}',
+              'productId': x['productId'] ?? int.tryParse('${x['key']}'),
+              'name': x['name'],
+              'unit': x['unit'],
+              'brand': x['brand'],
+              'bin': x['bin'],
+              'qty': x['qty'],
+              'done': x['done'] == true,
+              'buyQty': x['buyQty'],
+              'isNew': x['isNew'] == true,
+              'imageUrl': x['imageUrl'],
+            }
+        ],
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('ບັນທຶກແຜນບໍ່ສຳເລັດ: $e')));
+      }
+    }
   }
+
+
 
   Future<void> _createBuyPlan() async {
     if (_planId == null) {
@@ -1178,36 +1356,76 @@ class _BudgetPageState extends State<BudgetPage> {
     if (ok != true) return;
     final name = nameC.text.trim();
     if (name.isEmpty) return;
-    old.add({
-      'id': DateTime.now().millisecondsSinceEpoch,
-      'name': name,
-      'note': noteC.text.trim(),
-      'createdAt': DateTime.now().toIso8601String(),
-      'filter': flt,
-      'items': rows,
-    });
-    await _storeBuyPlans(old);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('ສ້າງແຜນແລ້ວ: $name')));
+    try {
+      await Api.post('/stock/budget-plans/$_planId/buy-plans', {
+        'name': name,
+        'note': noteC.text.trim(),
+        'filter': flt,
+        'items': [
+          for (final r in rows)
+            {
+              'key': '${r['key']}',
+              'productId': int.tryParse('${r['key']}'),
+              'name': r['name'],
+              'unit': r['unit'],
+              'brand': r['brand'],
+              'bin': r['bin'],
+              'qty': r['qty'],
+              'done': false,
+            }
+        ],
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('ສ້າງແຜນແລ້ວ: $name')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('ສ້າງແຜນບໍ່ສຳເລັດ: $e')));
+    }
   }
 
-  Future<void> _showBuyPlan(Map<String, dynamic> p) {
-    final items = [
-      for (final x in ((p['items'] as List?) ?? const []))
-        if (x is Map) Map<String, dynamic>.from(x)
-    ];
-    final byName = <String, String>{};
-    for (final it in _shownRows) {
-      final u = pick(it, ['imageUrl']);
-      if (u.isNotEmpty) byName[pick(it, ['productName'])] = u;
+  Future<void> _showBuyPlan(Map<String, dynamic> p) async {
+    final items = <Map<String, dynamic>>[];
+    try {
+      var d = await Api.get('/stock/buy-plans/${p['id']}');
+      if (d is Map && d['data'] is Map) d = d['data'];
+      if (d is Map && d['items'] is List) {
+        for (final x in (d['items'] as List)) {
+          if (x is Map) {
+            items.add({
+              'key': '${x['itemKey'] ?? x['productId'] ?? x['productName']}',
+              'productId': x['productId'],
+              'name': x['productName'],
+              'unit': x['unit'],
+              'brand': x['brand'],
+              'bin': x['binCode'],
+              'qty': x['qty'],
+              'done': '${x['done']}' == '1',
+              'buyQty': x['buyQty'],
+              'isNew': '${x['isNew']}' == '1',
+              'imageUrl': x['imageUrl'] ?? '',
+            });
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('ເປີດແຜນບໍ່ສຳເລັດ: $e')));
+      }
+      return;
+    }
+    if (!mounted) return;
+    final img = <String, String>{};
+    for (final b in asList(_last?['items'])) {
+      final u = pick(b, ['imageUrl']);
+      if (u.isNotEmpty) img[_keyOf(b)] = u;
     }
     for (final x in items) {
-      if ('${x['imageUrl'] ?? ''}'.isEmpty) {
-        x['imageUrl'] = byName['${x['name']}'] ?? '';
-      }
+      x['imageUrl'] = img['${x['key']}'] ?? x['imageUrl'] ?? '';
     }
-    return Navigator.of(context).push<void>(
+    await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (c) => _PlanItemsPage(host: this, plan: p, items: items),
       ),
@@ -1484,11 +1702,7 @@ class _PlanItemsPageState extends State<_PlanItemsPage> {
   void _onQ(String v) => setState(() => _q = v.trim().toLowerCase());
 
   Future<void> _persistPlan() async {
-    final all = await widget.host._loadBuyPlans();
-    for (final pl in all) {
-      if (pl['id'] == widget.plan['id']) pl['items'] = widget.items;
-    }
-    await widget.host._storeBuyPlans(all);
+    await widget.host._savePlanItems(widget.plan, widget.items);
   }
 
   Widget _planBar() {
@@ -1496,7 +1710,7 @@ class _PlanItemsPageState extends State<_PlanItemsPage> {
       onSave: _persistPlan,
       onList: _openChecked,
       onExport: () => exportPlanXlsx(widget.plan, widget.items),
-      onPdf: () => exportPlanPdf(widget.plan, widget.items),
+      onPdf: () => pickPlanPdf(context, widget.plan, widget.items),
     );
   }
 
@@ -1520,11 +1734,7 @@ class _PlanItemsPageState extends State<_PlanItemsPage> {
             items: widget.items,
             onExport: () => exportPlanXlsx(widget.plan, widget.items),
             onSave: () async {
-              final all = await widget.host._loadBuyPlans();
-              for (final pl in all) {
-                if (pl['id'] == widget.plan['id']) pl['items'] = widget.items;
-              }
-              await widget.host._storeBuyPlans(all);
+              await widget.host._savePlanItems(widget.plan, widget.items);
             })));
     if (mounted) setState(() {});
   }
@@ -1537,11 +1747,7 @@ class _PlanItemsPageState extends State<_PlanItemsPage> {
 
   Future<void> _toggle(Map<String, dynamic> x, bool on) async {
     setState(() => x['done'] = on);
-    final all = await widget.host._loadBuyPlans();
-    for (final pl in all) {
-      if (pl['id'] == widget.plan['id']) pl['items'] = widget.items;
-    }
-    await widget.host._storeBuyPlans(all);
+    await widget.host._savePlanItems(widget.plan, widget.items);
   }
 
   Future<void> _toggleGroup(List<Map<String, dynamic>> g, bool on) async {
@@ -1550,11 +1756,7 @@ class _PlanItemsPageState extends State<_PlanItemsPage> {
         x['done'] = on;
       }
     });
-    final all = await widget.host._loadBuyPlans();
-    for (final pl in all) {
-      if (pl['id'] == widget.plan['id']) pl['items'] = widget.items;
-    }
-    await widget.host._storeBuyPlans(all);
+    await widget.host._savePlanItems(widget.plan, widget.items);
   }
 
   Widget _brandHeader(String b, List<Map<String, dynamic>> g) {
@@ -1703,7 +1905,7 @@ class _BuyPlansPageState extends State<_BuyPlansPage> {
     final l = await widget.host._loadBuyPlans();
     if (!mounted) return;
     setState(() {
-      _plans = l.reversed.toList();
+      _plans = l;
       _loading = false;
     });
   }
@@ -1730,9 +1932,14 @@ class _BuyPlansPageState extends State<_BuyPlansPage> {
       ),
     );
     if (ok != true) return;
-    final all = await widget.host._loadBuyPlans();
-    await widget.host
-        ._storeBuyPlans(all.where((x) => x['id'] != p['id']).toList());
+    try {
+      await Api.delete('/stock/buy-plans/${p['id']}');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('ລຶບບໍ່ສຳເລັດ: $e')));
+      }
+    }
     await _reload();
   }
 
@@ -1751,17 +1958,15 @@ class _BuyPlansPageState extends State<_BuyPlansPage> {
                 color: cs.surfaceContainerHighest,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text('ແຜນຊື້ ${_plans.length} ແຜນ • ເກັບໄວ້ໃນເຄື່ອງນີ້',
+                child: Text('ແຜນຊື້ ${_plans.length} ແຜນ',
                     style: const TextStyle(fontSize: 12)),
               ),
               Expanded(
                 child: _plans.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
+                    ? const Center(child: Padding(padding: EdgeInsets.all(32),
                           child: Column(
                               mainAxisSize: MainAxisSize.min,
-                              children: const [
+                              children: [
                                 Icon(Icons.list_alt, size: 48),
                                 SizedBox(height: 12),
                                 Text('ຍັງບໍ່ມີແຜນຊື້'),
@@ -1778,7 +1983,10 @@ class _BuyPlansPageState extends State<_BuyPlansPage> {
                           return ListTile(
                             title: Text('${p['name']}'),
                             subtitle: Text(h._planSub(p)),
-                            onTap: () => h._showBuyPlan(p),
+                            onTap: () async {
+                              await h._showBuyPlan(p);
+                              await _reload();
+                            },
                             trailing: IconButton(
                               icon: const Icon(Icons.delete_outline),
                               onPressed: () => _delete(p),
