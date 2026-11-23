@@ -60,6 +60,8 @@ const menuGroups = <MenuGroup>[
     MenuItemDef('issue', 'ເອົາອອກ', Icons.upload_outlined, ['ISSUE']),
     MenuItemDef('wdcheck', 'ກວດເອກະສານເບີກ', Icons.fact_check_outlined,
         ['ISSUE', 'ATM_MANAGE', 'REPORT_VIEW']),
+    MenuItemDef('rqall', 'ຄຳຂໍອາໄຫຼ່ທຸກສາຂາ', Icons.inbox_outlined,
+        ['ATM_MANAGE', 'REPORT_VIEW']),
     MenuItemDef('trf', 'ໂອນສາຂາ', Icons.swap_horiz,
         ['TRANSFER_SEND', 'TRANSFER_RECEIVE']),
     MenuItemDef('req', 'ຂໍອາໄຫຼ່', Icons.move_to_inbox_outlined,

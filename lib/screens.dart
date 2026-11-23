@@ -7,6 +7,7 @@ import 'stock_drill.dart';
 import 'budget_list_page.dart';
 import 'package:flutter/material.dart';
 import 'withdraw_docs.dart';
+import 'repair_requests_all.dart';
 import 'package:flutter/services.dart';
 import 'api.dart';
 import 'crud.dart';
@@ -290,6 +291,8 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       case 'wdcheck':
         return const WithdrawDocCheckPage();
+      case 'rqall':
+        return const RepairRequestsAllPage();
       case 'trf':
         return const TransferScreen();
       case 'req':
