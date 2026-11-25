@@ -7,6 +7,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart' show ImagePicker, ImageSource;
 import 'package:url_launcher/url_launcher.dart';
 import 'api.dart';
+import 'plan_bar.dart';
 import 'product_images.dart' show productImageUrl;
 import 'purchase_orders.dart' show kPoDocExt;
 import 'repair_case.dart' show repairMySide;
@@ -56,6 +57,15 @@ Color wdDocStatusColor(String s) => s == 'submitted'
             ? Colors.red
             : Colors.grey;
 
+String wdStageLabel(int s) => const {
+      2: 'ຂັ້ນ 2 · ອັບເອກະສານທີ່ເຊັນແລ້ວ',
+      3: 'ຂັ້ນ 3 · HQ ອະນຸມັດ (ອັບໃບສົ່ງເຄື່ອງໄດ້)',
+      4: 'ຂັ້ນ 4 · ສາຂາຮັບເຄື່ອງ (ຮູບເຄື່ອງທີ່ໄດ້ຮັບ)',
+      5: 'ຂັ້ນ 5 · ຕິດຕັ້ງ (ຮູບເຄື່ອງທີ່ຕິດຕັ້ງ)',
+      6: 'ຂັ້ນ 6 · ສົ່ງອາໄຫຼ່ມີບັນຫາກັບ (ຮູບ)',
+      7: 'ຂັ້ນ 7 · HQ ຮັບຄືນ ແລະ ປິດເຄດ (ຮູບ)',
+    }[s] ?? 'ຂັ້ນ $s';
+
 String _wdWhen(dynamic v) {
   final s = '${v ?? ''}'.replaceFirst('T', ' ');
   return s.length >= 16 ? s.substring(0, 16) : s;
@@ -71,10 +81,10 @@ class WithdrawDocsSection extends StatefulWidget {
   const WithdrawDocsSection(this.w,
       {super.key, this.canUpload = true, this.onChanged});
   @override
-  State<WithdrawDocsSection> createState() => _WithdrawDocsSectionState();
+  State<WithdrawDocsSection> createState() => WithdrawDocsSectionState();
 }
 
-class _WithdrawDocsSectionState extends State<WithdrawDocsSection> {
+class WithdrawDocsSectionState extends State<WithdrawDocsSection> {
   List<Map<String, dynamic>> _docs = [];
   final List<_WdFile> _pending = [];
   bool _loading = true;
@@ -84,14 +94,31 @@ class _WithdrawDocsSectionState extends State<WithdrawDocsSection> {
   String get _id => '${widget.w['id']}';
   String get _status => '${widget.w['status'] ?? ''}';
   String get _docStatus => '${widget.w['docStatus'] ?? ''}';
-  bool get _approved => _status == 'open' || _status == 'closed';
+  int get _stage => int.tryParse('${widget.w['stage'] ?? ''}') ?? 2;
+  String _side = 'any';
+  bool _problem = false;
+  final TextEditingController _noteC = TextEditingController();
+  bool get _hqStep => _stage == 3 || _stage == 7;
   bool get _mayUpload =>
-      widget.canUpload && _approved && _docStatus != 'checked';
+      widget.canUpload &&
+      _status != 'closed' &&
+      _stage >= 2 &&
+      _stage <= 7 &&
+      (_hqStep == false || _side != 'branch');
 
   @override
   void initState() {
     super.initState();
     _load();
+    repairMySide().then((v) {
+      if (mounted) setState(() => _side = v);
+    });
+  }
+
+  @override
+  void dispose() {
+    _noteC.dispose();
+    super.dispose();
   }
 
   void _msg(String s) {
@@ -119,6 +146,16 @@ class _WithdrawDocsSectionState extends State<WithdrawDocsSection> {
         _loading = false;
         _error = '$e';
       });
+    }
+  }
+
+  Future<void> reload() => _load();
+
+  void pickFiles() {
+    if (_mayUpload) {
+      _pick();
+    } else {
+      _msg('ຂັ້ນນີ້ອັບໂຫຼດບໍ່ໄດ້');
     }
   }
 
@@ -195,6 +232,11 @@ class _WithdrawDocsSectionState extends State<WithdrawDocsSection> {
       final req =
           http.MultipartRequest('POST', Uri.parse('$base/withdrawals/$_id/docs'));
       if (Api.token != null) req.headers['Authorization'] = 'Bearer ${Api.token}';
+      req.fields['stage'] = '$_stage';
+      if (_stage >= 4 && _stage <= 6) {
+        req.fields['hasProblem'] = _problem ? '1' : '0';
+        req.fields['note'] = _noteC.text.trim();
+      }
       for (final f in _pending) {
         req.files.add(http.MultipartFile.fromBytes('files', f.bytes,
             filename: f.name, contentType: MediaType.parse(_wdMime(f.name))));
@@ -214,7 +256,9 @@ class _WithdrawDocsSectionState extends State<WithdrawDocsSection> {
       setState(() => _pending.clear());
       await _load();
       widget.onChanged?.call();
-      _msg('ອັບໂຫຼດເອກະສານແລ້ວ ລໍຖ້າ HQ ກວດ');
+      _noteC.clear();
+      if (mounted) setState(() => _problem = false);
+      _msg('ອັບໂຫຼດແລ້ວ');
     } catch (e) {
       debugPrint('[WD] upload failed: $e');
       if (mounted) {
@@ -244,6 +288,61 @@ class _WithdrawDocsSectionState extends State<WithdrawDocsSection> {
           mode: LaunchMode.externalApplication);
       if (!ok) _msg('ເປີດໄຟລ໌ບໍ່ໄດ້');
     }
+  }
+
+  List<Widget> _groups() {
+    final mut = Theme.of(context).hintColor;
+    final primary = Theme.of(context).colorScheme.primary;
+    final by = <int, List<Map<String, dynamic>>>{};
+    for (final d in _docs) {
+      final s = int.tryParse('${d['stage'] ?? ''}') ?? 2;
+      by.putIfAbsent(s, () => <Map<String, dynamic>>[]).add(d);
+    }
+    final out = <Widget>[];
+    for (var s = 2; s <= 7; s++) {
+      final list = by[s] ?? const <Map<String, dynamic>>[];
+      final cur = s == _stage;
+      final color = cur ? primary : mut;
+      out.add(Padding(
+        padding: const EdgeInsets.only(top: 12, bottom: 2),
+        child: Row(children: [
+          Icon(
+              list.isNotEmpty
+                  ? Icons.check_circle
+                  : (cur
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked),
+              size: 18,
+              color: color),
+          const SizedBox(width: 6),
+          Expanded(
+              child: Text(wdStageLabel(s),
+                  style: TextStyle(
+                      fontWeight: cur ? FontWeight.w700 : FontWeight.w500,
+                      color: color))),
+          Text('${list.length}', style: TextStyle(color: mut)),
+        ]),
+      ));
+      if (list.isEmpty) {
+        out.add(Padding(
+            padding: const EdgeInsets.only(left: 24, bottom: 2),
+            child: Text(s > _stage ? 'ຍັງບໍ່ເຖິງຂັ້ນນີ້' : 'ບໍ່ມີເອກະສານ',
+                style: TextStyle(color: mut, fontSize: 12))));
+      }
+      for (final d in list) {
+        out.add(ListTile(
+          dense: true,
+          contentPadding: const EdgeInsets.only(left: 24),
+          leading: _leading(d),
+          title: Text('${d['name'] ?? ''}',
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: Text('${d['by'] ?? ''} · ${_wdWhen(d['at'])}'),
+          trailing: const Icon(Icons.open_in_new, size: 18),
+          onTap: () => _open(d),
+        ));
+      }
+    }
+    return out;
   }
 
   Widget _leading(Map<String, dynamic> d) {
@@ -302,28 +401,35 @@ class _WithdrawDocsSectionState extends State<WithdrawDocsSection> {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text('ຍັງບໍ່ມີເອກະສານ', style: TextStyle(color: mut)))
           else
-            for (final d in _docs)
-              ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                leading: _leading(d),
-                title: Text('${d['name'] ?? ''}',
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: Text('${d['by'] ?? ''} · ${_wdWhen(d['at'])}'),
-                trailing: const Icon(Icons.open_in_new, size: 18),
-                onTap: () => _open(d),
-              ),
-          if (!_approved)
-            Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text('ອັບເອກະສານໄດ້ຫຼັງອະນຸມັດເບີກ',
-                    style: TextStyle(color: mut)))
-          else if (_docStatus == 'checked')
-            Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text('ກວດແລ້ວ ບໍ່ສາມາດອັບເພີ່ມ', style: TextStyle(color: mut))),
+            ..._groups(),
+          Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                  _mayUpload
+                      ? wdStageLabel(_stage)
+                      : (_status == 'closed'
+                          ? 'ປິດເຄດແລ້ວ ບໍ່ສາມາດອັບເພີ່ມ'
+                          : 'ຂັ້ນ $_stage · ລໍຖ້າ Head Office'),
+                  style: TextStyle(color: mut))),
           if (_mayUpload) ...[
             const SizedBox(height: 8),
+            if (_stage >= 4 && _stage <= 6) ...[
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('ມີບັນຫາ'),
+                value: _problem,
+                onChanged: _busy ? null : (v) => setState(() => _problem = v),
+              ),
+              TextField(
+                controller: _noteC,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                    labelText: 'ໝາຍເຫດ (ບັນຫາທີ່ພົບ)',
+                    border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 8),
+            ],
             if (_pending.isNotEmpty)
               Wrap(spacing: 6, runSpacing: 6, children: [
                 for (var i = 0; i < _pending.length; i++)
@@ -625,6 +731,60 @@ class _WithdrawDocCheckDetailState extends State<WithdrawDocCheckDetail> {
         ] else if (st == 'submitted')
           Text('ສະເພາະ Head Office ກວດໄດ້', style: TextStyle(color: mut)),
       ]),
+    );
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Documents page of one withdrawal (opened from the bill page bottom bar)
+// ---------------------------------------------------------------------------
+class WithdrawDocsPage extends StatefulWidget {
+  final Map<String, dynamic> w;
+  const WithdrawDocsPage(this.w, {super.key});
+  @override
+  State<WithdrawDocsPage> createState() => _WithdrawDocsPageState();
+}
+
+class _WithdrawDocsPageState extends State<WithdrawDocsPage> {
+  late Map<String, dynamic> _w = Map<String, dynamic>.from(widget.w);
+  final GlobalKey<WithdrawDocsSectionState> _key =
+      GlobalKey<WithdrawDocsSectionState>();
+
+  Future<void> _reloadW() async {
+    try {
+      final list = await Api.get('/withdrawals');
+      if (list is List) {
+        for (final x in list) {
+          if (x is Map && '${x['id']}' == '${_w['id']}') {
+            if (mounted) setState(() => _w = Map<String, dynamic>.from(x));
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[WD] docs page reload failed: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('ເອກະສານ - ${_w['withdrawNo'] ?? _w['id']}')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(12),
+        child: WithdrawDocsSection(_w, key: _key, onChanged: _reloadW),
+      ),
+      bottomNavigationBar: PlanNav(
+        items: [
+          PlanNavItem(Icons.upload_file, 'ເພີ່ມໄຟລ໌',
+              () => _key.currentState?.pickFiles()),
+          PlanNavItem(Icons.refresh, 'ໂຫຼດໃໝ່', () async {
+            await _reloadW();
+            await _key.currentState?.reload();
+          }),
+        ],
+      ),
     );
   }
 }

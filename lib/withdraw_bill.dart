@@ -2,6 +2,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'api.dart';
+import 'repair_case.dart' show repairMySide;
+import 'plan_bar.dart';
 import 'withdraw_docs.dart';
 import 'ldb_letterhead.dart' show LdbLetterhead, loadLetterhead;
 import 'price_report_export.dart' show buildWithdrawalPdf;
@@ -19,6 +21,7 @@ class WithdrawBillPage extends StatefulWidget {
 }
 
 class _WithdrawBillPageState extends State<WithdrawBillPage> {
+  late final Future<String> _sideF = repairMySide();
   late Map<String, dynamic> _d = widget.data;
   bool _busy = false;
   final Map<String, String> _img = {};
@@ -330,6 +333,138 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
     );
   }
 
+  Future<void> _reject() async {
+    final c = TextEditingController();
+    final note = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('ບໍ່ອະນຸມັດ'),
+        content: TextField(
+          controller: c,
+          maxLines: 3,
+          decoration: const InputDecoration(
+              labelText: 'ໝາຍເຫດ (ຕ້ອງໃສ່)', border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('ຍົກເລີກ')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, c.text.trim()),
+              child: const Text('ຢືນຢັນ')),
+        ],
+      ),
+    );
+    if (note == null) return;
+    if (note.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('ກະລຸນາໃສ່ໝາຍເຫດ')));
+      }
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await Api.post('/withdrawals/${_d['id']}/reject', {'note': note});
+      await _reloadD();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('ບໍ່ອະນຸມັດ ສົ່ງກັບໃຫ້ສາຂາແກ້ໄຂ')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _closeCase() async {
+    final items = (_d['items'] is List ? _d['items'] as List : const [])
+        .whereType<Map>()
+        .toList();
+    final used = {
+      for (final i in items)
+        '${i['id']}': TextEditingController(text: '${i['qtyUsed'] ?? 0}')
+    };
+    final back = {
+      for (final i in items)
+        '${i['id']}': TextEditingController(text: '${i['qtyReturned'] ?? 0}')
+    };
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('ປິດເຄດ ${_d['withdrawNo'] ?? _d['id']}'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            for (final i in items) ...[
+              Text('${i['productName']} (ເບີກ ${i['qty']})'),
+              Row(children: [
+                Expanded(
+                    child: TextField(
+                        controller: used['${i['id']}'],
+                        keyboardType: TextInputType.number,
+                        decoration:
+                            const InputDecoration(labelText: 'ໃຊ້ແລ້ວ'))),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: TextField(
+                        controller: back['${i['id']}'],
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'ຄືນ'))),
+              ]),
+              const SizedBox(height: 12),
+            ],
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('ຍົກເລີກ')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('ປິດເຄດ')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    try {
+      await Api.post('/withdrawals/${_d['id']}/return', {
+        'items': [
+          for (final i in items)
+            {
+              'id': i['id'],
+              'qtyUsed': int.tryParse(used['${i['id']}']?.text ?? '') ?? 0,
+              'qtyReturned': int.tryParse(back['${i['id']}']?.text ?? '') ?? 0,
+            }
+        ],
+      });
+      await _reloadD();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('ປິດເຄດແລ້ວ')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _goDocs() async {
+    await Navigator.push<dynamic>(
+        context,
+        MaterialPageRoute(
+            builder: (_) => WithdrawDocsPage(Map<String, dynamic>.from(_d))));
+    if (mounted) _reloadD();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -338,73 +473,69 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
         padding: const EdgeInsets.all(12),
         child: Column(children: [
           FittedBox(fit: BoxFit.fitWidth, child: _sheet()),
-          if ('${_d['status']}' == 'open' || '${_d['status']}' == 'closed') ...[
-            const SizedBox(height: 16),
-            WithdrawDocsSection(_d, onChanged: _reloadD),
-            if ('${_d['docStatus']}' == 'submitted') ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () async {
-                    final r = await Navigator.push<dynamic>(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => WithdrawDocCheckDetail(
-                                Map<String, dynamic>.from(_d))));
-                    if (r == true && mounted) _reloadD();
-                  },
-                  icon: const Icon(Icons.fact_check_outlined),
-                  label: const Text('ກວດເອກະສານ'),
-                ),
-              ),
-            ],
-          ],
           if ('${_d['status']}' == 'requested') ...[
             const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: FilledButton.icon(
-                onPressed: _busy ? null : _approve,
-                icon: const Icon(Icons.check_circle_outline),
-                label: const Text('ອະນຸມັດເບີກ (ຕັດສະຕັອກ)'),
-              ),
-            ),
+            Text(
+                (int.tryParse('${_d['stage'] ?? ''}') ?? 0) == 3
+                    ? 'ລໍຖ້າ Head Office ອະນຸມັດ'
+                    : 'ຂັ້ນ 2: ອັບໂຫຼດເອກະສານທີ່ເຊັນແລ້ວ ໃນປຸ່ມ ເອກະສານ',
+                style: TextStyle(color: Theme.of(context).hintColor)),
           ],
         ]),
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(children: [
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: _busy
-                    ? null
-                    : () => _run((bytes) async {
-                          await Printing.layoutPdf(
-                              onLayout: (_) async => bytes, name: _name);
-                        }),
-                icon: const Icon(Icons.print_outlined),
-                label: const Text('ພິມ'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _busy
-                    ? null
-                    : () => _run((bytes) async {
-                          await Printing.sharePdf(
-                              bytes: bytes, filename: '$_name.pdf');
-                        }),
-                icon: const Icon(Icons.ios_share),
-                label: const Text('ແຊຣ໌ PDF'),
-              ),
-            ),
-          ]),
-        ),
+      bottomNavigationBar: FutureBuilder<String>(
+        future: _sideF,
+        builder: (context, snap) {
+          final hq = (snap.data ?? 'any') != 'branch';
+          final st = '${_d['status']}';
+          final sg = int.tryParse('${_d['stage'] ?? ''}') ?? 0;
+          PlanNavItem docs(IconData ic, String label) =>
+              PlanNavItem(ic, label, _busy ? null : _goDocs);
+          final prn = PlanNavItem(
+              Icons.print_outlined,
+              'ພິມ',
+              _busy
+                  ? null
+                  : () => _run((bytes) async {
+                        await Printing.layoutPdf(
+                            onLayout: (_) async => bytes, name: _name);
+                      }));
+          final shr = PlanNavItem(
+              Icons.ios_share,
+              'ແຊຣ໌ PDF',
+              _busy
+                  ? null
+                  : () => _run((bytes) async {
+                        await Printing.sharePdf(
+                            bytes: bytes, filename: '$_name.pdf');
+                      }));
+          final okBtn = PlanNavItem(Icons.check_circle_outline, 'ອະນຸມັດ',
+              _busy ? null : _approve);
+          final noBtn = PlanNavItem(Icons.cancel_outlined, 'ບໍ່ອະນຸມັດ',
+              _busy ? null : _reject);
+          final closeBtn = PlanNavItem(
+              Icons.task_alt, 'ປິດເຄດ', _busy ? null : _closeCase);
+          final folder = docs(Icons.folder_outlined, 'ເອກະສານ');
+          final List<PlanNavItem> items;
+          if (st == 'closed') {
+            items = [folder, prn, shr];
+          } else if (st == 'requested' && sg == 3) {
+            items = hq ? [folder, okBtn, noBtn, prn] : [folder, prn, shr];
+          } else if (sg == 7) {
+            items = hq ? [folder, closeBtn, prn, shr] : [folder, prn, shr];
+          } else if (st == 'requested') {
+            items = [docs(Icons.upload_file, 'ອັບເອກະສານ'), prn, shr];
+          } else if (sg == 4) {
+            items = [docs(Icons.inventory_2_outlined, 'ຮັບເຄື່ອງ'), prn, shr];
+          } else if (sg == 5) {
+            items = [docs(Icons.build_outlined, 'ຕິດຕັ້ງ'), prn, shr];
+          } else if (sg == 6) {
+            items = [docs(Icons.undo, 'ສົ່ງຄືນ'), prn, shr];
+          } else {
+            items = [folder, prn, shr];
+          }
+          return PlanNav(items: items);
+        },
       ),
     );
   }
