@@ -6,6 +6,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'stock_drill.dart';
 import 'budget_list_page.dart';
 import 'package:flutter/material.dart';
+import 'withdraw_bill_list.dart';
 import 'withdraw_docs.dart';
 import 'repair_requests_all.dart';
 import 'stock_requests_all.dart';
@@ -1461,6 +1462,22 @@ class DashMenuScreen extends StatelessWidget {
             Colors.cyan,
             () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const StockCountPage()))),
+      if (Api.can('REQUEST_SEND') || Api.can('REQUEST_APPROVE'))
+        _DashMenuItem(
+            Icons.move_to_inbox_outlined,
+            'Request Spare',
+            Colors.indigo,
+            () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const StockRequestsPage()))),
+      if (Api.can('ISSUE') || Api.can('ATM_MANAGE') || Api.can('REPORT_VIEW'))
+        _DashMenuItem(
+            Icons.receipt_long_outlined,
+            'ໃບເບີກອາໄຫຼ່',
+            Colors.pink,
+            () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const WithdrawBillListPage()))),
     ];
     if (MediaQuery.of(context).size.width <= 0) {
       return const SizedBox.shrink();

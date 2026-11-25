@@ -45,6 +45,14 @@ class _WithdrawBillListPageState extends State<WithdrawBillListPage> {
     if (r == true && mounted) _reload();
   }
 
+  /// Second line (terminal / ATM) only in the all-bills list.
+  String _sub(Map<String, dynamic> w, int n) {
+    final base = '${_when(w['createdAt'])} · ${w['status'] ?? ''} · $n ລາຍການ';
+    final bc = '${w['barcode'] ?? ''}';
+    if (widget.barcode.isNotEmpty || bc.isEmpty) return base;
+    return '$base\n$bc · ATM ${w['atmId'] ?? ''}';
+  }
+
   static String _when(dynamic v) {
     final s = v == null ? '' : '$v';
     final d = DateTime.tryParse(s);
@@ -62,7 +70,9 @@ class _WithdrawBillListPageState extends State<WithdrawBillListPage> {
           title: Text(widget.barcode.isEmpty
               ? 'ລາຍການໃບເບີກ'
               : 'ໃບເບີກ · ${widget.barcode}')),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: widget.barcode.isEmpty
+          ? null
+          : FloatingActionButton.extended(
         onPressed: _create,
         icon: const Icon(Icons.add),
         label: const Text('ສ້າງໃບເບີກ'),
@@ -108,8 +118,8 @@ class _WithdrawBillListPageState extends State<WithdrawBillListPage> {
                   leading: const Icon(Icons.receipt_long_outlined),
                   title: Text(
                       '${w['withdrawNo'] ?? w['id']} · ${w['branchName'] ?? ''}'),
-                  subtitle: Text(
-                      '${_when(w['createdAt'])} · ${w['status'] ?? ''} · $n ລາຍການ'),
+                  isThreeLine: widget.barcode.isEmpty,
+                  subtitle: Text(_sub(w, n)),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () async {
                     await Navigator.push(
