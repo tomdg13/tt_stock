@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'withdraw_bill.dart';
+import 'withdraw_docs.dart' show wdDocStatusColor;
 import 'withdraw_page.dart';
 
 /// ລາຍການໃບເບີກ of one terminal (GET /withdrawals, filtered by barcode).
@@ -62,6 +63,37 @@ class _WithdrawBillListPageState extends State<WithdrawBillListPage> {
     return '${l.year}-${t(l.month)}-${t(l.day)} ${t(l.hour)}:${t(l.minute)}';
   }
 
+  /// Waiting approval, or the status of the uploaded documents.
+  Widget _docChip(Map<String, dynamic> w) {
+    final st = '${w['status'] ?? ''}';
+    final ds = '${w['docStatus'] ?? ''}';
+    final String label;
+    final Color color;
+    if (st == 'requested') {
+      label = 'ລໍຖ້າອະນຸມັດ';
+      color = Colors.orange;
+    } else if (ds == 'submitted') {
+      label = 'ລໍຖ້າກວດ';
+      color = wdDocStatusColor(ds);
+    } else if (ds == 'checked') {
+      label = 'ຜ່ານ';
+      color = wdDocStatusColor(ds);
+    } else if (ds == 'rejected') {
+      label = 'ບໍ່ຜ່ານ';
+      color = wdDocStatusColor(ds);
+    } else {
+      label = 'ຍັງບໍ່ອັບ';
+      color = wdDocStatusColor('');
+    }
+    return Chip(
+      label: Text(label, style: const TextStyle(fontSize: 12)),
+      backgroundColor: color.withValues(alpha: 0.15),
+      side: BorderSide(color: color),
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final mut = Theme.of(context).hintColor;
@@ -120,7 +152,10 @@ class _WithdrawBillListPageState extends State<WithdrawBillListPage> {
                       '${w['withdrawNo'] ?? w['id']} · ${w['branchName'] ?? ''}'),
                   isThreeLine: widget.barcode.isEmpty,
                   subtitle: Text(_sub(w, n)),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    _docChip(w),
+                    const Icon(Icons.chevron_right),
+                  ]),
                   onTap: () async {
                     await Navigator.push(
                         context,
