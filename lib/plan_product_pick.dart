@@ -6,10 +6,34 @@ import 'plan_bar.dart';
 import 'product_images.dart' show productImageUrl;
 import 'widgets.dart';
 
+class PlanPickResult {
+  final List<Map<String, dynamic>> add;
+  final Set<String> tick;
+  final Set<String> untick;
+  final Set<String> remove;
+  const PlanPickResult(this.add, this.tick, this.untick, this.remove);
+  bool get isEmpty =>
+      add.isEmpty && tick.isEmpty && untick.isEmpty && remove.isEmpty;
+}
+
+void applyPlanPick(List<Map<String, dynamic>> items, PlanPickResult r) {
+  final have = <String>{for (final x in items) '${x['key']}'};
+  for (final x in r.add) {
+    if (have.add('${x['key']}')) items.add(x);
+  }
+  for (final x in items) {
+    final k = '${x['key']}';
+    if (r.tick.contains(k)) x['done'] = true;
+    if (r.untick.contains(k)) x['done'] = false;
+  }
+  items.removeWhere((x) => r.remove.contains('${x['key']}'));
+}
+
 class PlanProductPickPage extends StatefulWidget {
-  final Set<String> existing;
+  final Map<String, Map<String, dynamic>> existing;
   final String initialQuery;
-  const PlanProductPickPage({super.key, required this.existing, this.initialQuery = ""});
+  const PlanProductPickPage(
+      {super.key, required this.existing, this.initialQuery = ''});
   @override
   State<PlanProductPickPage> createState() => _PlanProductPickPageState();
 }
@@ -19,6 +43,7 @@ class _PlanProductPickPageState extends State<PlanProductPickPage> {
   Timer? _deb;
   List<Map<String, dynamic>> _list = [];
   final Map<String, Map<String, dynamic>> _sel = {};
+  final Map<String, bool> _on = {};
   bool _loading = true;
   Object? _err;
 
@@ -39,6 +64,39 @@ class _PlanProductPickPageState extends State<PlanProductPickPage> {
   String _id(Map<String, dynamic> m) {
     final id = pick(m, ['id', 'productId']);
     return id.isNotEmpty ? id : pick(m, ['name', 'productName']);
+  }
+
+  bool _was(String id) {
+    final ex = widget.existing[id];
+    return ex is Map<String, dynamic> && ex['done'] == true;
+  }
+
+  int get _changes {
+    var n = _sel.length;
+    _on.forEach((k, v) {
+      if (v == _was(k)) return;
+      n++;
+    });
+    return n;
+  }
+
+  PlanPickResult _result() {
+    final tick = <String>{};
+    final untick = <String>{};
+    final remove = <String>{};
+    _on.forEach((k, v) {
+      if (v == _was(k)) return;
+      final ex = widget.existing[k];
+      final isNew = ex is Map<String, dynamic> && ex['isNew'] == true;
+      if (v) {
+        tick.add(k);
+      } else if (isNew) {
+        remove.add(k);
+      } else {
+        untick.add(k);
+      }
+    });
+    return PlanPickResult(_sel.values.toList(), tick, untick, remove);
   }
 
   Map<String, dynamic> _toItem(Map<String, dynamic> m) {
@@ -65,9 +123,6 @@ class _PlanProductPickPageState extends State<PlanProductPickPage> {
       final q = Uri.encodeQueryComponent(_qc.text.trim());
       final d = await Api.get('/products?limit=50&active=1&q=$q');
       final l = asList(d);
-      if (l.isNotEmpty) {
-        debugPrint('[PLANPICK] first product keys: ${l.first.keys.toList()}');
-      }
       if (mounted) {
         setState(() {
           _list = l;
@@ -122,27 +177,42 @@ class _PlanProductPickPageState extends State<PlanProductPickPage> {
       itemBuilder: (_, i) {
         final m = _list[i];
         final id = _id(m);
-        final have = widget.existing.contains(id);
+        final ex = widget.existing[id];
+        final inPlan = ex is Map<String, dynamic>;
+        final isNew = ex is Map<String, dynamic> && ex['isNew'] == true;
+        final checked = inPlan ? (_on[id] ?? _was(id)) : _sel.containsKey(id);
+        var status = '';
+        if (inPlan) {
+          if (checked == _was(id)) {
+            status = isNew
+                ? 'ເຄື່ອງທີ່ບໍ່ເຄີຍຊື້ • ໃນແຜນ'
+                : (checked ? 'ໃນແຜນແລ້ວ' : 'ໃນແຜນ (ຍັງບໍ່ຕິກ)');
+          } else {
+            status = checked
+                ? 'ຈະຕິກ'
+                : (isNew ? 'ຈະເອົາອອກຈາກແຜນ' : 'ຈະເອົາຕິກອອກ');
+          }
+        }
         final sub = [
-          if (have) 'ມີໃນແຜນແລ້ວ',
+          status,
           pick(m, ['brand', 'brandName']),
           pick(m, ['barcode', 'barcodes']),
         ].where((e) => e.isNotEmpty).join(' • ');
         return CheckboxListTile(
           controlAffinity: ListTileControlAffinity.leading,
-          value: have ? true : _sel.containsKey(id),
+          value: checked,
           secondary: _thumb(pick(m, ['imageUrl', 'image', 'photo'])),
           title: Text(pick(m, ['name', 'productName'])),
           subtitle: sub.isEmpty ? null : Text(sub),
-          onChanged: have
-              ? null
-              : (v) => setState(() {
-                    if (v == true) {
-                      _sel[id] = _toItem(m);
-                    } else {
-                      _sel.remove(id);
-                    }
-                  }),
+          onChanged: (v) => setState(() {
+            if (inPlan) {
+              _on[id] = v == true;
+            } else if (v == true) {
+              _sel[id] = _toItem(m);
+            } else {
+              _sel.remove(id);
+            }
+          }),
         );
       },
     );
@@ -150,8 +220,9 @@ class _PlanProductPickPageState extends State<PlanProductPickPage> {
 
   @override
   Widget build(BuildContext context) {
+    final n = _changes;
     return Scaffold(
-      appBar: AppBar(title: Text('ເລືອກສິນຄ້າ (${_sel.length})')),
+      appBar: AppBar(title: Text('ເລືອກສິນຄ້າ ($n)')),
       body: Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -180,15 +251,11 @@ class _PlanProductPickPageState extends State<PlanProductPickPage> {
         Expanded(child: _body()),
       ]),
       bottomNavigationBar: PlanNav(
-        summary: 'ເລືອກແລ້ວ ${_sel.length}',
+        summary: 'ເພີ່ມ ${_sel.length} • ແກ້ໄຂ ${n - _sel.length}',
         items: [
           PlanNavItem(Icons.close, 'ຍົກເລີກ', () => Navigator.pop(context)),
-          PlanNavItem(
-              Icons.add_task,
-              'ເພີ່ມ (${_sel.length})',
-              _sel.isEmpty
-                  ? null
-                  : () => Navigator.pop(context, _sel.values.toList())),
+          PlanNavItem(Icons.save_outlined, 'ບັນທຶກ ($n)',
+              n == 0 ? null : () => Navigator.pop(context, _result())),
         ],
       ),
     );

@@ -14,7 +14,7 @@ import 'specs.dart' show crudSpec;
 import 'plan_excel.dart';
 import 'plan_checked.dart';
 import 'plan_bar.dart';
-import 'plan_pdf_menu.dart';
+import 'plan_docs_page.dart';
 
 String _n(num v) => v % 1 == 0 ? v.toInt().toString() : v.toStringAsFixed(1);
 
@@ -828,13 +828,8 @@ class _BudgetPageState extends State<BudgetPage> {
   }
 
   Future<void> _searchAllProducts() async {
-    final picked = await Navigator.of(context)
-        .push<List<Map<String, dynamic>>>(MaterialPageRoute(
-            builder: (_) => PlanProductPickPage(
-                existing: const <String>{}, initialQuery: _bq.text.trim())));
-    if (picked == null || picked.isEmpty || !mounted) return;
     final plans = await _loadBuyPlans();
-    if (!mounted) return;
+    if (mounted == false) return;
     if (plans.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('ຍັງບໍ່ມີແຜນຊື້ ກົດ ແຜນຊື້ ເພື່ອສ້າງແຜນກ່ອນ')));
@@ -857,22 +852,23 @@ class _BudgetPageState extends State<BudgetPage> {
         ]),
       ),
     );
-    if (plan == null) return;
+    if (plan == null || mounted == false) return;
     final items = await _fetchPlanItems(plan);
-    if (items == null) return;
-    final have = <String>{for (final x in items) '${x['key']}'};
-    var added = 0;
-    for (final x in picked) {
-      if (have.add('${x['key']}')) {
-        items.add(x);
-        added++;
-      }
-    }
+    if (items == null || mounted == false) return;
+    final have = <String, Map<String, dynamic>>{
+      for (final x in items) '${x['key']}': x
+    };
+    final r = await Navigator.of(context).push<PlanPickResult>(
+        MaterialPageRoute(
+            builder: (_) => PlanProductPickPage(
+                existing: have, initialQuery: _bq.text.trim())));
+    if (r == null || r.isEmpty) return;
+    applyPlanPick(items, r);
     await _savePlanItems(plan, items);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              'ເພີ່ມ $added ລາຍການເຂົ້າ ${plan['name']} • ເປີດແຜນ ແລ້ວກົດ ລາຍການ ເພື່ອໃສ່ຈຳນວນ')));
+              'ແຜນ ${plan['name']}: ເພີ່ມ ${r.add.length} • ເອົາອອກ ${r.remove.length + r.untick.length} • ຕິກ ${r.tick.length}')));
     }
   }
 
@@ -1701,6 +1697,13 @@ class _PlanItemsPageState extends State<_PlanItemsPage> {
 
   void _onQ(String v) => setState(() => _q = v.trim().toLowerCase());
 
+  Future<void> _openDocs() async {
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => PlanDocsPage(
+            planId: '${widget.plan['id']}',
+            planName: '${widget.plan['name']}')));
+  }
+
   Future<void> _persistPlan() async {
     await widget.host._savePlanItems(widget.plan, widget.items);
   }
@@ -1709,8 +1712,8 @@ class _PlanItemsPageState extends State<_PlanItemsPage> {
     return PlanBar(
       onSave: _persistPlan,
       onList: _openChecked,
+      onDocs: _openDocs,
       onExport: () => exportPlanXlsx(widget.plan, widget.items),
-      onPdf: () => pickPlanPdf(context, widget.plan, widget.items),
     );
   }
 
@@ -1727,6 +1730,30 @@ class _PlanItemsPageState extends State<_PlanItemsPage> {
         x['must'] = widget.host._mustBuy(b);
         x['po'] = widget.host._actualOf(b);
       }
+    }
+    final other = <String, num>{};
+    try {
+      final plans = await widget.host._loadBuyPlans();
+      for (final pl in plans) {
+        if ('${pl['id']}' == '${widget.plan['id']}') continue;
+        var d = await Api.get('/stock/buy-plans/${pl['id']}');
+        if (d is Map && d['data'] is Map) d = d['data'];
+        if (d is Map && d['items'] is List) {
+          for (final y in (d['items'] as List)) {
+            if (y is Map) {
+              final b = y['buyQty'];
+              if (b is num) {
+                final k = '${y['itemKey'] ?? y['productId']}';
+                other[k] = (other[k] ?? 0) + b;
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    if (mounted == false) return;
+    for (final x in widget.items) {
+      x['other'] = other['${x['key']}'] ?? 0;
     }
     await Navigator.of(context).push<void>(MaterialPageRoute(
         builder: (_) => PlanCheckedPage(

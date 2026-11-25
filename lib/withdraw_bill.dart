@@ -341,6 +341,24 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
           if ('${_d['status']}' == 'open' || '${_d['status']}' == 'closed') ...[
             const SizedBox(height: 16),
             WithdrawDocsSection(_d, onChanged: _reloadD),
+            if ('${_d['docStatus']}' == 'submitted') ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () async {
+                    final r = await Navigator.push<dynamic>(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => WithdrawDocCheckDetail(
+                                Map<String, dynamic>.from(_d))));
+                    if (r == true && mounted) _reloadD();
+                  },
+                  icon: const Icon(Icons.fact_check_outlined),
+                  label: const Text('ກວດເອກະສານ'),
+                ),
+              ),
+            ],
           ],
           if ('${_d['status']}' == 'requested') ...[
             const SizedBox(height: 16),

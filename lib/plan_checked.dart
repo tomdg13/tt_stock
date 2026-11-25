@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'api.dart';
 import 'image_search.dart' show SearchTools;
 import 'plan_bar.dart';
+import 'plan_docs_page.dart';
 import 'plan_pick.dart';
 import 'plan_product_pick.dart';
 import 'plan_pdf_menu.dart';
@@ -36,6 +37,13 @@ class _PlanCheckedPageState extends State<PlanCheckedPage> {
 
   void _onS(String v) => setState(() => _s = v.trim().toLowerCase());
 
+  Future<void> _openDocs() async {
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => PlanDocsPage(
+            planId: '${widget.plan['id']}',
+            planName: '${widget.plan['name']}')));
+  }
+
   Widget _thumb(String raw) {
     final url = productImageUrl(raw);
     final holder = Container(
@@ -59,6 +67,34 @@ class _PlanCheckedPageState extends State<PlanCheckedPage> {
   }
 
   String _q(num v) => v % 1 == 0 ? '${v.toInt()}' : '$v';
+
+  List<DataRow> _buildRows(List<Map<String, dynamic>> shown, ColorScheme cs) {
+    final out = <DataRow>[];
+    final n = _columns().length;
+    String? last;
+    var no = 0;
+    for (final r in shown) {
+      final b = '${r['brand'] ?? ''}';
+      if (last != b) {
+        last = b;
+        final cnt = shown.where((x) => '${x['brand'] ?? ''}' == b).length;
+        final label = b.isEmpty ? '(ບໍ່ມີ Brand)' : b;
+        out.add(DataRow(
+          color: WidgetStatePropertyAll(cs.surfaceContainerHighest),
+          cells: [
+            for (var c = 0; c < n; c++)
+              DataCell(c == 2
+                  ? Text('$label ($cnt)',
+                      style: const TextStyle(fontWeight: FontWeight.w700))
+                  : const Text('')),
+          ],
+        ));
+      }
+      out.add(_row(no, r, cs));
+      no++;
+    }
+    return out;
+  }
 
   Future<void> _addMenu() async {
     final r = await showModalBottomSheet<int>(
@@ -85,19 +121,20 @@ class _PlanCheckedPageState extends State<PlanCheckedPage> {
   }
 
   Future<void> _addFromCatalog() async {
-    final have = <String>{for (final x in widget.items) '${x['key']}'};
-    final r = await Navigator.of(context).push<List<Map<String, dynamic>>>(
-        MaterialPageRoute(
-            builder: (_) => PlanProductPickPage(existing: have)));
+    final have = <String, Map<String, dynamic>>{
+      for (final x in widget.items) '${x['key']}': x
+    };
+    final r = await Navigator.of(context).push<PlanPickResult>(
+        MaterialPageRoute(builder: (_) => PlanProductPickPage(existing: have)));
     if (r == null || r.isEmpty) return;
     setState(() {
-      widget.items.addAll(r);
+      applyPlanPick(widget.items, r);
     });
     await widget.onSave();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              'ເພີ່ມແລ້ວ ${r.length} ລາຍການ • ກົດແຖວເພື່ອໃສ່ຈຳນວນຊື້')));
+              'ເພີ່ມ ${r.add.length} • ເອົາອອກ ${r.remove.length + r.untick.length} • ຕິກ ${r.tick.length}')));
     }
   }
 
@@ -270,6 +307,7 @@ class _PlanCheckedPageState extends State<PlanCheckedPage> {
       const DataColumn(label: Text('ໜ່ວຍ')),
       if (_full)
         const DataColumn(label: Text('ຊື້ຕົວຈິງ (PO)'), numeric: true),
+      if (_full) const DataColumn(label: Text('ຊື້ມາແລ້ວ'), numeric: true),
       const DataColumn(label: Text('ຊື້ແຜນນີ້'), numeric: true),
       if (_full) const DataColumn(label: Text('brand')),
       if (_full) const DataColumn(label: Text('ທີ່ເກັບ')),
@@ -291,6 +329,8 @@ class _PlanCheckedPageState extends State<PlanCheckedPage> {
           style: const TextStyle(fontWeight: FontWeight.w700))),
       DataCell(Text('${r['unit'] ?? ''}')),
       if (_full) DataCell(Text(_poCell(r))),
+      if (_full)
+        DataCell(Text(num0(r['other']) == 0 ? '-' : _cell(r, 'other'))),
       DataCell(Text(_cell(r, 'buyQty'),
           style: TextStyle(fontWeight: FontWeight.w700, color: cs.primary))),
       if (_full) DataCell(Text('${r['brand'] ?? ''}')),
@@ -383,8 +423,7 @@ class _PlanCheckedPageState extends State<PlanCheckedPage> {
                           WidgetStatePropertyAll(cs.surfaceContainerHighest),
                       columns: _columns(),
                       rows: [
-                        for (var i = 0; i < shown.length; i++)
-                          _row(i, shown[i], cs),
+                        ..._buildRows(shown, cs),
                       ],
                     ),
                   ),
@@ -398,6 +437,7 @@ class _PlanCheckedPageState extends State<PlanCheckedPage> {
         onExport: widget.onExport,
         onPdf: () => pickPlanPdf(context, widget.plan, widget.items),
         onAdd: _addMore,
+        onDocs: _openDocs,
       ),
     );
   }

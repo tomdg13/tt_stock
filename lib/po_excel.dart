@@ -48,7 +48,7 @@ const _workbookRels =
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
 
 const _styles =
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Phetsarath OT"/></font><font><b/><sz val="11"/><name val="Phetsarath OT"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="4" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/></cellXfs></styleSheet>';
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Phetsarath OT"/></font><font><b/><sz val="11"/><name val="Phetsarath OT"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE0E0E0"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="9"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="4" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf></cellXfs></styleSheet>';
 
 String _esc(String s) =>
     s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
@@ -64,6 +64,13 @@ String _col(int i) {
   return s;
 }
 
+int _tableStyle(int kind, int c, Set<int> leftCols, Set<int> boldCols) {
+  if (kind == 2) return 8;
+  if (kind == 3) return leftCols.contains(c) ? 7 : 8;
+  if (leftCols.contains(c)) return 4;
+  return boldCols.contains(c) ? 6 : 5;
+}
+
 Future<void> sharePoXlsx({
   required String fileName,
   required List<List<Object>> rows,
@@ -74,6 +81,10 @@ Future<void> sharePoXlsx({
   Map<int, double> rowHeights = const {},
   String? pageHeader,
   String? pageFooter,
+  Map<int, int> tableRows = const {},
+  int tableCols = 0,
+  Set<int> leftCols = const {2},
+  Set<int> boldCols = const {},
 }) async {
   final pics = images.isNotEmpty;
   debugPrint(
@@ -99,10 +110,29 @@ Future<void> sharePoXlsx({
     final ht = rowHeights[r];
     final ha = ht == null ? '' : ' ht="$ht" customHeight="1"';
     sb.write('<row r="${r + 1}"$ha>');
-    for (var c = 0; c < rows[r].length; c++) {
-      final v = rows[r][c];
+    final tk = tableRows[r];
+    final nc = tk == null
+        ? rows[r].length
+        : (rows[r].length > tableCols ? rows[r].length : tableCols);
+    for (var c = 0; c < nc; c++) {
+      final Object v = c < rows[r].length ? rows[r][c] : '';
       final ref = '${_col(c)}${r + 1}';
       final bold = boldRows.contains(r);
+      if (tk != null) {
+        final st = _tableStyle(tk, c, leftCols, boldCols);
+        if (v is num) {
+          sb.write('<c r="$ref" s="$st"><v>$v</v></c>');
+        } else {
+          final s = v.toString();
+          if (s.isEmpty) {
+            sb.write('<c r="$ref" s="$st"/>');
+          } else {
+            sb.write(
+                '<c r="$ref" s="$st" t="inlineStr"><is><t xml:space="preserve">${_esc(s)}</t></is></c>');
+          }
+        }
+        continue;
+      }
       if (v is XlFormula) {
         sb.write(
             '<c r="$ref" s="${bold ? 3 : 2}"><f>${_esc(v.f)}</f><v>${v.v}</v></c>');

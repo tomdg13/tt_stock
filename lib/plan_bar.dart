@@ -70,6 +70,7 @@ class PlanBar extends StatefulWidget {
   final Future<void> Function()? onPdf;
   final VoidCallback? onList;
   final VoidCallback? onAdd;
+  final VoidCallback? onDocs;
   final String? summary;
   const PlanBar(
       {super.key,
@@ -78,6 +79,7 @@ class PlanBar extends StatefulWidget {
       this.onPdf,
       this.onList,
       this.onAdd,
+      this.onDocs,
       this.summary});
   @override
   State<PlanBar> createState() => _PlanBarState();
@@ -143,6 +145,7 @@ class _PlanBarState extends State<PlanBar> {
     final busy = _saving || _exporting || _pdfing;
     final ol = widget.onList;
     final oa = widget.onAdd;
+    final od = widget.onDocs;
     final op = widget.onPdf;
     return PlanNav(
       summary: widget.summary,
@@ -151,6 +154,7 @@ class _PlanBarState extends State<PlanBar> {
             loading: _saving),
         if (ol is VoidCallback) PlanNavItem(Icons.checklist, 'ລາຍການ', ol),
         if (oa is VoidCallback) PlanNavItem(Icons.add_task, 'ເລືອກເພີ່ມ', oa),
+        if (od is VoidCallback) PlanNavItem(Icons.folder_open_outlined, 'ເອກະສານ', od),
         if (op is Function)
           PlanNavItem(Icons.picture_as_pdf_outlined, 'PDF', busy ? null : _pdf,
               loading: _pdfing),

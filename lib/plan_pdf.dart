@@ -182,7 +182,7 @@ Future<void> exportPlanPdf(
   };
 
   final trs = <pw.TableRow>[];
-  trs.add(pw.TableRow(
+  trs.add(pw.TableRow(repeat: true,
     children: [
       await _c('ລຳດັບ', bold: true, center: true),
       await _c('ອາໄຫຼ່', bold: true, center: true),
@@ -202,6 +202,9 @@ Future<void> exportPlanPdf(
     final qn = num0(qv).toDouble();
     sumQty += qn;
     final nameW = await _t(_nm(x), size: 9, maxW: 240);
+    if (_newBrand(rows, i)) {
+      trs.add(await _brandRow(rows, i, widths.length, 1));
+    }
     trs.add(pw.TableRow(
       verticalAlignment: pw.TableCellVerticalAlignment.middle,
       children: [
@@ -319,7 +322,7 @@ Future<void> exportPlanPdf(
 }
 
 Future<pw.TableRow> _sheetHead() async {
-  return pw.TableRow(
+  return pw.TableRow(repeat: true,
     decoration: const pw.BoxDecoration(color: PdfColors.grey200),
     children: [
       await _c('ລຳດັບ', bold: true, center: true),
@@ -329,6 +332,7 @@ Future<pw.TableRow> _sheetHead() async {
       await _c('ນັບຕົວຈິງ', bold: true, center: true),
       await _c('ໃຊ້', bold: true, center: true),
       await _c('ຕ້ອງຊື້', bold: true, center: true),
+      await _c('ຊື້ມາແລ້ວ', bold: true, center: true),
       await _c('ຊື້ແຜນນີ້', bold: true, center: true),
     ],
   );
@@ -361,7 +365,8 @@ Future<void> exportPlanSheetPdf(
     4: const pw.FixedColumnWidth(52),
     5: const pw.FixedColumnWidth(36),
     6: const pw.FixedColumnWidth(48),
-    7: const pw.FixedColumnWidth(52),
+    7: const pw.FixedColumnWidth(44),
+    8: const pw.FixedColumnWidth(52),
   };
 
   var sumMust = 0.0;
@@ -376,6 +381,9 @@ Future<void> exportPlanSheetPdf(
     if (must is num) sumMust += must.toDouble();
     final buy = x['buyQty'];
     if (buy is num) sumBuy += buy.toDouble();
+    if (_newBrand(rows, i)) {
+      cur.add(await _brandRow(rows, i, widths.length, 2));
+    }
     cur.add(pw.TableRow(
       verticalAlignment: pw.TableCellVerticalAlignment.middle,
       children: [
@@ -387,15 +395,16 @@ Future<void> exportPlanSheetPdf(
                   width: 38, height: 38, fit: pw.BoxFit.fill)
               : pw.SizedBox(width: 38, height: 38),
         ),
-        await _c(_nm(x), maxW: 230),
+        await _c(_nm(x), maxW: 180),
         await _c(_num(x['stock']), center: true),
         await _c(_num(x['counted']), center: true),
         await _c(_num(x['used']), center: true),
         await _c(_num(must), bold: true, center: true),
+        await _c(_oth(x['other']), center: true),
         await _c(_num(buy), bold: true, center: true),
       ],
     ));
-    if (cur.length == 12) {
+    if (cur.length == 100000) {
       chunks.add(cur);
       cur = <pw.TableRow>[];
     }
@@ -418,6 +427,7 @@ Future<void> exportPlanSheetPdf(
           await _c(''),
           await _c(''),
           await _c(_q(sumMust), bold: true, center: true),
+          await _c(''),
           await _c(_q(sumBuy), bold: true, center: true),
         ],
       ));
@@ -516,4 +526,29 @@ Future<pw.Widget> _letterBottom() async {
 String _nm(Map<String, dynamic> x) {
   final n = '${x['name'] ?? ''}';
   return x['isNew'] == true ? '$n\n(ເຄື່ອງທີ່ບໍ່ເຄີຍຊື້)' : n;
+}
+
+String _oth(dynamic v) => (v is num && v > 0) ? _q(v) : '-';
+
+bool _newBrand(List<Map<String, dynamic>> rows, int i) {
+  if (i == 0) return true;
+  final a = '${rows[i - 1]['brand'] ?? ''}';
+  final b = '${rows[i]['brand'] ?? ''}';
+  return a.compareTo(b) < 0;
+}
+
+Future<pw.TableRow> _brandRow(
+    List<Map<String, dynamic>> rows, int i, int cols, int labelCol) async {
+  final b = '${rows[i]['brand'] ?? ''}';
+  final cnt = rows.where((y) => '${y['brand'] ?? ''}' == b).length;
+  final label = b.isEmpty ? '(ບໍ່ມີ Brand)' : b;
+  final cells = <pw.Widget>[];
+  for (var c = 0; c < cols; c++) {
+    cells.add(c == labelCol
+        ? await _c('$label ($cnt)', bold: true)
+        : await _c(''));
+  }
+  return pw.TableRow(
+      decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+      children: cells);
 }
