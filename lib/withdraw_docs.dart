@@ -65,6 +65,31 @@ String wdStageLabel(int s) => const {
       7: 'ຂັ້ນ 7 · HQ ຮັບຄືນ ແລະ ປິດເຄດ (ຮູບ)',
     }[s] ?? 'ຂັ້ນ $s';
 
+String wdStageStatusLabel(Map<String, dynamic> w) {
+  final st = '${w['status'] ?? ''}';
+  final sg = int.tryParse('${w['stage'] ?? ''}') ?? 0;
+  if (st == 'closed') return 'ປິດເຄດ';
+  if (st == 'requested') {
+    if (sg == 3) return 'ລໍຖ້າອະນຸມັດ';
+    return '${w['rejectNote'] ?? ''}'.isNotEmpty ? 'ບໍ່ອະນຸມັດ' : 'ອັບເອກະສານ';
+  }
+  const m = {4: 'ຮັບເຄື່ອງ', 5: 'ຕິດຕັ້ງ', 6: 'ສົ່ງຄືນ', 7: 'HQ ຮັບຄືນ'};
+  return m[sg] ?? 'ເປີດຢູ່';
+}
+
+Color wdStageStatusColor(Map<String, dynamic> w) {
+  final st = '${w['status'] ?? ''}';
+  final sg = int.tryParse('${w['stage'] ?? ''}') ?? 0;
+  if (st == 'closed') return Colors.green;
+  if (st == 'requested') {
+    if (sg == 3) return Colors.orange;
+    return '${w['rejectNote'] ?? ''}'.isNotEmpty ? Colors.red : Colors.grey;
+  }
+  if (sg == 7) return Colors.deepPurple;
+  if (sg >= 4 && sg <= 6) return Colors.blue;
+  return Colors.grey;
+}
+
 String _wdWhen(dynamic v) {
   final s = '${v ?? ''}'.replaceFirst('T', ' ');
   return s.length >= 16 ? s.substring(0, 16) : s;
@@ -357,7 +382,7 @@ class WithdrawDocsSectionState extends State<WithdrawDocsSection> {
   @override
   Widget build(BuildContext context) {
     final mut = Theme.of(context).hintColor;
-    final color = wdDocStatusColor(_docStatus);
+    final color = wdStageStatusColor(widget.w);
     final note = '${widget.w['checkNote'] ?? ''}';
     final by = '${widget.w['checkedBy'] ?? ''}';
     return Card(
@@ -370,7 +395,7 @@ class WithdrawDocsSectionState extends State<WithdrawDocsSection> {
                     style:
                         TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
             Chip(
-              label: Text(wdDocStatusLabel(_docStatus)),
+              label: Text(wdStageStatusLabel(widget.w)),
               backgroundColor: color.withValues(alpha: 0.15),
               side: BorderSide(color: color),
               visualDensity: VisualDensity.compact,
@@ -403,7 +428,7 @@ class WithdrawDocsSectionState extends State<WithdrawDocsSection> {
                       ? wdStageLabel(_stage)
                       : (_status == 'closed'
                           ? 'ປິດເຄດແລ້ວ ບໍ່ສາມາດອັບເພີ່ມ'
-                          : 'ຂັ້ນ $_stage · ຂັ້ນນີ້ບໍ່ແມ່ນສິດຂອງທ່ານ'),
+                          : (_stage == 3 ? 'ລໍຖ້າອະນຸມັດ (HQ / Admin)' : (_stage == 7 ? 'ລໍຖ້າ HQ ຮັບຄືນ ແລະ ປິດເຄດ' : 'ຂັ້ນ $_stage · ຂັ້ນນີ້ບໍ່ແມ່ນສິດຂອງທ່ານ'))),
                   style: TextStyle(color: mut))),
           if (_mayUpload) ...[
             const SizedBox(height: 8),
@@ -839,6 +864,14 @@ class _WithdrawDocsPageState extends State<WithdrawDocsPage> {
     }
   }
 
+  bool get _canUp {
+    final sg = int.tryParse('${_w['stage'] ?? ''}') ?? 0;
+    return '${_w['status']}' != 'closed' &&
+        sg >= 2 &&
+        sg <= 7 &&
+        Api.can('WD_S$sg');
+  }
+
   Future<void> _reloadW() async {
     try {
       final list = await Api.get('/withdrawals');
@@ -866,7 +899,7 @@ class _WithdrawDocsPageState extends State<WithdrawDocsPage> {
       bottomNavigationBar: PlanNav(
         items: [
           PlanNavItem(Icons.upload_file, 'ເພີ່ມໄຟລ໌',
-              () => _key.currentState?.pickFiles()),
+              _canUp ? () => _key.currentState?.pickFiles() : null),
           PlanNavItem(Icons.refresh, 'ໂຫຼດໃໝ່', () async {
             await _reloadW();
             await _key.currentState?.reload();

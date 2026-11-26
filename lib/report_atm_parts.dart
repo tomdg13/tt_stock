@@ -18,6 +18,7 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
   dynamic _branchId;
   Set<String> _selPos = <String>{};
   String _ptype = '';
+  String _cur = 'USD';
   Map<String, String> _ptById = {};
   Map<String, List<String>> _pinfo = {};
   List<String> _poOpts = [];
@@ -133,11 +134,11 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
     final bl = _branches.isEmpty ? await loadBranches() : _branches;
     final d = await Api.get(_url());
     final m = d is Map ? d : {};
-    List<dynamic> pur = asList(m['purchases']);
-    List<dynamic> usd = asList(m['used']);
-    _pos = asList(m['pos']);
-    _items = asList(m['items']);
-    _used = asList(m['usedItems']);
+    List<dynamic> pur = asList(m[_cur == 'USD' ? 'purchasesUsd' : 'purchases']);
+    List<dynamic> usd = asList(m[_cur == 'USD' ? 'usedUsd' : 'used']);
+    _pos = asList(m[_cur == 'USD' ? 'posUsd' : 'pos']);
+    _items = asList(m[_cur == 'USD' ? 'itemsUsd' : 'items']);
+    _used = asList(m[_cur == 'USD' ? 'usedItemsUsd' : 'usedItems']);
     final poSet = <String>{};
     for (final x in _pos) {
       poSet.add(pick(x, ['poNo']));
@@ -169,11 +170,11 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       }
       pur = <dynamic>[
         for (final e in pb.entries)
-          {'branchId': e.key, 'currency': 'LAK', 'total': e.value}
+          {'branchId': e.key, 'currency': _cur, 'total': e.value}
       ];
       usd = <dynamic>[
         for (final e in ub.entries)
-          {'branchId': e.key, 'currency': 'LAK', 'used': e.value}
+          {'branchId': e.key, 'currency': _cur, 'used': e.value}
       ];
       _pos = _pos.where((x) => sp.contains(pick(x, ['poNo']))).toList();
       _used = _used.where((x) => sp.contains(pick(x, ['poNo']))).toList();
@@ -207,11 +208,11 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       }
       pur = <dynamic>[
         for (final e in pb.entries)
-          {'branchId': e.key, 'currency': 'LAK', 'total': e.value}
+          {'branchId': e.key, 'currency': _cur, 'total': e.value}
       ];
       usd = <dynamic>[
         for (final e in ub.entries)
-          {'branchId': e.key, 'currency': 'LAK', 'used': e.value}
+          {'branchId': e.key, 'currency': _cur, 'used': e.value}
       ];
       _pos = [
         for (final x in _pos)
@@ -220,7 +221,7 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       ];
     }
     final miss = _v(m['lakMissing']);
-    if (miss > 0 && mounted) {
+    if (_cur == 'LAK' && miss > 0 && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('${miss.round()} GRN ຍັງບໍ່ມີມູນຄ່າ LAK ຈາກບັນຊີ'),
           duration: const Duration(seconds: 6)));
@@ -317,6 +318,11 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       _selPos = tmp;
       _load();
     }
+  }
+
+  void _setCur(String c) {
+    _cur = c;
+    _load();
   }
 
   void _setPtype(String t) {
@@ -564,6 +570,17 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
                     _load();
                   }),
           ]),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, children: [
+          ChoiceChip(
+              label: const Text('LAK'),
+              selected: _cur == 'LAK',
+              onSelected: (_) => _setCur('LAK')),
+          ChoiceChip(
+              label: const Text('USD'),
+              selected: _cur == 'USD',
+              onSelected: (_) => _setCur('USD')),
+        ]),
         const SizedBox(height: 8),
         Wrap(spacing: 8, children: [
           ChoiceChip(
