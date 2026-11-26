@@ -25,9 +25,21 @@ class _WithdrawPageState extends State<WithdrawPage> {
   void initState() {
     super.initState();
     _loadTerm();
-    Api.get('/repair/branches').then((d) {
+    Api.get('/withdrawals/branches').then((d) {
       if (!mounted) return;
-      setState(() => _branches = d is List ? d : []);
+      final list = d is List ? d : <dynamic>[];
+      final own = Api.user?['branchId'];
+      setState(() {
+        _branches = list;
+        if (_branchId == null) {
+          for (final b in list) {
+            if ('${b['id']}' == '$own') _branchId = b['id'];
+          }
+          if (_branchId == null && list.length == 1) {
+            _branchId = list.first['id'];
+          }
+        }
+      });
     });
   }
 

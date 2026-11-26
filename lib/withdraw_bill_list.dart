@@ -13,7 +13,8 @@ class _StepTile {
 }
 
 const _kTiles = <_StepTile>[
-  _StepTile('wait', 'ລໍຖ້າອະນຸມັດ', Icons.hourglass_top_outlined),
+  _StepTile('s2', 'ອັບເອກະສານ', Icons.upload_file),
+  _StepTile('s3', 'ລໍຖ້າອະນຸມັດ', Icons.hourglass_top_outlined),
   _StepTile('s4', 'ຮັບເຄື່ອງ', Icons.inventory_2_outlined),
   _StepTile('s5', 'ຕິດຕັ້ງ', Icons.build_outlined),
   _StepTile('s6', 'ສົ່ງຄືນ', Icons.undo),
@@ -53,7 +54,9 @@ class _WithdrawBillListPageState extends State<WithdrawBillListPage> {
     final st = '${w['status'] ?? ''}';
     final sg = int.tryParse('${w['stage'] ?? ''}') ?? 0;
     if (st == 'closed') return 'closed';
-    if (st == 'requested') return 'wait';
+    if (st == 'requested') {
+      return sg == 3 ? 's3' : 's2';
+    }
     if (sg >= 4 && sg <= 7) return 's$sg';
     return 'other';
   }
@@ -69,7 +72,6 @@ class _WithdrawBillListPageState extends State<WithdrawBillListPage> {
       borderRadius: BorderRadius.circular(8),
       onTap: () => setState(() => _filter = on ? '' : t.key),
       child: Container(
-        width: 78,
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
             color: on ? cs.primaryContainer : null,
@@ -108,12 +110,13 @@ class _WithdrawBillListPageState extends State<WithdrawBillListPage> {
                   _filter.isEmpty ? null : () => setState(() => _filter = ''),
               child: const Text('ເບິ່ງທັງໝົດ ›')),
         ]),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(children: [
-            for (final t in _kTiles) _tile(t, cnt[t.key] ?? 0),
-          ]),
-        ),
+        LayoutBuilder(builder: (context, cons) {
+          final w = cons.maxWidth / 4;
+          return Wrap(children: [
+            for (final t in _kTiles)
+              SizedBox(width: w, child: _tile(t, cnt[t.key] ?? 0)),
+          ]);
+        }),
       ]),
     );
   }
