@@ -16,7 +16,7 @@ class ReportAtmPartsPage extends StatefulWidget {
 class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
   List<Map<String, dynamic>> _branches = [];
   dynamic _branchId;
-  String? _selPo;
+  Set<String> _selPos = <String>{};
   List<String> _poOpts = [];
   List<dynamic> _pos = [];
   List<dynamic> _items = [];
@@ -137,21 +137,22 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
     }
     _poOpts = poSet.toList();
     _poOpts.sort((a, b) => b.compareTo(a));
+    _selPos.removeWhere((o) => _poOpts.contains(o) == false);
     if (mounted) {
       setState(() {});
     }
-    final sp = _selPo;
-    if (sp != null) {
+    final sp = _selPos;
+    if (sp.isNotEmpty) {
       final pb = <String, double>{};
       final ub = <String, double>{};
       for (final x in _pos) {
-        if (pick(x, ['poNo']) == sp) {
+        if (sp.contains(pick(x, ['poNo']))) {
           final k = '${x['branchId']}';
           pb[k] = (pb[k] ?? 0) + _v(x['total']);
         }
       }
       for (final x in _used) {
-        if (pick(x, ['poNo']) == sp) {
+        if (sp.contains(pick(x, ['poNo']))) {
           final k = '${x['branchId']}';
           ub[k] = (ub[k] ?? 0) + _v(x['amount']);
         }
@@ -164,8 +165,8 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
         for (final e in ub.entries)
           {'branchId': e.key, 'currency': 'LAK', 'used': e.value}
       ];
-      _pos = _pos.where((x) => pick(x, ['poNo']) == sp).toList();
-      _used = _used.where((x) => pick(x, ['poNo']) == sp).toList();
+      _pos = _pos.where((x) => sp.contains(pick(x, ['poNo']))).toList();
+      _used = _used.where((x) => sp.contains(pick(x, ['poNo']))).toList();
       final ids = _pos.map((x) => '${x['id']}').toSet();
       _items = _items.where((x) => ids.contains('${x['grnId']}')).toList();
     }
@@ -216,6 +217,57 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       }
     }
     return out;
+  }
+
+  Future<void> _pickPos() async {
+    final tmp = Set<String>.from(_selPos);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: const Text('ເລືອກ PO'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final o in _poOpts)
+                  CheckboxListTile(
+                    dense: true,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    value: tmp.contains(o),
+                    title: Text(o.isEmpty ? 'ບໍ່ມີ PO' : 'PO $o'),
+                    onChanged: (v) {
+                      setS(() {
+                        if (v == true) {
+                          tmp.add(o);
+                        } else {
+                          tmp.remove(o);
+                        }
+                      });
+                    },
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => setS(() => tmp.clear()),
+                child: const Text('ລ້າງ')),
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('ຍົກເລີກ')),
+            FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('ຕົກລົງ')),
+          ],
+        ),
+      ),
+    );
+    if (ok == true && mounted) {
+      _selPos = tmp;
+      _load();
+    }
   }
 
   void _load() {
@@ -434,22 +486,23 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
         ],
       ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        DropdownButtonFormField<dynamic>(
-          key: ValueKey('po-${_poOpts.length}-$_selPo'),
-          initialValue: _poOpts.contains(_selPo) ? _selPo : null,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'PO'),
-          items: [
-            const DropdownMenuItem(value: null, child: Text('ທຸກ PO')),
-            for (final o in _poOpts)
-              DropdownMenuItem(
-                  value: o, child: Text(o.isEmpty ? 'ບໍ່ມີ PO' : 'PO $o')),
-          ],
-          onChanged: (v) {
-            _selPo = v == null ? null : '$v';
-            _load();
-          },
+        OutlinedButton.icon(
+          icon: const Icon(Icons.checklist),
+          label: Text(_selPos.isEmpty
+              ? 'PO: ທຸກ PO'
+              : 'PO: ເລືອກ ${_selPos.length}'),
+          onPressed: _pickPos,
         ),
+        if (_selPos.isNotEmpty)
+          Wrap(spacing: 6, children: [
+            for (final o in _selPos)
+              InputChip(
+                  label: Text(o.isEmpty ? 'ບໍ່ມີ PO' : o),
+                  onDeleted: () {
+                    _selPos.remove(o);
+                    _load();
+                  }),
+          ]),
         const SizedBox(height: 8),
         Wrap(spacing: 8, children: [
           ChoiceChip(
