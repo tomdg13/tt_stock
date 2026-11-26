@@ -297,6 +297,7 @@ class _TerminalInfoPageState extends State<TerminalInfoPage> {
                               pick(m, ['atmLocation', 'location'])),
                         ]),
                   ),
+                  ..._installsSection(c, m),
                   const SizedBox(height: 12),
                   AppCard(title: 'ລາຍລະອຽດທັງໝົດ', child: DataView(m)),
                 ]),
@@ -1283,4 +1284,45 @@ class _PickProductPageState extends State<PickProductPage> {
       ]),
     );
   }
+}
+
+/// Parts installed in / removed from this terminal (GET /terminals/<barcode> -> installs).
+List<Widget> _installsSection(BuildContext c, Map<String, dynamic> m) {
+  final rows = asList(m['installs']);
+  if (rows.isEmpty) return const <Widget>[];
+  return <Widget>[
+    const SizedBox(height: 12),
+    AppCard(
+      title: 'ອາໄຫຼ່ທີ່ຕິດຕັ້ງ (${rows.length})',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final r in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                      pick(r, ['productName']).isNotEmpty
+                          ? pick(r, ['productName'])
+                          : pick(r, ['serialNo', 'productId']),
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(
+                      [
+                        if (pick(r, ['serialNo']).isNotEmpty)
+                          'S/N ${pick(r, ['serialNo'])}',
+                        pick(r, ['action']),
+                        pick(r, ['userName']),
+                        pick(r, ['logDate']),
+                      ].where((e) => e.isNotEmpty).join(' · '),
+                      style: TextStyle(
+                          fontSize: 12, color: Theme.of(c).hintColor)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    ),
+  ];
 }
