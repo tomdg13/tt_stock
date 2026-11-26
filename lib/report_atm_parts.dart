@@ -714,8 +714,8 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       grnPo['${x['id']}'] = pick(x, ['poNo']);
     }
     String f(String s) => s.isEmpty ? '-' : s;
-    List<String> make(
-        dynamic x, String atm, String po, double buy, double used) {
+    List<String> make(dynamic x, String atm, String po, double buy,
+        double used, String term) {
       final id = pick(x, ['productId']);
       final inf = _pinfo[id] ?? <String>['', '', '', ''];
       final fl = _pfull[id] ?? <String>['', 'FULL', '', ''];
@@ -726,6 +726,7 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       final full = partial ? (parent.isEmpty ? own : parent) : own;
       final part = partial ? own : '';
       final bc = fl[3].isEmpty ? inf[3] : fl[3];
+      final img = _imgFor(x, x['productName'] == null ? 'name' : 'productName');
       return <String>[
         f(inf[0]),
         f(inf[1]),
@@ -737,17 +738,19 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
         f(po),
         '$buy',
         '$used',
+        img,
+        f(term),
       ];
     }
 
     final ents = <List<String>>[];
     for (final e in _items) {
-      ents.add(make(
-          e, 'Stock', grnPo['${e['grnId']}'] ?? '', _v(e['amount']), 0));
+      ents.add(make(e, 'Stock', grnPo['${e['grnId']}'] ?? '',
+          _v(e['amount']), 0, ''));
     }
     for (final u in _used) {
-      ents.add(make(
-          u, pick(u, ['atmId']), pick(u, ['poNo']), 0, _v(u['amount'])));
+      ents.add(make(u, pick(u, ['atmId']), pick(u, ['poNo']), 0,
+          _v(u['amount']), pick(u, ['terminalBarcode'])));
     }
     if (ents.isEmpty) {
       return Padding(
@@ -814,6 +817,21 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
           child: Text(t, style: const TextStyle(fontSize: 12)),
         ));
 
+    DataCell imgCell(String url) {
+      const s = 44.0;
+      const ic = SizedBox(
+          width: s, height: s, child: Icon(Icons.build_outlined));
+      if (url.isEmpty) return const DataCell(ic);
+      return DataCell(ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(url,
+            width: s,
+            height: s,
+            fit: BoxFit.cover,
+            errorBuilder: (c, e, st) => ic),
+      ));
+    }
+
     final table = Container(
       decoration: BoxDecoration(
           border: Border.all(color: cs.outlineVariant),
@@ -825,18 +843,20 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
           child: DataTable(
             columnSpacing: 18,
             headingRowHeight: 40,
-            dataRowMinHeight: 40,
-            dataRowMaxHeight: 56,
+            dataRowMinHeight: 52,
+            dataRowMaxHeight: 60,
             headingRowColor:
                 WidgetStatePropertyAll(cs.surfaceContainerHighest),
             columns: [
               for (final h in const [
+                'Image',
                 'Brand',
                 'Model',
                 'Full part',
                 'Part',
                 'Amount',
                 'ATM',
+                'Terminal',
                 'Barcode',
                 'PO'
               ])
@@ -845,25 +865,31 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
             rows: [
               for (final r in ents)
                 DataRow(cells: [
+                  imgCell(r[10]),
                   cell(r[0], w: 80),
                   cell(r[1], w: 150),
                   cell(r[2], w: 220),
                   cell(r[3], w: 160),
                   cell(r[4], w: 60, st: bold),
                   atmCell(r[5]),
+                  cell(r[11], w: 130),
                   cell(r[6], w: 130),
                   cell(r[7], w: 90),
                 ]),
-              DataRow(color: WidgetStatePropertyAll(cs.surfaceContainerHighest), cells: [
-                cell('Total', w: 80, st: bold),
-                cell(''),
-                cell(''),
-                cell(''),
-                cell('$allQty', w: 60, st: bold),
-                cell(''),
-                cell(''),
-                cell(''),
-              ]),
+              DataRow(
+                  color: WidgetStatePropertyAll(cs.surfaceContainerHighest),
+                  cells: [
+                    cell(''),
+                    cell('Total', w: 80, st: bold),
+                    cell(''),
+                    cell(''),
+                    cell(''),
+                    cell('$allQty', w: 60, st: bold),
+                    cell(''),
+                    cell(''),
+                    cell(''),
+                    cell(''),
+                  ]),
             ],
           ),
         ),
