@@ -19,6 +19,7 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
   Set<String> _selPos = <String>{};
   String _ptype = '';
   Map<String, String> _ptById = {};
+  Map<String, List<String>> _pinfo = {};
   List<String> _poOpts = [];
   List<dynamic> _pos = [];
   List<dynamic> _items = [];
@@ -60,6 +61,12 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       final byId = <String, String>{};
       final byName = <String, String>{};
       for (final m in asList(d)) {
+        _pinfo[pick(m, ['id', 'productId'])] = <String>[
+          pick(m, ['brandName']),
+          m['modelNames'] is List ? (m['modelNames'] as List).join('/') : '',
+          pick(m, ['typeName']),
+          pick(m, ['partNo']),
+        ];
         _ptById[pick(m, ['id', 'productId'])] = pick(m, ['partType']).isEmpty ? 'FULL' : pick(m, ['partType']).toUpperCase();
         final img = pick(m, ['imageUrl', 'image', 'photo']);
         if (img.isEmpty) continue;
@@ -366,6 +373,15 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
     return d < 0 && out != '0' ? '-$out' : out;
   }
 
+  String _pipe(dynamic x, String name, String loc, String atm, String po) {
+    final info = _pinfo[pick(x, ['productId'])] ?? <String>['', '', '', ''];
+    String f(String s) => s.isEmpty ? 'x' : s;
+    final type = info[2].isEmpty ? name : info[2];
+    final code = info[3].isEmpty ? pick(x, ['partNo']) : info[3];
+    final q = _v(x['qty']).round().toString().padLeft(2, '0');
+    return '${f(info[0])}|${f(info[1])}|${f(type)}|$q|${f(loc)}|${f(atm)}|${f(code)}|${f(po)}';
+  }
+
   List<BranchPoItem> _posFor(BranchPriceRow r) {
     final list = _pos
         .where((x) =>
@@ -388,7 +404,7 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
                   in _items.where((e) => '${e['grnId']}' == '${x['id']}'))
                 BranchLineItem(
                     name: pick(e, ['name']),
-                    sub: '${_k(e['unitCost'])} × ${pick(e, ['qty'])}',
+                    sub: _pipe(e, pick(e, ['name']), r.branch, 'x', pick(x, ['poNo'])),
                     amount: '${_k(e['amount'])} ${pick(x, ['currency'])}',
                     qty: '+${pick(e, ['qty'])}',
                     imageUrl: _imgFor(e)),
@@ -426,7 +442,7 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
           for (final x in xs)
             BranchLineItem(
                 name: pick(x, ['productName']),
-                sub: '${pick(x, ['createdAt']).split('T').first} · ${_po(x)}',
+                sub: _pipe(x, pick(x, ['productName']), 'x', pick(x, ['atmId']), pick(x, ['poNo'])),
                 amount: '${_k(x['amount'])} ${pick(x, ['currency'])}',
                 qty: '-${pick(x, ['qty'])}',
                 imageUrl: _imgFor(x, 'productName')),
@@ -448,9 +464,7 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
             name: pick(x, ['atmId']).isEmpty
                 ? pick(x, ['productName'])
                 : 'ATM ${pick(x, ['atmId'])}',
-            sub: '${pick(x, [
-                  'productName'
-                ])} · ${pick(x, ['createdAt']).split('T').first} · ${_po(x)}',
+            sub: _pipe(x, pick(x, ['productName']), 'x', pick(x, ['atmId']), pick(x, ['poNo'])),
             amount: '${_k(x['amount'])} ${pick(x, ['currency'])}',
             qty: '-${pick(x, ['qty'])}',
             imageUrl: _imgFor(x, 'productName')),
