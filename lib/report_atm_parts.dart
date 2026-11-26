@@ -706,6 +706,187 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
     ]);
   }
 
+  Widget _fullTable() {
+    final p = pal(context);
+    final cs = Theme.of(context).colorScheme;
+    final grnPo = <String, String>{};
+    for (final x in _pos) {
+      grnPo['${x['id']}'] = pick(x, ['poNo']);
+    }
+    String f(String s) => s.isEmpty ? '-' : s;
+    List<String> make(
+        dynamic x, String atm, String po, double buy, double used) {
+      final id = pick(x, ['productId']);
+      final inf = _pinfo[id] ?? <String>['', '', '', ''];
+      final fl = _pfull[id] ?? <String>['', 'FULL', '', ''];
+      final own = fl[0].isEmpty ? pick(x, ['name', 'productName']) : fl[0];
+      final partial = fl[1] == 'PARTIAL';
+      final pl = partial ? _pfull[fl[2]] : null;
+      final parent = (pl == null || pl.isEmpty) ? '' : pl[0];
+      final full = partial ? (parent.isEmpty ? own : parent) : own;
+      final part = partial ? own : '';
+      final bc = fl[3].isEmpty ? inf[3] : fl[3];
+      return <String>[
+        f(inf[0]),
+        f(inf[1]),
+        f(full),
+        f(part),
+        _v(x['qty']).round().toString(),
+        f(atm),
+        f(bc),
+        f(po),
+        '$buy',
+        '$used',
+      ];
+    }
+
+    final ents = <List<String>>[];
+    for (final e in _items) {
+      ents.add(make(
+          e, 'Stock', grnPo['${e['grnId']}'] ?? '', _v(e['amount']), 0));
+    }
+    for (final u in _used) {
+      ents.add(make(
+          u, pick(u, ['atmId']), pick(u, ['poNo']), 0, _v(u['amount'])));
+    }
+    if (ents.isEmpty) {
+      return Padding(
+          padding: const EdgeInsets.all(32),
+          child: Center(
+              child: Text('ບໍ່ມີຂໍ້ມູນ', style: TextStyle(color: p.mut))));
+    }
+    ents.sort((a, b) {
+      for (final i in const [0, 1, 2, 3]) {
+        final c = a[i].compareTo(b[i]);
+        if (c == 0) continue;
+        return c;
+      }
+      return 0;
+    });
+    double sum(int i) {
+      var t = 0.0;
+      for (final r in ents) {
+        t += double.tryParse(r[i]) ?? 0;
+      }
+      return t;
+    }
+
+    final allBuy = sum(8);
+    final allUsed = sum(9);
+    final allQty = sum(4).round();
+    const bold = TextStyle(fontWeight: FontWeight.w700);
+
+    Widget stat(String label, double v, Color bg, Color fg) => Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            decoration: BoxDecoration(
+                color: bg, borderRadius: BorderRadius.circular(14)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(color: fg, fontSize: 12)),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(_k(v),
+                      style: TextStyle(
+                          color: fg,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+          ),
+        );
+
+    DataCell cell(String t, {double w = 170, TextStyle? st}) => DataCell(
+        ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: w),
+            child: Text(t,
+                maxLines: 2, overflow: TextOverflow.ellipsis, style: st)));
+
+    DataCell atmCell(String t) => DataCell(Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+              color:
+                  t == 'Stock' ? cs.secondaryContainer : cs.tertiaryContainer,
+              borderRadius: BorderRadius.circular(10)),
+          child: Text(t, style: const TextStyle(fontSize: 12)),
+        ));
+
+    final table = Container(
+      decoration: BoxDecoration(
+          border: Border.all(color: cs.outlineVariant),
+          borderRadius: BorderRadius.circular(12)),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            columnSpacing: 18,
+            headingRowHeight: 40,
+            dataRowMinHeight: 40,
+            dataRowMaxHeight: 56,
+            headingRowColor:
+                WidgetStatePropertyAll(cs.surfaceContainerHighest),
+            columns: [
+              for (final h in const [
+                'Brand',
+                'Model',
+                'Full part',
+                'Part',
+                'Amount',
+                'ATM',
+                'Barcode',
+                'PO'
+              ])
+                DataColumn(label: Text(h, style: bold))
+            ],
+            rows: [
+              for (final r in ents)
+                DataRow(cells: [
+                  cell(r[0], w: 80),
+                  cell(r[1], w: 150),
+                  cell(r[2], w: 220),
+                  cell(r[3], w: 160),
+                  cell(r[4], w: 60, st: bold),
+                  atmCell(r[5]),
+                  cell(r[6], w: 130),
+                  cell(r[7], w: 90),
+                ]),
+              DataRow(color: WidgetStatePropertyAll(cs.surfaceContainerHighest), cells: [
+                cell('Total', w: 80, st: bold),
+                cell(''),
+                cell(''),
+                cell(''),
+                cell('$allQty', w: 60, st: bold),
+                cell(''),
+                cell(''),
+                cell(''),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        stat('Price buy · $_cur', allBuy, cs.primaryContainer,
+            cs.onPrimaryContainer),
+        const SizedBox(width: 8),
+        stat('Used', allUsed, cs.tertiaryContainer, cs.onTertiaryContainer),
+        const SizedBox(width: 8),
+        stat('Total', allBuy - allUsed, cs.secondaryContainer,
+            cs.onSecondaryContainer),
+      ]),
+      const SizedBox(height: 12),
+      Text('ລາຍລະອຽດອາໄຫຼ່ · ${ents.length} ແຖວ', style: bold),
+      const SizedBox(height: 8),
+      table,
+    ]);
+  }
+
   void _openDocs() {
     var name = 'ທຸກສາຂາ';
     for (final b in _branches) {
@@ -889,7 +1070,7 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
                       child:
                           Text('ບໍ່ມີຂໍ້ມູນ', style: TextStyle(color: p.mut))));
             }
-            return _brandTable();
+            return _fullTable();
           },
         ),
       ]),
