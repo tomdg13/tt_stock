@@ -10,7 +10,6 @@ import 'api.dart';
 import 'plan_bar.dart';
 import 'product_images.dart' show productImageUrl;
 import 'purchase_orders.dart' show kPoDocExt;
-import 'repair_case.dart' show repairMySide;
 import 'withdraw_bill.dart' show WithdrawBillPage;
 
 /// Documents of an approved withdrawal (upload by the branch, check by Head Office).
@@ -95,24 +94,19 @@ class WithdrawDocsSectionState extends State<WithdrawDocsSection> {
   String get _status => '${widget.w['status'] ?? ''}';
   String get _docStatus => '${widget.w['docStatus'] ?? ''}';
   int get _stage => int.tryParse('${widget.w['stage'] ?? ''}') ?? 2;
-  String _side = 'any';
   bool _problem = false;
   final TextEditingController _noteC = TextEditingController();
-  bool get _hqStep => _stage == 3 || _stage == 7;
   bool get _mayUpload =>
       widget.canUpload &&
       _status != 'closed' &&
       _stage >= 2 &&
       _stage <= 7 &&
-      (_hqStep == false || _side != 'branch');
+      Api.can('WD_S$_stage');
 
   @override
   void initState() {
     super.initState();
     _load();
-    repairMySide().then((v) {
-      if (mounted) setState(() => _side = v);
-    });
   }
 
   @override
@@ -409,7 +403,7 @@ class WithdrawDocsSectionState extends State<WithdrawDocsSection> {
                       ? wdStageLabel(_stage)
                       : (_status == 'closed'
                           ? 'ປິດເຄດແລ້ວ ບໍ່ສາມາດອັບເພີ່ມ'
-                          : 'ຂັ້ນ $_stage · ລໍຖ້າ Head Office'),
+                          : 'ຂັ້ນ $_stage · ຂັ້ນນີ້ບໍ່ແມ່ນສິດຂອງທ່ານ'),
                   style: TextStyle(color: mut))),
           if (_mayUpload) ...[
             const SizedBox(height: 8),
@@ -605,17 +599,8 @@ class WithdrawDocCheckDetail extends StatefulWidget {
 
 class _WithdrawDocCheckDetailState extends State<WithdrawDocCheckDetail> {
   final _note = TextEditingController();
-  String _side = 'any';
   bool _busy = false;
   String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    repairMySide().then((s) {
-      if (mounted) setState(() => _side = s);
-    });
-  }
 
   @override
   void dispose() {
@@ -698,7 +683,7 @@ class _WithdrawDocCheckDetailState extends State<WithdrawDocCheckDetail> {
         const SizedBox(height: 8),
         WithdrawDocsSection(w, canUpload: false),
         const SizedBox(height: 8),
-        if (st == 'submitted' && _side != 'branch') ...[
+        if (st == 'submitted' && Api.can('WD_S3')) ...[
           TextField(
             controller: _note,
             maxLines: 2,
@@ -750,6 +735,109 @@ class _WithdrawDocsPageState extends State<WithdrawDocsPage> {
   late Map<String, dynamic> _w = Map<String, dynamic>.from(widget.w);
   final GlobalKey<WithdrawDocsSectionState> _key =
       GlobalKey<WithdrawDocsSectionState>();
+  bool _closing = false;
+
+  Future<void> _closeCase() async {
+    final items = (_w['items'] is List ? _w['items'] as List : const [])
+        .whereType<Map>()
+        .toList();
+    var problems = <Map>[];
+    try {
+      final n = await Api.get('/withdrawals/${_w['id']}/notes');
+      if (n is List) {
+        problems = [
+          for (final x in n)
+            if (x is Map && x['problem'] == true) x
+        ];
+      }
+    } catch (e) {
+      debugPrint('[WD] notes load failed: $e');
+    }
+    if (mounted == false) return;
+    final used = {
+      for (final i in items)
+        '${i['id']}': TextEditingController(text: '${i['qtyUsed'] ?? 0}')
+    };
+    final back = {
+      for (final i in items)
+        '${i['id']}': TextEditingController(text: '${i['qtyReturned'] ?? 0}')
+    };
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('ປິດເຄດ ${_w['withdrawNo'] ?? _w['id']}'),
+        content: SingleChildScrollView(
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (problems.isNotEmpty) ...[
+                  const Text('ສາຂາລາຍງານບັນຫາ:',
+                      style: TextStyle(
+                          color: Colors.orange, fontWeight: FontWeight.w700)),
+                  for (final p in problems)
+                    Text('ຂັ້ນ ${p['stage']}: ${p['note'] ?? ''}'),
+                  const SizedBox(height: 12),
+                ],
+                for (final i in items) ...[
+                  Text('${i['productName']} (ເບີກ ${i['qty']})'),
+                  Row(children: [
+                    Expanded(
+                        child: TextField(
+                            controller: used['${i['id']}'],
+                            keyboardType: TextInputType.number,
+                            decoration:
+                                const InputDecoration(labelText: 'ໃຊ້ແລ້ວ'))),
+                    const SizedBox(width: 8),
+                    Expanded(
+                        child: TextField(
+                            controller: back['${i['id']}'],
+                            keyboardType: TextInputType.number,
+                            decoration:
+                                const InputDecoration(labelText: 'ຄືນ'))),
+                  ]),
+                  const SizedBox(height: 12),
+                ],
+              ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('ຍົກເລີກ')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('ປິດເຄດ')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _closing = true);
+    try {
+      await Api.post('/withdrawals/${_w['id']}/return', {
+        'items': [
+          for (final i in items)
+            {
+              'id': i['id'],
+              'qtyUsed': int.tryParse(used['${i['id']}']?.text ?? '') ?? 0,
+              'qtyReturned': int.tryParse(back['${i['id']}']?.text ?? '') ?? 0,
+            }
+        ],
+      });
+      await _reloadW();
+      await _key.currentState?.reload();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('ປິດເຄດແລ້ວ')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _closing = false);
+    }
+  }
 
   Future<void> _reloadW() async {
     try {
@@ -783,6 +871,11 @@ class _WithdrawDocsPageState extends State<WithdrawDocsPage> {
             await _reloadW();
             await _key.currentState?.reload();
           }),
+          if (Api.can('WD_S7') &&
+              '${_w['status']}' == 'open' &&
+              (int.tryParse('${_w['stage'] ?? ''}') ?? 0) == 7)
+            PlanNavItem(Icons.task_alt, 'ປິດເຄດ',
+                _closing ? null : _closeCase, loading: _closing),
         ],
       ),
     );

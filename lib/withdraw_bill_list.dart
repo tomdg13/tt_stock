@@ -76,7 +76,7 @@ class _WithdrawBillListPageState extends State<WithdrawBillListPage> {
             borderRadius: BorderRadius.circular(8)),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Badge(
-            isLabelVisible: n > 0,
+            isLabelVisible: t.key == 'closed' ? false : n > 0,
             label: Text('$n'),
             child: Icon(t.icon, size: 28, color: c),
           ),

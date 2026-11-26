@@ -2,7 +2,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'api.dart';
-import 'repair_case.dart' show repairMySide;
 import 'plan_bar.dart';
 import 'withdraw_docs.dart';
 import 'ldb_letterhead.dart' show LdbLetterhead, loadLetterhead;
@@ -21,7 +20,6 @@ class WithdrawBillPage extends StatefulWidget {
 }
 
 class _WithdrawBillPageState extends State<WithdrawBillPage> {
-  late final Future<String> _sideF = repairMySide();
   late Map<String, dynamic> _d = widget.data;
   bool _busy = false;
   final Map<String, String> _img = {};
@@ -483,10 +481,8 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
           ],
         ]),
       ),
-      bottomNavigationBar: FutureBuilder<String>(
-        future: _sideF,
-        builder: (context, snap) {
-          final hq = (snap.data ?? 'any') != 'branch';
+      bottomNavigationBar: Builder(
+        builder: (context) {
           final st = '${_d['status']}';
           final sg = int.tryParse('${_d['stage'] ?? ''}') ?? 0;
           PlanNavItem docs(IconData ic, String label) =>
@@ -520,17 +516,33 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
           if (st == 'closed') {
             items = [folder, prn, shr];
           } else if (st == 'requested' && sg == 3) {
-            items = hq ? [folder, okBtn, noBtn, prn] : [folder, prn, shr];
+            items = Api.can('WD_S3') ? [folder, okBtn, noBtn, prn] : [folder, prn, shr];
           } else if (sg == 7) {
-            items = hq ? [folder, closeBtn, prn, shr] : [folder, prn, shr];
+            items = Api.can('WD_S7') ? [folder, closeBtn, prn, shr] : [folder, prn, shr];
           } else if (st == 'requested') {
-            items = [docs(Icons.upload_file, 'ອັບເອກະສານ'), prn, shr];
+            items = [
+              Api.can('WD_S2') ? docs(Icons.upload_file, 'ອັບເອກະສານ') : folder,
+              prn,
+              shr
+            ];
           } else if (sg == 4) {
-            items = [docs(Icons.inventory_2_outlined, 'ຮັບເຄື່ອງ'), prn, shr];
+            items = [
+              Api.can('WD_S4') ? docs(Icons.inventory_2_outlined, 'ຮັບເຄື່ອງ') : folder,
+              prn,
+              shr
+            ];
           } else if (sg == 5) {
-            items = [docs(Icons.build_outlined, 'ຕິດຕັ້ງ'), prn, shr];
+            items = [
+              Api.can('WD_S5') ? docs(Icons.build_outlined, 'ຕິດຕັ້ງ') : folder,
+              prn,
+              shr
+            ];
           } else if (sg == 6) {
-            items = [docs(Icons.undo, 'ສົ່ງຄືນ'), prn, shr];
+            items = [
+              Api.can('WD_S6') ? docs(Icons.undo, 'ສົ່ງຄືນ') : folder,
+              prn,
+              shr
+            ];
           } else {
             items = [folder, prn, shr];
           }

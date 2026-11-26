@@ -127,6 +127,12 @@ const permLabels = {
   'SERIAL_MANAGE': 'ຈັດການ Serial',
   'ROLE_MANAGE': 'ຈັດການບົດບາດ/ຟັງຊັນ',
   'ATM_MANAGE': 'ຈັດການຕູ້ ATM / Terminal',
+  'WD_S2': 'ໃບເບີກ ຂັ້ນ 2: ສ້າງ / ອັບເອກະສານທີ່ເຊັນ',
+  'WD_S3': 'ໃບເບີກ ຂັ້ນ 3: ອະນຸມັດ / ບໍ່ອະນຸມັດ',
+  'WD_S4': 'ໃບເບີກ ຂັ້ນ 4: ຮັບເຄື່ອງ',
+  'WD_S5': 'ໃບເບີກ ຂັ້ນ 5: ຕິດຕັ້ງ',
+  'WD_S6': 'ໃບເບີກ ຂັ້ນ 6: ສົ່ງອາໄຫຼ່ຄືນ',
+  'WD_S7': 'ໃບເບີກ ຂັ້ນ 7: HQ ຮັບຄືນ / ປິດເຄດ',
 };
 
 /// One row of the role permission table: which API permission codes the
@@ -143,6 +149,12 @@ const permPages = <PermPage>[
   PermPage('ສະຕັອກ / ສິນຄ້າ / Serial / ຕູ້ ATM', view: ['STOCK_VIEW']),
   PermPage('ຮັບເຂົ້າ', edit: ['RECEIVE']),
   PermPage('ເອົາອອກ', edit: ['ISSUE']),
+  PermPage('ໃບເບີກ ຂັ້ນ 2: ສ້າງ / ອັບເອກະສານທີ່ເຊັນ', edit: ['WD_S2']),
+  PermPage('ໃບເບີກ ຂັ້ນ 3: ອະນຸມັດ / ບໍ່ອະນຸມັດ', edit: ['WD_S3']),
+  PermPage('ໃບເບີກ ຂັ້ນ 4: ຮັບເຄື່ອງ', edit: ['WD_S4']),
+  PermPage('ໃບເບີກ ຂັ້ນ 5: ຕິດຕັ້ງ', edit: ['WD_S5']),
+  PermPage('ໃບເບີກ ຂັ້ນ 6: ສົ່ງອາໄຫຼ່ຄືນ', edit: ['WD_S6']),
+  PermPage('ໃບເບີກ ຂັ້ນ 7: HQ ຮັບຄືນ / ປິດເຄດ', edit: ['WD_S7']),
   PermPage('ໂອນສາຂາ (ສົ່ງ / ຍົກເລີກ)', edit: ['TRANSFER_SEND']),
   PermPage('ໂອນສາຂາ (ຮັບເຄື່ອງ)', edit: ['TRANSFER_RECEIVE']),
   PermPage('ຂໍອາໄຫຼ່ (ສົ່ງຄຳຂໍ)', edit: ['REQUEST_SEND']),
