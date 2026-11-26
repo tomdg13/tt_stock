@@ -1,3 +1,4 @@
+import 'report_atm_parts.dart';
 import 'transfer_home.dart';
 import 'services/biometric_service.dart';
 import 'image_search.dart';
@@ -1647,13 +1648,6 @@ class ReportStockPage extends StatelessWidget {
       body: const Center(child: Text('ກຳລັງພັດທະນາ')));
 }
 
-class ReportAtmPartsPage extends StatelessWidget {
-  const ReportAtmPartsPage({super.key});
-  @override
-  Widget build(BuildContext context) => Scaffold(
-      appBar: AppBar(title: const Text('ຕູ້ ATM ທີ່ປ່ຽນອາໄຫຼ່')),
-      body: const Center(child: Text('ກຳລັງພັດທະນາ')));
-}
 
 // ------------------------------------------------------------ Stock report
 const String kStockReportEndpoint = '/stock/overview';
