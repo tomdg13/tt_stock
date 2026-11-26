@@ -21,6 +21,7 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
   String _cur = 'USD';
   Map<String, String> _ptById = {};
   Map<String, List<String>> _pinfo = {};
+  Map<String, List<String>> _pfull = {};
   List<String> _poOpts = [];
   List<dynamic> _pos = [];
   List<dynamic> _items = [];
@@ -62,6 +63,12 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       final byId = <String, String>{};
       final byName = <String, String>{};
       for (final m in asList(d)) {
+        _pfull[pick(m, ['id', 'productId'])] = <String>[
+          pick(m, ['name', 'productName']),
+          pick(m, ['partType']).toUpperCase(),
+          pick(m, ['parentProductId']),
+          pick(m, ['barcode']),
+        ];
         _pinfo[pick(m, ['id', 'productId'])] = <String>[
           pick(m, ['brandName']),
           m['modelNames'] is List ? (m['modelNames'] as List).join('/') : '',
@@ -477,6 +484,228 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
     ];
   }
 
+  Widget _brandTable() {
+    final p = pal(context);
+    final cs = Theme.of(context).colorScheme;
+    final grnPo = <String, String>{};
+    for (final x in _pos) {
+      grnPo['${x['id']}'] = pick(x, ['poNo']);
+    }
+    String f(String s) => s.isEmpty ? '-' : s;
+    List<String> make(
+        dynamic x, String atm, String po, double buy, double used) {
+      final id = pick(x, ['productId']);
+      final inf = _pinfo[id] ?? <String>['', '', '', ''];
+      final fl = _pfull[id] ?? <String>['', 'FULL', '', ''];
+      final own = fl[0].isEmpty ? pick(x, ['name', 'productName']) : fl[0];
+      final partial = fl[1] == 'PARTIAL';
+      final pl = partial ? _pfull[fl[2]] : null;
+      final parent = (pl == null || pl.isEmpty) ? '' : pl[0];
+      final full = partial ? (parent.isEmpty ? own : parent) : own;
+      final part = partial ? own : '';
+      final bc = fl[3].isEmpty ? inf[3] : fl[3];
+      return <String>[
+        f(inf[0]),
+        f(inf[1]),
+        f(full),
+        f(part),
+        _v(x['qty']).round().toString(),
+        f(atm),
+        f(bc),
+        f(po),
+        '$buy',
+        '$used',
+      ];
+    }
+
+    final ents = <List<String>>[];
+    for (final e in _items) {
+      ents.add(make(
+          e, 'Stock', grnPo['${e['grnId']}'] ?? '', _v(e['amount']), 0));
+    }
+    for (final u in _used) {
+      ents.add(make(
+          u, pick(u, ['atmId']), pick(u, ['poNo']), 0, _v(u['amount'])));
+    }
+    if (ents.isEmpty) {
+      return Padding(
+          padding: const EdgeInsets.all(32),
+          child: Center(
+              child: Text('ບໍ່ມີຂໍ້ມູນ', style: TextStyle(color: p.mut))));
+    }
+    final tree = <String, Map<String, List<List<String>>>>{};
+    for (final r in ents) {
+      tree
+          .putIfAbsent(r[0], () => <String, List<List<String>>>{})
+          .putIfAbsent(r[1], () => <List<String>>[])
+          .add(r);
+    }
+    double sum(Iterable<List<String>> l, int i) {
+      var t = 0.0;
+      for (final r in l) {
+        t += double.tryParse(r[i]) ?? 0;
+      }
+      return t;
+    }
+
+    final allBuy = sum(ents, 8);
+    final allUsed = sum(ents, 9);
+    final small = TextStyle(color: p.mut, fontSize: 12);
+    const bold = TextStyle(fontWeight: FontWeight.w700);
+
+    Widget stat(String label, double v, Color bg, Color fg) => Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            decoration: BoxDecoration(
+                color: bg, borderRadius: BorderRadius.circular(14)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(color: fg, fontSize: 12)),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(_k(v),
+                      style: TextStyle(
+                          color: fg,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+          ),
+        );
+
+    Widget atmChip(String t) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+              color:
+                  t == 'Stock' ? cs.secondaryContainer : cs.tertiaryContainer,
+              borderRadius: BorderRadius.circular(10)),
+          child: Text(t, style: const TextStyle(fontSize: 12)),
+        );
+
+    Widget detail(List<List<String>> l) => Container(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          decoration: BoxDecoration(
+              border: Border.all(color: cs.outlineVariant),
+              borderRadius: BorderRadius.circular(12)),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columnSpacing: 18,
+                headingRowHeight: 38,
+                dataRowMinHeight: 40,
+                dataRowMaxHeight: 52,
+                headingRowColor:
+                    WidgetStatePropertyAll(cs.surfaceContainerHighest),
+                columns: [
+                  for (final h in const [
+                    'Full part',
+                    'Part',
+                    'Amount',
+                    'ATM',
+                    'Barcode',
+                    'PO'
+                  ])
+                    DataColumn(label: Text(h, style: bold))
+                ],
+                rows: [
+                  for (final r in l)
+                    DataRow(cells: [
+                      DataCell(Text(r[2])),
+                      DataCell(Text(r[3])),
+                      DataCell(Text(r[4], style: bold)),
+                      DataCell(atmChip(r[5])),
+                      DataCell(Text(r[6])),
+                      DataCell(Text(r[7])),
+                    ])
+                ],
+              ),
+            ),
+          ),
+        );
+
+    double brandNet(String b) {
+      var t = 0.0;
+      for (final l in (tree[b] ?? <String, List<List<String>>>{}).values) {
+        t += sum(l, 8) - sum(l, 9);
+      }
+      return t;
+    }
+
+    final brands = tree.keys.toList();
+    brands.sort((a, b) => brandNet(b).compareTo(brandNet(a)));
+    final cards = <Widget>[];
+    for (final b in brands) {
+      final models = tree[b] ?? <String, List<List<String>>>{};
+      final all = <List<String>>[
+        for (final l in models.values) ...l,
+      ];
+      final mkeys = models.keys.toList()..sort();
+      cards.add(Card(
+        elevation: 0,
+        clipBehavior: Clip.antiAlias,
+        margin: const EdgeInsets.only(bottom: 10),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: cs.outlineVariant)),
+        child: ExpansionTile(
+          shape: const Border(),
+          collapsedShape: const Border(),
+          leading: CircleAvatar(
+              backgroundColor: cs.primaryContainer,
+              foregroundColor: cs.onPrimaryContainer,
+              child: Text(b.isEmpty ? '-' : b.substring(0, 1).toUpperCase())),
+          title: Row(children: [
+            Expanded(child: Text(b, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+            Text(_k(sum(all, 8) - sum(all, 9)), style: bold),
+          ]),
+          subtitle: Text(
+              '${mkeys.length} model · ${all.length} ແຖວ · Buy ${_k(sum(all, 8))} · Used ${_k(sum(all, 9))}',
+              style: small),
+          children: [
+            for (final m in mkeys)
+              ExpansionTile(
+                tilePadding: const EdgeInsets.only(left: 20, right: 12),
+                shape: const Border(),
+                collapsedShape: const Border(),
+                leading: Icon(Icons.memory_outlined, color: cs.primary),
+                title: Row(children: [
+                  Expanded(
+                      child: Text(m == '-' ? 'ບໍ່ມີ Model' : m,
+                          style: const TextStyle(fontWeight: FontWeight.w600))),
+                  Text(
+                      _k(sum(models[m] ?? <List<String>>[], 8) -
+                          sum(models[m] ?? <List<String>>[], 9)),
+                      style: bold),
+                ]),
+                subtitle: Text(
+                    'Buy ${_k(sum(models[m] ?? <List<String>>[], 8))} · Used ${_k(sum(models[m] ?? <List<String>>[], 9))}',
+                    style: small),
+                children: [detail(models[m] ?? <List<String>>[])],
+              ),
+          ],
+        ),
+      ));
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        stat('Price buy · $_cur', allBuy, cs.primaryContainer,
+            cs.onPrimaryContainer),
+        const SizedBox(width: 8),
+        stat('Used', allUsed, cs.tertiaryContainer, cs.onTertiaryContainer),
+        const SizedBox(width: 8),
+        stat('Total', allBuy - allUsed, cs.secondaryContainer,
+            cs.onSecondaryContainer),
+      ]),
+      const SizedBox(height: 12),
+      ...cards,
+    ]);
+  }
+
   void _openDocs() {
     var name = 'ທຸກສາຂາ';
     for (final b in _branches) {
@@ -660,12 +889,7 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
                       child:
                           Text('ບໍ່ມີຂໍ້ມູນ', style: TextStyle(color: p.mut))));
             }
-            return BranchPriceTable(
-                key: ValueKey('t-${_range.start}-${_range.end}-$_branchId'),
-                rows: rows,
-                children: _posFor,
-                used: _usedFor,
-                usedGroups: _usedGroupsFor);
+            return _brandTable();
           },
         ),
       ]),
