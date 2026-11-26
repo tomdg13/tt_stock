@@ -3,9 +3,24 @@ import 'api.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'product_images.dart';
-import 'branch_price_table.dart';
-import 'report_docs_page.dart';
-import 'price_report_export.dart';
+
+class _PoGroup {
+  _PoGroup(this.po);
+  final String po;
+  final List<dynamic> grns = <dynamic>[];
+  final List<dynamic> items = <dynamic>[];
+  final List<dynamic> used = <dynamic>[];
+}
+
+class _SpRow {
+  _SpRow(this.productId, this.name);
+  final String productId;
+  String name;
+  int recv = 0;
+  int usedQty = 0;
+  double usedAmt = 0;
+  final List<dynamic> atms = <dynamic>[];
+}
 
 class ReportAtmPartsPage extends StatefulWidget {
   const ReportAtmPartsPage({super.key});
@@ -14,38 +29,35 @@ class ReportAtmPartsPage extends StatefulWidget {
 }
 
 class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
-  List<Map<String, dynamic>> _branches = [];
-  dynamic _branchId;
   List<dynamic> _pos = [];
   List<dynamic> _items = [];
   List<dynamic> _used = [];
   Map<String, String> _imgById = {};
   Map<String, String> _imgByName = {};
+  String? _sel;
   String _mode = 'month';
   DateTime _anchor = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTimeRange _range = DateTimeRange(
       start: DateTime(DateTime.now().year, DateTime.now().month, 1),
       end: DateTime(DateTime.now().year, DateTime.now().month + 1, 0));
-  Future<List<BranchPriceRow>>? _f;
+  Future<int>? _f;
 
   String _d(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   double _v(dynamic v) => double.tryParse('$v') ?? 0;
-  String _n(dynamic v) => _v(v).toStringAsFixed(2);
-  String _po(dynamic x) =>
-      pick(x, ['poNo']).isEmpty ? 'ບໍ່ມີ PO' : pick(x, ['poNo']);
+  int _n(dynamic v) => _v(v).round();
+  String _date(dynamic v) => v == null ? '' : '$v'.split('T').first;
 
   String get _label => _mode == 'year'
       ? '${_anchor.year}'
       : '${_anchor.year}-${_anchor.month.toString().padLeft(2, '0')}';
 
+  String _poName(String po) => po.isEmpty ? 'ບໍ່ມີ PO' : 'PO $po';
+
   @override
   void initState() {
     super.initState();
-    loadBranches().then((b) {
-      if (mounted) setState(() => _branches = b);
-    }).catchError((_) {});
     _loadImgs();
     _load();
   }
@@ -114,73 +126,6 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
     _load();
   }
 
-  String _url() =>
-      '/repair/price-report-branch?from=${_d(_range.start)}&to=${_d(_range.end)}${_branchId == null ? '' : '&branchId=$_branchId'}';
-
-  Future<List<BranchPriceRow>> _loadAll() async {
-    final bl = _branches.isEmpty ? await loadBranches() : _branches;
-    final d = await Api.get(_url());
-    final m = d is Map ? d : {};
-    final pur = asList(m['purchases']);
-    final usd = asList(m['used']);
-    _pos = asList(m['pos']);
-    _items = asList(m['items']);
-    _used = asList(m['usedItems']);
-    final miss = _v(m['lakMissing']);
-    if (miss > 0 && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${miss.round()} GRN ຍັງບໍ່ມີມູນຄ່າ LAK ຈາກບັນຊີ'),
-          duration: const Duration(seconds: 6)));
-    }
-    final list = _branchId == null
-        ? bl
-        : bl.where((b) => '${b['id']}' == '$_branchId').toList();
-    final out = <BranchPriceRow>[];
-    for (final b in list) {
-      final id = '${b['id']}';
-      final name = pick(b, ['name', 'branchName', 'id']);
-      final cur = <String, List<double>>{};
-      for (final r in pur) {
-        if ('${r['branchId']}' == id) {
-          final a = cur.putIfAbsent(pick(r, ['currency']), () => [0.0, 0.0]);
-          a[0] += _v(r['total']);
-        }
-      }
-      for (final r in usd) {
-        if ('${r['branchId']}' == id) {
-          final a = cur.putIfAbsent(pick(r, ['currency']), () => [0.0, 0.0]);
-          a[1] += _v(r['used']);
-        }
-      }
-      if (cur.isEmpty) {
-        out.add(BranchPriceRow(
-            branchId: id,
-            branch: name,
-            currency: '',
-            priceBuy: 0,
-            priceSale: 0,
-            total: 0));
-      } else {
-        for (final e in cur.entries) {
-          out.add(BranchPriceRow(
-              branchId: id,
-              branch: name,
-              currency: e.key,
-              priceBuy: e.value[0],
-              priceSale: e.value[1],
-              total: e.value[0] - e.value[1]));
-        }
-      }
-    }
-    return out;
-  }
-
-  void _load() {
-    setState(() {
-      _f = _loadAll();
-    });
-  }
-
   Future<void> _pickRange() async {
     final r = await showDateRangePicker(
         context: context,
@@ -192,11 +137,20 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
     _load();
   }
 
-  String _imgFor(dynamic e, [String nameKey = 'name']) {
-    final v = _imgById[pick(e, ['productId'])] ??
-        _imgByName[pick(e, [nameKey]).toLowerCase()] ??
-        '';
-    return productImageUrl(v);
+  Future<int> _fetch() async {
+    final d = await Api.get(
+        '/repair/price-report-branch?from=${_d(_range.start)}&to=${_d(_range.end)}');
+    final m = d is Map ? d : {};
+    _pos = asList(m['pos']);
+    _items = asList(m['items']);
+    _used = asList(m['usedItems']);
+    return _pos.length;
+  }
+
+  void _load() {
+    setState(() {
+      _f = _fetch();
+    });
   }
 
   String _k(dynamic v) {
@@ -221,195 +175,180 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       }
       out = b.toString();
     }
-    return d < 0 && out != '0' ? '-$out' : out;
-  }
-
-  List<BranchPoItem> _posFor(BranchPriceRow r) {
-    final list = _pos
-        .where((x) =>
-            '${x['branchId']}' == r.branchId &&
-            (r.currency.isEmpty || pick(x, ['currency']) == r.currency))
-        .toList();
-    return [
-      for (final x in list)
-        BranchPoItem(
-            id: '${x['id']}',
-            po: pick(x, ['poNo']).isEmpty
-                ? 'ບໍ່ມີ PO'
-                : 'PO ${pick(x, ['poNo'])}',
-            sub: '${pick(x, [
-                  'grnNo'
-                ])} · ${pick(x, ['receiptDate']).split('T').first}',
-            amount: '${_k(x['total'])} ${pick(x, ['currency'])}',
-            lines: [
-              for (final e
-                  in _items.where((e) => '${e['grnId']}' == '${x['id']}'))
-                BranchLineItem(
-                    name: pick(e, ['name']),
-                    sub: '${_k(e['unitCost'])} × ${pick(e, ['qty'])}',
-                    amount: '${_k(e['amount'])} ${pick(x, ['currency'])}',
-                    qty: '+${pick(e, ['qty'])}',
-                    imageUrl: _imgFor(e)),
-            ]),
-    ];
-  }
-
-  List<BranchPoItem> _usedGroupsFor(BranchPriceRow r) {
-    final list = _used
-        .where((x) =>
-            '${x['branchId']}' == r.branchId &&
-            (r.currency.isEmpty || pick(x, ['currency']) == r.currency))
-        .toList();
-    final groups = <String, List<dynamic>>{};
-    for (final x in list) {
-      groups.putIfAbsent(pick(x, ['atmId']), () => <dynamic>[]).add(x);
-    }
-    final out = <BranchPoItem>[];
-    groups.forEach((id, xs) {
-      double tot = 0;
-      var parts = 0;
-      var last = '';
-      for (final x in xs) {
-        tot += _v(x['amount']);
-        parts += _v(x['qty']).round();
-        final d = pick(x, ['createdAt']).split('T').first;
-        if (d.compareTo(last) > 0) last = d;
-      }
-      out.add(BranchPoItem(
-        id: 'atm-${r.branchId}-$id',
-        po: id.isEmpty ? 'ບໍ່ມີ ATM ID' : 'ATM $id',
-        sub: '$parts ອາໄຫຼ່ · $last',
-        amount: '${_k(tot)} ${r.currency}',
-        lines: [
-          for (final x in xs)
-            BranchLineItem(
-                name: pick(x, ['productName']),
-                sub: '${pick(x, ['createdAt']).split('T').first} · ${_po(x)}',
-                amount: '${_k(x['amount'])} ${pick(x, ['currency'])}',
-                qty: '-${pick(x, ['qty'])}',
-                imageUrl: _imgFor(x, 'productName')),
-        ],
-      ));
-    });
+    if (d < 0 && out.length > 1) return '-$out';
+    if (d < 0 && out.codeUnitAt(0) > 48) return '-$out';
     return out;
   }
 
-  List<BranchLineItem> _usedFor(BranchPriceRow r) {
-    final list = _used
-        .where((x) =>
-            '${x['branchId']}' == r.branchId &&
-            (r.currency.isEmpty || pick(x, ['currency']) == r.currency))
-        .toList();
-    return [
-      for (final x in list)
-        BranchLineItem(
-            name: pick(x, ['atmId']).isEmpty
-                ? pick(x, ['productName'])
-                : 'ATM ${pick(x, ['atmId'])}',
-            sub: '${pick(x, [
-                  'productName'
-                ])} · ${pick(x, ['createdAt']).split('T').first} · ${_po(x)}',
-            amount: '${_k(x['amount'])} ${pick(x, ['currency'])}',
-            qty: '-${pick(x, ['qty'])}',
-            imageUrl: _imgFor(x, 'productName')),
-    ];
+  String _imgFor(String productId, String name) {
+    final v = _imgById[productId] ?? _imgByName[name.toLowerCase()] ?? '';
+    return productImageUrl(v);
   }
 
-  void _openDocs() {
-    var name = 'ທຸກສາຂາ';
-    for (final b in _branches) {
-      if ('${b['id']}' == '$_branchId') {
-        name = pick(b, ['name', 'branchName', 'id']);
-      }
+  Widget _thumb(String url) {
+    const box = 40.0;
+    if (url.isEmpty) {
+      return const SizedBox(
+          width: box, height: box, child: Icon(Icons.build_outlined));
     }
-    debugPrint(
-        '[DOCS] open page branch=$_branchId from=${_d(_range.start)} to=${_d(_range.end)}');
-    Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => ReportDocsPage(
-            branchId: _branchId == null ? 0 : (int.tryParse('$_branchId') ?? 0),
-            branchName: name,
-            from: _d(_range.start),
-            to: _d(_range.end))));
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: Image.network(url,
+          width: box,
+          height: box,
+          fit: BoxFit.cover,
+          errorBuilder: (c, e, s) => const SizedBox(
+              width: box, height: box, child: Icon(Icons.build_outlined))),
+    );
   }
 
-  Future<void> _export(String kind) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final f = _f;
-      final rows = f == null ? <BranchPriceRow>[] : await f;
-      if (rows.isEmpty) {
-        messenger.showSnackBar(const SnackBar(content: Text('ບໍ່ມີຂໍ້ມູນ')));
-        return;
-      }
-      messenger.showSnackBar(const SnackBar(
-          content: Text('ກຳລັງສ້າງໄຟລ໌...'), duration: Duration(seconds: 15)));
-      var branchName = 'ທຸກສາຂາ';
-      for (final b in _branches) {
-        if ('${b['id']}' == '$_branchId') {
-          branchName = pick(b, ['name', 'branchName', 'id']);
-        }
-      }
-      final data = PriceReportData(
-          range: '${_d(_range.start)} - ${_d(_range.end)}',
-          branch: branchName,
-          rows: rows,
-          pos: _pos,
-          items: _items,
-          used: _used,
-          imgFor: (x, k) => _imgFor(x, k));
-      if (kind == 'pdf') {
-        await sharePriceReportPdf(data);
-      } else {
-        await sharePriceReportXlsx(data);
-      }
-    } catch (e) {
-      debugPrint('[REPORT] export $kind failed: $e');
-      messenger.showSnackBar(SnackBar(content: Text('ດາວໂຫຼດບໍ່ສຳເລັດ: $e')));
+  List<_PoGroup> _groups() {
+    final map = <String, _PoGroup>{};
+    _PoGroup g(String po) => map.putIfAbsent(po, () => _PoGroup(po));
+    final grnPo = <String, String>{};
+    for (final x in _pos) {
+      final po = pick(x, ['poNo']);
+      grnPo['${x['id']}'] = po;
+      g(po).grns.add(x);
     }
+    for (final it in _items) {
+      final po = grnPo['${it['grnId']}'];
+      if (po == null) continue;
+      g(po).items.add(it);
+    }
+    for (final u in _used) {
+      g(pick(u, ['poNo'])).used.add(u);
+    }
+    final list = map.values.toList();
+    list.sort((a, b) {
+      if (a.po.isEmpty) return 1;
+      if (b.po.isEmpty) return -1;
+      return b.po.compareTo(a.po);
+    });
+    return list;
+  }
+
+  List<_SpRow> _sps(_PoGroup g) {
+    final map = <String, _SpRow>{};
+    _SpRow row(String id, String name) =>
+        map.putIfAbsent(id, () => _SpRow(id, name));
+    for (final it in g.items) {
+      final r = row(pick(it, ['productId']), pick(it, ['name']));
+      r.recv += _n(it['qty']);
+    }
+    for (final u in g.used) {
+      final r = row(pick(u, ['productId']), pick(u, ['productName']));
+      if (r.name.isEmpty) r.name = pick(u, ['productName']);
+      r.usedQty += _n(u['qty']);
+      r.usedAmt += _v(u['amount']);
+      r.atms.add(u);
+    }
+    final list = map.values.toList();
+    list.sort((a, b) => b.usedQty.compareTo(a.usedQty));
+    return list;
+  }
+
+  Widget _spTile(_PoGroup g, _SpRow r) {
+    final p = pal(context);
+    final hasRecv = g.grns.isNotEmpty;
+    final left = r.recv - r.usedQty;
+    final sub = hasRecv
+        ? 'ຮັບ ${r.recv} · ໃຊ້ ${r.usedQty} · ເຫຼືອ $left'
+        : 'ໃຊ້ ${r.usedQty}';
+    final trailing = Text('${_k(r.usedAmt)} LAK',
+        style: const TextStyle(fontWeight: FontWeight.w600));
+    final lead = _thumb(_imgFor(r.productId, r.name));
+    if (r.atms.isEmpty) {
+      return ListTile(
+          dense: true,
+          leading: lead,
+          title: Text(r.name),
+          subtitle: Text(sub, style: TextStyle(color: p.mut)),
+          trailing: Text('ຍັງບໍ່ໄດ້ໃຊ້', style: TextStyle(color: p.mut)));
+    }
+    return ExpansionTile(
+      shape: const Border(),
+      collapsedShape: const Border(),
+      leading: lead,
+      title: Text(r.name),
+      subtitle: Text(sub, style: TextStyle(color: p.mut)),
+      trailing: trailing,
+      children: [
+        for (final u in r.atms)
+          ListTile(
+            dense: true,
+            contentPadding: const EdgeInsets.only(left: 72, right: 16),
+            title: Text(pick(u, ['atmId']).isEmpty
+                ? 'ບໍ່ມີ ATM ID'
+                : 'ATM ${pick(u, ['atmId'])}'),
+            subtitle: Text(_date(u['createdAt'])),
+            trailing: Text('-${_n(u['qty'])}'),
+          ),
+      ],
+    );
+  }
+
+  Widget _poCard(_PoGroup g, bool open) {
+    final p = pal(context);
+    final sps = _sps(g);
+    var usedQty = 0;
+    var usedAmt = 0.0;
+    for (final u in g.used) {
+      usedQty += _n(u['qty']);
+      usedAmt += _v(u['amount']);
+    }
+    var total = 0.0;
+    for (final x in g.grns) {
+      total += _v(x['total']);
+    }
+    final grnNos = g.grns.map((x) => pick(x, ['grnNo'])).join(', ');
+    final date = g.grns.isEmpty ? '' : _date(g.grns.first['receiptDate']);
+    final sub = g.grns.isEmpty
+        ? 'ຮັບກ່ອນໄລຍະນີ້ · ໃຊ້ $usedQty ອາໄຫຼ່'
+        : '$grnNos · $date · ໃຊ້ $usedQty ອາໄຫຼ່';
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ExpansionTile(
+        key: PageStorageKey('po-${g.po}-$open'),
+        initiallyExpanded: open,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: const Icon(Icons.receipt_long_outlined),
+        title: Text(_poName(g.po),
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(sub, style: TextStyle(color: p.mut, fontSize: 12)),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text('${_k(total)} LAK',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text('ໃຊ້ ${_k(usedAmt)}',
+                style: TextStyle(color: p.mut, fontSize: 12)),
+          ],
+        ),
+        children: [
+          if (sps.isEmpty)
+            Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('ບໍ່ມີອາໄຫຼ່', style: TextStyle(color: p.mut))),
+          for (final r in sps) _spTile(g, r),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final p = pal(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('ຕູ້ ATM ທີ່ປ່ຽນອາໄຫຼ່')),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 0,
-        indicatorColor: Colors.transparent,
-        onDestinationSelected: (i) {
-          if (i == 0) _export('xlsx');
-          if (i == 1) _export('pdf');
-          if (i == 2) _openDocs();
-        },
-        destinations: const [
-          NavigationDestination(
-              icon: Icon(Icons.table_view_outlined), label: 'Excel'),
-          NavigationDestination(
-              icon: Icon(Icons.picture_as_pdf_outlined), label: 'PDF'),
-          NavigationDestination(
-              icon: Icon(Icons.upload_file_outlined), label: 'ອັບໂຫຼດ'),
+      appBar: AppBar(
+        title: const Text('ຕູ້ ATM ທີ່ປ່ຽນອາໄຫຼ່'),
+        actions: [
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        DropdownButtonFormField<dynamic>(
-          key: ValueKey('rb-${_branches.length}-$_branchId'),
-          initialValue:
-              _branches.any((b) => b['id'] == _branchId) ? _branchId : null,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'ສາຂາ'),
-          items: [
-            const DropdownMenuItem(value: null, child: Text('ທຸກສາຂາ')),
-            for (final b in _branches)
-              DropdownMenuItem(
-                  value: b['id'],
-                  child: Text(pick(b, ['name', 'branchName', 'id']))),
-          ],
-          onChanged: (v) {
-            _branchId = v;
-            _load();
-          },
-        ),
-        const SizedBox(height: 8),
         Wrap(spacing: 8, children: [
           ChoiceChip(
               label: const Text('ເດືອນ'),
@@ -456,29 +395,62 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
           ),
         ],
         const SizedBox(height: 8),
-        FutureBuilder<List<BranchPriceRow>>(
+        FutureBuilder<int>(
           future: _f,
           builder: (c, s) {
-            if (s.connectionState != ConnectionState.done) {
+            if (s.connectionState == ConnectionState.waiting ||
+                s.connectionState == ConnectionState.none) {
               return const Padding(
                   padding: EdgeInsets.all(32),
                   child: Center(child: CircularProgressIndicator()));
             }
             if (s.hasError) return ErrorView(s.error as Object, _load);
-            final rows = s.data ?? <BranchPriceRow>[];
-            if (rows.isEmpty) {
+            final groups = _groups();
+            if (groups.isEmpty) {
               return Padding(
                   padding: const EdgeInsets.all(32),
                   child: Center(
                       child:
                           Text('ບໍ່ມີຂໍ້ມູນ', style: TextStyle(color: p.mut))));
             }
-            return BranchPriceTable(
-                key: ValueKey('t-${_range.start}-${_range.end}-$_branchId'),
-                rows: rows,
-                children: _posFor,
-                used: _usedFor,
-                usedGroups: _usedGroupsFor);
+            final sel = groups.any((g) => g.po == _sel) ? _sel : null;
+            final shown = sel == null
+                ? groups
+                : groups.where((g) => g.po == sel).toList();
+            var usedQty = 0;
+            for (final g in shown) {
+              for (final u in g.used) {
+                usedQty += _n(u['qty']);
+              }
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DropdownButtonFormField<dynamic>(
+                  key: ValueKey('po-${groups.length}-$sel'),
+                  initialValue: sel,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'PO'),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('ທຸກ PO')),
+                    for (final g in groups)
+                      DropdownMenuItem(
+                          value: g.po, child: Text(_poName(g.po))),
+                  ],
+                  onChanged: (v) {
+                    setState(() {
+                      _sel = v == null ? null : '$v';
+                    });
+                  },
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text('${shown.length} PO · ໃຊ້ $usedQty ອາໄຫຼ່',
+                      style: TextStyle(color: p.mut)),
+                ),
+                for (final g in shown) _poCard(g, sel == null ? false : true),
+              ],
+            );
           },
         ),
       ]),
