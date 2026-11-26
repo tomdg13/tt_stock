@@ -727,6 +727,74 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
     ]);
   }
 
+  Future<void> _showAtm(String id) async {
+    Map<String, dynamic> d = <String, dynamic>{};
+    try {
+      final r = await Api.get('/atms/${Uri.encodeComponent(id)}');
+      if (r is Map) d = Map<String, dynamic>.from(r);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+      return;
+    }
+    if (mounted == false) return;
+    final List<Map<String, dynamic>> terms = d['terminals'] is List
+        ? asList(d['terminals'])
+        : <Map<String, dynamic>>[];
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (c) {
+        final p = pal(c);
+        Widget kv(String k, String v) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                SizedBox(
+                    width: 110, child: Text(k, style: TextStyle(color: p.mut))),
+                Expanded(child: Text(v.isEmpty ? '-' : v)),
+              ]),
+            );
+        return SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('ຕູ້ ATM · $id',
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  kv('ຊື່ຕູ້ ATM', pick(d, ['atmLocation'])),
+                  kv('Group ID', pick(d, ['atmGroupId'])),
+                  kv('IP', pick(d, ['atmIpAddr'])),
+                  kv('Port', pick(d, ['atmPortNum'])),
+                  kv('ATM Version', pick(d, ['atmVersion'])),
+                  kv('Serial', pick(d, ['serialAtm'])),
+                  const SizedBox(height: 8),
+                  if (terms.isEmpty)
+                    Text('ບໍ່ມີ Terminal', style: TextStyle(color: p.mut)),
+                  for (final t in terms)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: typeThumb(c, pick(t, ['typeImage', 'imageFile']),
+                          size: 52),
+                      title: Text(pick(t, ['barcode']),
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                      subtitle: Text([
+                        pick(t, ['typeName']),
+                        pick(t, ['model']),
+                        pick(t, ['serial'])
+                      ].where((e) => e.isNotEmpty).join(' · ')),
+                    ),
+                ]),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _fullTable() {
     final p = pal(context);
     final cs = Theme.of(context).colorScheme;
@@ -835,8 +903,15 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
               color:
                   t == 'Stock' ? cs.secondaryContainer : cs.tertiaryContainer,
               borderRadius: BorderRadius.circular(10)),
-          child: Text(t, style: const TextStyle(fontSize: 12)),
-        ));
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text(t, style: const TextStyle(fontSize: 12)),
+            if (t == 'Stock' || t == '-')
+              const SizedBox()
+            else
+              const Icon(Icons.open_in_new, size: 12),
+          ]),
+        ),
+        onTap: (t == 'Stock' || t == '-') ? null : () => _showAtm(t));
 
     DataCell termCell(String bc) {
       if (bc == '-') return const DataCell(Text('-'));
