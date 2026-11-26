@@ -17,6 +17,8 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
   List<Map<String, dynamic>> _branches = [];
   dynamic _branchId;
   Set<String> _selPos = <String>{};
+  String _ptype = '';
+  Map<String, String> _ptById = {};
   List<String> _poOpts = [];
   List<dynamic> _pos = [];
   List<dynamic> _items = [];
@@ -54,10 +56,11 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
 
   Future<void> _loadImgs() async {
     try {
-      final d = await Api.get('/products?limit=200');
+      final d = await Api.get('/products?limit=500');
       final byId = <String, String>{};
       final byName = <String, String>{};
       for (final m in asList(d)) {
+        _ptById[pick(m, ['id', 'productId'])] = pick(m, ['partType']).isEmpty ? 'FULL' : pick(m, ['partType']).toUpperCase();
         final img = pick(m, ['imageUrl', 'image', 'photo']);
         if (img.isEmpty) continue;
         final id = pick(m, ['id', 'productId']);
@@ -170,6 +173,45 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       final ids = _pos.map((x) => '${x['id']}').toSet();
       _items = _items.where((x) => ids.contains('${x['grnId']}')).toList();
     }
+    if (_ptype.isNotEmpty && _ptById.isEmpty) {
+      await _loadImgs();
+    }
+    if (_ptype.isNotEmpty) {
+      bool keep(dynamic x) =>
+          (_ptById[pick(x, ['productId'])] ?? 'FULL') == _ptype;
+      final grnBr = <String, String>{};
+      for (final x in _pos) {
+        grnBr['${x['id']}'] = '${x['branchId']}';
+      }
+      _items = _items.where(keep).toList();
+      _used = _used.where(keep).toList();
+      final pb = <String, double>{};
+      final ub = <String, double>{};
+      final gt = <String, double>{};
+      for (final x in _items) {
+        final g = '${x['grnId']}';
+        final k = grnBr[g] ?? '';
+        pb[k] = (pb[k] ?? 0) + _v(x['amount']);
+        gt[g] = (gt[g] ?? 0) + _v(x['amount']);
+      }
+      for (final x in _used) {
+        final k = '${x['branchId']}';
+        ub[k] = (ub[k] ?? 0) + _v(x['amount']);
+      }
+      pur = <dynamic>[
+        for (final e in pb.entries)
+          {'branchId': e.key, 'currency': 'LAK', 'total': e.value}
+      ];
+      usd = <dynamic>[
+        for (final e in ub.entries)
+          {'branchId': e.key, 'currency': 'LAK', 'used': e.value}
+      ];
+      _pos = [
+        for (final x in _pos)
+          if (gt.containsKey('${x['id']}'))
+            {...Map<String, dynamic>.from(x as Map), 'total': gt['${x['id']}']}
+      ];
+    }
     final miss = _v(m['lakMissing']);
     if (miss > 0 && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -268,6 +310,11 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       _selPos = tmp;
       _load();
     }
+  }
+
+  void _setPtype(String t) {
+    _ptype = t;
+    _load();
   }
 
   void _load() {
@@ -503,6 +550,21 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
                     _load();
                   }),
           ]),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, children: [
+          ChoiceChip(
+              label: const Text('ທັງໝົດ'),
+              selected: _ptype.isEmpty,
+              onSelected: (_) => _setPtype('')),
+          ChoiceChip(
+              label: const Text('ອາໄຫຼ່ເຕັມ'),
+              selected: _ptype == 'FULL',
+              onSelected: (_) => _setPtype('FULL')),
+          ChoiceChip(
+              label: const Text('ອາໄຫຼ່ຍ່ອຍ'),
+              selected: _ptype == 'PARTIAL',
+              onSelected: (_) => _setPtype('PARTIAL')),
+        ]),
         const SizedBox(height: 8),
         Wrap(spacing: 8, children: [
           ChoiceChip(
