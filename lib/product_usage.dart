@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'api.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'receive_home.dart' show openPoByNo;
+import 'terminal_actions.dart' show openTerminalInfo;
 
 // Product detail -> "POs that contain this product" and "ATM usage" pages.
 // Wired in specs.dart as RowActions on the products spec.
@@ -52,7 +54,10 @@ class _RowView {
   final String title;
   final String sub;
   final String trail;
-  const _RowView(this.title, this.sub, this.trail);
+  final String poNo;
+  final String barcode;
+  const _RowView(this.title, this.sub, this.trail,
+      [this.poNo = '', this.barcode = '']);
 }
 
 _RowView _poRow(Map<String, dynamic> r) {
@@ -67,6 +72,7 @@ _RowView _poRow(Map<String, dynamic> r) {
     [no, title].where((e) => e.isNotEmpty).join('  '),
     [vendor, status, date].where((e) => e.isNotEmpty).join(' · '),
     qty.isEmpty ? '' : '$qty × $price',
+    no,
   );
 }
 
@@ -82,6 +88,8 @@ _RowView _installRow(Map<String, dynamic> r) {
         .where((e) => e.isNotEmpty)
         .join(' · '),
     _date(pick(r, ['logDate', 'log_date'])),
+    '',
+    atm.isNotEmpty ? atm : term,
   );
 }
 
@@ -144,7 +152,13 @@ class _UsagePageState extends State<_UsagePage> {
               separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (_, i) {
                 final v = widget.rowBuilder(rows[i]);
-                return AppCard(
+                return InkWell(
+                  onTap: v.poNo.isNotEmpty
+                      ? () => openPoByNo(context, v.poNo)
+                      : v.barcode.isNotEmpty
+                          ? () => _openTerminal(context, v.barcode)
+                          : null,
+                  child: AppCard(
                   child: Row(
                     children: [
                       Expanded(
@@ -168,6 +182,7 @@ class _UsagePageState extends State<_UsagePage> {
                         Text(v.trail, style: TextStyle(color: p.mut)),
                     ],
                   ),
+                ),
                 );
               },
             ),
@@ -175,5 +190,18 @@ class _UsagePageState extends State<_UsagePage> {
         },
       ),
     );
+  }
+}
+
+/// Open the terminal page for an install row (its ATM_ID holds the terminal barcode).
+Future<void> _openTerminal(BuildContext context, String barcode) async {
+  final msg = ScaffoldMessenger.of(context);
+  try {
+    final d = await Api.get('/terminals/${Uri.encodeComponent(barcode)}');
+    if (!context.mounted) return;
+    final m = d is Map ? Map<String, dynamic>.from(d) : <String, dynamic>{};
+    await openTerminalInfo(context, {...m, 'barcode': barcode});
+  } catch (_) {
+    msg.showSnackBar(SnackBar(content: Text('ບໍ່ພົບ Terminal $barcode')));
   }
 }

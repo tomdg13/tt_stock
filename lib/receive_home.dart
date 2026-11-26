@@ -2472,3 +2472,55 @@ class _AddLinesPageState extends State<_AddLinesPage> {
     );
   }
 }
+
+/// Opens the PO page (items / PO info / documents / Excel / Upload) for one PO number.
+Future<void> openPoByNo(BuildContext context, String poNo) async {
+  if (poNo.isEmpty) return;
+  final nav = Navigator.of(context);
+  final msg = ScaffoldMessenger.of(context);
+  try {
+    final d = await Api.get(
+        '/stock/movements?type=purchase_in&limit=5000&poNo=${Uri.encodeQueryComponent(poNo)}');
+    final rows = asList(d);
+    if (rows.isEmpty) {
+      msg.showSnackBar(
+          SnackBar(content: Text('ບໍ່ພົບລາຍການຮັບເຂົ້າຂອງ PO $poNo')));
+      return;
+    }
+    final first = rows.first;
+    final day =
+        pick(first, ['receiptDate', 'createdAt', 'movementDate', 'date']);
+    final g = _PoGroup(
+      label: 'PO $poNo',
+      po: poNo,
+      grn: pick(first, ['grnNo', 'refNo']),
+      branch: pick(first, ['branchName', 'branchId']),
+      date: day.length >= 10 ? day.substring(0, 10) : day,
+    );
+    final inv = <String, double>{};
+    for (final m in rows) {
+      g.items.add(m);
+      final q = num0(pick(m, ['qtyChange', 'qty'])).toDouble();
+      final a = pick(m, ['amount']);
+      g.total += q;
+      g.amount += a.isNotEmpty
+          ? num0(a).toDouble()
+          : q * num0(pick(m, ['unitCost'])).toDouble();
+      if (g.currency.isEmpty) g.currency = pick(m, ['currency']);
+      final t = num0(pick(m, ['totalAmount'])).toDouble();
+      final gid = pick(m, ['grnId']);
+      if (t > 0 && gid.isNotEmpty) inv[gid] = t;
+    }
+    final sum = inv.values.fold<double>(0, (x, y) => x + y);
+    if (sum > 0) g.amount = sum;
+    await nav.push(MaterialPageRoute(
+      builder: (_) => _PoPage(
+        group: g,
+        onItem: (m) => nav.push<bool>(
+            MaterialPageRoute(builder: (_) => _ItemPage(item: m))),
+      ),
+    ));
+  } catch (e) {
+    msg.showSnackBar(SnackBar(content: Text('$e')));
+  }
+}
