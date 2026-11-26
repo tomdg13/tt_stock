@@ -3,6 +3,7 @@ import 'api.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'product_images.dart';
+import 'type_image.dart';
 import 'branch_price_table.dart';
 import 'report_docs_page.dart';
 import 'price_report_export.dart';
@@ -22,6 +23,7 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
   Map<String, String> _ptById = {};
   Map<String, List<String>> _pinfo = {};
   Map<String, List<String>> _pfull = {};
+  Map<String, List<String>> _tinfo = {};
   List<String> _poOpts = [];
   List<dynamic> _pos = [];
   List<dynamic> _items = [];
@@ -54,7 +56,26 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       if (mounted) setState(() => _branches = b);
     }).catchError((_) {});
     _loadImgs();
+    _loadTerms();
     _load();
+  }
+
+  Future<void> _loadTerms() async {
+    try {
+      final d = await Api.get('/terminals?limit=1000');
+      final m = <String, List<String>>{};
+      for (final t in asList(d)) {
+        m[pick(t, ['barcode'])] = <String>[
+          pick(t, ['typeName']),
+          pick(t, ['typeImage', 'imageFile']),
+        ];
+      }
+      if (mounted) {
+        setState(() {
+          _tinfo = m;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadImgs() async {
@@ -817,6 +838,24 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
           child: Text(t, style: const TextStyle(fontSize: 12)),
         ));
 
+    DataCell termCell(String bc) {
+      if (bc == '-') return const DataCell(Text('-'));
+      final ti = _tinfo[bc] ?? <String>['', ''];
+      return DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
+        typeThumb(context, ti[1], size: 36),
+        const SizedBox(width: 8),
+        Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(bc, style: const TextStyle(fontWeight: FontWeight.w600)),
+            if (ti[0].isNotEmpty)
+              Text(ti[0], style: TextStyle(color: p.mut, fontSize: 12)),
+          ],
+        ),
+      ]));
+    }
+
     DataCell imgCell(String url) {
       const s = 44.0;
       const ic = SizedBox(
@@ -872,7 +911,7 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
                   cell(r[3], w: 160),
                   cell(r[4], w: 60, st: bold),
                   atmCell(r[5]),
-                  cell(r[11], w: 130),
+                  termCell(r[11]),
                   cell(r[6], w: 130),
                   cell(r[7], w: 90),
                 ]),
