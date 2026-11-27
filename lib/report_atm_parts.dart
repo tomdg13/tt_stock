@@ -61,6 +61,12 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
     _load();
   }
 
+  String _normPo(String s) {
+    final m = RegExp(r'^PO0*(\d+)$').firstMatch(s.trim().toUpperCase());
+    if (m == null) return s;
+    return 'PO${(m.group(1) ?? '').padLeft(4, '0')}';
+  }
+
   Future<void> _loadTerms() async {
     try {
       final d = await Api.get('/terminals?limit=1000');
@@ -171,6 +177,20 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
     _pos = asList(m[_cur == 'USD' ? 'posUsd' : 'pos']);
     _items = asList(m[_cur == 'USD' ? 'itemsUsd' : 'items']);
     _used = asList(m[_cur == 'USD' ? 'usedItemsUsd' : 'usedItems']);
+    _pos = [
+      for (final x in _pos)
+        {
+          ...Map<String, dynamic>.from(x as Map),
+          'poNo': _normPo(pick(x, ['poNo']))
+        }
+    ];
+    _used = [
+      for (final x in _used)
+        {
+          ...Map<String, dynamic>.from(x as Map),
+          'poNo': _normPo(pick(x, ['poNo']))
+        }
+    ];
     _terms = asList(m['terms']);
     final poSet = <String>{};
     for (final x in _pos) {
