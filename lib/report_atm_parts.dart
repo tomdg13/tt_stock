@@ -123,6 +123,9 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       _range = DateTimeRange(
           start: DateTime(_anchor.year, 1, 1),
           end: DateTime(_anchor.year, 12, 31));
+    } else if (_mode == 'all') {
+      _range = DateTimeRange(
+          start: DateTime(2020, 1, 1), end: DateTime(2100, 12, 31));
     }
   }
 
@@ -182,6 +185,8 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
     if (mounted) {
       setState(() {});
     }
+    debugPrint(
+        '[ATMPARTS] raw pos=${_pos.length} items=${_items.length} used=${_used.length} sel=$_selPos type=$_ptype cur=$_cur');
     final sp = _selPos;
     if (sp.isNotEmpty) {
       final pb = <String, double>{};
@@ -250,6 +255,8 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
             {...Map<String, dynamic>.from(x as Map), 'total': gt['${x['id']}']}
       ];
     }
+    debugPrint(
+        '[ATMPARTS] after pos=${_pos.length} items=${_items.length} used=${_used.length}');
     final miss = _v(m['lakMissing']);
     if (_cur == 'LAK' && miss > 0 && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1142,6 +1149,70 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
         ],
       ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
+        Wrap(spacing: 8, children: [
+          ChoiceChip(
+              label: const Text('ເດືອນ'),
+              selected: _mode == 'month',
+              onSelected: (_) => _setMode('month')),
+          ChoiceChip(
+              label: const Text('ປີ'),
+              selected: _mode == 'year',
+              onSelected: (_) => _setMode('year')),
+          ChoiceChip(
+              label: const Text('ກຳນົດເອງ'),
+              selected: _mode == 'custom',
+              onSelected: (_) => _setMode('custom')),
+          ChoiceChip(
+              label: const Text('ທັງໝົດ'),
+              selected: _mode == 'all',
+              onSelected: (_) => _setMode('all')),
+        ]),
+        const SizedBox(height: 8),
+        if (_mode == 'custom')
+          OutlinedButton.icon(
+            icon: const Icon(Icons.date_range),
+            label: Text('${_d(_range.start)}  →  ${_d(_range.end)}'),
+            onPressed: _pickRange,
+          )
+        else if (_mode == 'all')
+          Center(child: Text('ທຸກວັນທີ', style: TextStyle(color: p.mut)))
+        else ...[
+          Row(children: [
+            IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: () => _shift(-1)),
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.calendar_month),
+                label: Text(_label),
+                onPressed: _jump,
+              ),
+            ),
+            IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: () => _shift(1)),
+          ]),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Center(
+              child: Text('${_d(_range.start)}  →  ${_d(_range.end)}',
+                  style: TextStyle(color: p.mut, fontSize: 12)),
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, children: [
+          ChoiceChip(
+              label: const Text('ອາໄຫຼ່ເຕັມ'),
+              selected: _ptype == 'FULL',
+              onSelected: (_) => _setPtype(_ptype == 'FULL' ? '' : 'FULL')),
+          ChoiceChip(
+              label: const Text('ອາໄຫຼ່ຍ່ອຍ'),
+              selected: _ptype == 'PARTIAL',
+              onSelected: (_) =>
+                  _setPtype(_ptype == 'PARTIAL' ? '' : 'PARTIAL')),
+        ]),
+        const SizedBox(height: 8),
         OutlinedButton.icon(
           icon: const Icon(Icons.checklist),
           label: Text(_selPos.isEmpty
@@ -1170,67 +1241,6 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
               selected: _cur == 'USD',
               onSelected: (_) => _setCur('USD')),
         ]),
-        const SizedBox(height: 8),
-        Wrap(spacing: 8, children: [
-          ChoiceChip(
-              label: const Text('ທັງໝົດ'),
-              selected: _ptype.isEmpty,
-              onSelected: (_) => _setPtype('')),
-          ChoiceChip(
-              label: const Text('ອາໄຫຼ່ເຕັມ'),
-              selected: _ptype == 'FULL',
-              onSelected: (_) => _setPtype('FULL')),
-          ChoiceChip(
-              label: const Text('ອາໄຫຼ່ຍ່ອຍ'),
-              selected: _ptype == 'PARTIAL',
-              onSelected: (_) => _setPtype('PARTIAL')),
-        ]),
-        const SizedBox(height: 8),
-        Wrap(spacing: 8, children: [
-          ChoiceChip(
-              label: const Text('ເດືອນ'),
-              selected: _mode == 'month',
-              onSelected: (_) => _setMode('month')),
-          ChoiceChip(
-              label: const Text('ປີ'),
-              selected: _mode == 'year',
-              onSelected: (_) => _setMode('year')),
-          ChoiceChip(
-              label: const Text('ກຳນົດເອງ'),
-              selected: _mode == 'custom',
-              onSelected: (_) => _setMode('custom')),
-        ]),
-        const SizedBox(height: 8),
-        if (_mode == 'custom')
-          OutlinedButton.icon(
-            icon: const Icon(Icons.date_range),
-            label: Text('${_d(_range.start)}  →  ${_d(_range.end)}'),
-            onPressed: _pickRange,
-          )
-        else ...[
-          Row(children: [
-            IconButton(
-                icon: const Icon(Icons.chevron_left),
-                onPressed: () => _shift(-1)),
-            Expanded(
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.calendar_month),
-                label: Text(_label),
-                onPressed: _jump,
-              ),
-            ),
-            IconButton(
-                icon: const Icon(Icons.chevron_right),
-                onPressed: () => _shift(1)),
-          ]),
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Center(
-              child: Text('${_d(_range.start)}  →  ${_d(_range.end)}',
-                  style: TextStyle(color: p.mut, fontSize: 12)),
-            ),
-          ),
-        ],
         const SizedBox(height: 8),
         FutureBuilder<List<BranchPriceRow>>(
           future: _f,
