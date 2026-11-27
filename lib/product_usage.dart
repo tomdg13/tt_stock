@@ -82,11 +82,17 @@ _RowView _installRow(Map<String, dynamic> r) {
   final serial = pick(r, ['serialNo', 'serial_no']);
   final action = pick(r, ['action']);
   final user = pick(r, ['userName', 'user_name']);
+  final siteLoc = pick(r, ['siteLocation', 'site_location']);
+  final siteAtm = pick(r, ['siteAtm', 'site_atm']);
   return _RowView(
     [atm, term].where((e) => e.isNotEmpty).join('  '),
-    [action, if (serial.isNotEmpty) 'S/N $serial', user]
-        .where((e) => e.isNotEmpty)
-        .join(' · '),
+    [
+      if (siteLoc.isNotEmpty)
+        '$siteLoc${siteAtm.isNotEmpty ? ' ($siteAtm)' : ''}',
+      [action, if (serial.isNotEmpty) 'S/N $serial', user]
+          .where((e) => e.isNotEmpty)
+          .join(' · '),
+    ].where((e) => e.isNotEmpty).join('\n'),
     _date(pick(r, ['logDate', 'log_date'])),
     '',
     atm.isNotEmpty ? atm : term,
