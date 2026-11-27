@@ -1,11 +1,13 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart' show PdfPageFormat;
 import 'api.dart';
+import 'branch_contacts_page.dart';
 import 'plan_bar.dart';
 import 'withdraw_docs.dart';
 import 'ldb_letterhead.dart' show LdbLetterhead, loadLetterhead;
-import 'price_report_export.dart' show buildWithdrawalPdf;
+import 'price_report_export.dart' show buildWithdrawalPdf, buildWithdrawalSticker;
 import 'product_images.dart' show productImageUrl;
 
 /// ໃບເບີກອາໄຫຼ່: one withdrawal as a bill. The preview shows the LDB letterhead;
@@ -455,6 +457,108 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
     }
   }
 
+  Future<void> _sticker() async {
+    final canSet = Api.can('WD_S3') || Api.can('WD_S6');
+    final sg = int.tryParse('${_d['stage'] ?? ''}') ?? 0;
+    var back = sg >= 6;
+    final from = '${_d['branchName'] ?? ''}';
+    final to = '${_d['requestBranchName'] ?? _d['branchName'] ?? ''}';
+    String firstOf(List<String> xs) {
+      for (final x in xs) {
+        if (x.isNotEmpty) return x;
+      }
+      return '';
+    }
+
+    final pa = TextEditingController(
+        text: firstOf(['${_d['senderPhone'] ?? ''}', '${_d['fromPhone'] ?? ''}']));
+    final pb = TextEditingController(
+        text: firstOf(['${_d['receiverPhone'] ?? ''}', '${_d['toPhone'] ?? ''}']));
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(builder: (c2, setD) {
+        final fromName = back ? to : from;
+        final toName = back ? from : to;
+        return AlertDialog(
+          title: const Text('ສະຕິກເກີ'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(value: false, label: Text('ສົ່ງໄປ')),
+                  ButtonSegment(value: true, label: Text('ສົ່ງຄືນ')),
+                ],
+                selected: {back},
+                onSelectionChanged: (s) => setD(() => back = s.first),
+              ),
+              const SizedBox(height: 12),
+              Text('$fromName  ->  $toName'),
+              const SizedBox(height: 12),
+              TextField(
+                  controller: back ? pb : pa,
+                  enabled: canSet,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: 'ເບີໂທຜູ້ສົ່ງ')),
+              const SizedBox(height: 8),
+              TextField(
+                  controller: back ? pa : pb,
+                  enabled: canSet,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: 'ເບີໂທຜູ້ຮັບ')),
+              if (Api.can('BRANCH_MANAGE'))
+                TextButton.icon(
+                  icon: const Icon(Icons.location_on_outlined),
+                  label: const Text('ແກ້ໄຂທີ່ຢູ່ສາຂາ'),
+                  onPressed: () async {
+                    await Navigator.push(
+                        c2,
+                        MaterialPageRoute(
+                            builder: (_) => const BranchContactsPage()));
+                    await _reloadD();
+                  },
+                ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c2, false),
+                child: const Text('ຍົກເລີກ')),
+            FilledButton(
+                onPressed: () => Navigator.pop(c2, true),
+                child: const Text('ພິມ')),
+          ],
+        );
+      }),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    try {
+      final d = Map<String, dynamic>.from(_d);
+      d['senderPhone'] = pa.text.trim();
+      d['receiverPhone'] = pb.text.trim();
+      if (canSet) {
+        await Api.post('/withdrawals/${_d['id']}/sticker', {
+          'senderPhone': pa.text.trim(),
+          'receiverPhone': pb.text.trim(),
+        });
+        if (mounted) setState(() => _d = d);
+      }
+      final bytes = await buildWithdrawalSticker(d, back: back);
+      await Printing.layoutPdf(
+          onLayout: (_) async => bytes,
+          name: '$_name-sticker',
+          format: PdfPageFormat(100 * PdfPageFormat.mm, 150 * PdfPageFormat.mm));
+    } catch (e) {
+      debugPrint('[WD] sticker failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _goDocs() async {
     await Navigator.push<dynamic>(
         context,
@@ -546,7 +650,10 @@ class _WithdrawBillPageState extends State<WithdrawBillPage> {
           } else {
             items = [folder, prn, shr];
           }
-          return PlanNav(items: items);
+          final stk = PlanNavItem(Icons.local_shipping_outlined, 'ສະຕິກເກີ',
+              _busy ? null : _sticker);
+          final showStk = (st == 'open' || st == 'closed') && sg >= 4;
+          return PlanNav(items: showStk ? [...items, stk] : items);
         },
       ),
     );

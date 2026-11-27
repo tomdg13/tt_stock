@@ -28,6 +28,7 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
   List<dynamic> _pos = [];
   List<dynamic> _items = [];
   List<dynamic> _used = [];
+  List<dynamic> _terms = [];
   Map<String, String> _imgById = {};
   Map<String, String> _imgByName = {};
   String _mode = 'month';
@@ -167,6 +168,7 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
     _pos = asList(m[_cur == 'USD' ? 'posUsd' : 'pos']);
     _items = asList(m[_cur == 'USD' ? 'itemsUsd' : 'items']);
     _used = asList(m[_cur == 'USD' ? 'usedItemsUsd' : 'usedItems']);
+    _terms = asList(m['terms']);
     final poSet = <String>{};
     for (final x in _pos) {
       poSet.add(pick(x, ['poNo']));
@@ -817,8 +819,8 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       final bc = fl[3].isEmpty ? inf[3] : fl[3];
       final img = _imgFor(x, x['productName'] == null ? 'name' : 'productName');
       return <String>[
-        f(inf[0]),
-        f(inf[1]),
+        f(pick(x, ['termBrand']).isEmpty ? inf[0] : pick(x, ['termBrand'])),
+        f(pick(x, ['termModel']).isEmpty ? inf[1] : pick(x, ['termModel'])),
         f(full),
         f(part),
         _v(x['qty']).round().toString(),
@@ -833,9 +835,25 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
     }
 
     final ents = <List<String>>[];
-    for (final e in _items) {
-      ents.add(make(e, 'Stock', grnPo['${e['grnId']}'] ?? '',
-          _v(e['amount']), 0, ''));
+    final termsOn = _ptype == 'PARTIAL' ? <dynamic>[] : _terms;
+    for (final t in termsOn) {
+      final tp = pick(t, ['poNo']);
+      if (_selPos.isNotEmpty && _selPos.contains(tp) == false) continue;
+      final ta = pick(t, ['atmId']);
+      ents.add(<String>[
+        f(pick(t, ['brandName'])),
+        f(pick(t, ['model'])),
+        f(pick(t, ['fullPart'])),
+        '-',
+        '1',
+        ta.isEmpty ? 'Stock' : ta,
+        f(pick(t, ['serial'])),
+        f(tp),
+        '0',
+        '0',
+        '',
+        f(pick(t, ['barcode'])),
+      ]);
     }
     for (final u in _used) {
       ents.add(make(u, pick(u, ['atmId']), pick(u, ['poNo']), 0,
@@ -863,7 +881,10 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       return t;
     }
 
-    final allBuy = sum(8);
+    var allBuy = 0.0;
+    for (final e in _items) {
+      allBuy += _v(e['amount']);
+    }
     final allUsed = sum(9);
     final allQty = sum(4).round();
     const bold = TextStyle(fontWeight: FontWeight.w700);
@@ -946,7 +967,8 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       ));
     }
 
-    final table = Container(
+    var rn = 0;
+      final table = Container(
       decoration: BoxDecoration(
           border: Border.all(color: cs.outlineVariant),
           borderRadius: BorderRadius.circular(12)),
@@ -963,23 +985,25 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
                 WidgetStatePropertyAll(cs.surfaceContainerHighest),
             columns: [
               for (final h in const [
-                'Image',
-                'Brand',
+                  'No',
+                  'Image',
+                  'Brand',
                 'Model',
                 'Full part',
                 'Part',
                 'Amount',
                 'ATM',
                 'Terminal',
-                'Barcode',
+                'Serial / Barcode',
                 'PO'
               ])
                 DataColumn(label: Text(h, style: bold))
             ],
             rows: [
               for (final r in ents)
-                DataRow(cells: [
-                  imgCell(r[10]),
+                  DataRow(cells: [
+                    cell('${++rn}', w: 44),
+                    imgCell(r[10]),
                   cell(r[0], w: 80),
                   cell(r[1], w: 150),
                   cell(r[2], w: 220),
@@ -994,6 +1018,7 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
                   color: WidgetStatePropertyAll(cs.surfaceContainerHighest),
                   cells: [
                     cell(''),
+                      cell(''),
                     cell('Total', w: 80, st: bold),
                     cell(''),
                     cell(''),
@@ -1063,12 +1088,26 @@ class _ReportAtmPartsPageState extends State<ReportAtmPartsPage> {
       }
       final data = PriceReportData(
           range: '${_d(_range.start)} - ${_d(_range.end)}',
-          branch: branchName,
+          branch: '$branchName · $_cur${_ptype.isEmpty ? '' : ' · $_ptype'}${_selPos.isEmpty ? '' : ' · PO: ${_selPos.map((o) => o.isEmpty ? '-' : o).join(', ')}'}',
           rows: rows,
           pos: _pos,
           items: _items,
           used: _used,
-          imgFor: (x, k) => _imgFor(x, k));
+          imgFor: (x, k) => _imgFor(x, k),
+            termMode: true,
+            cur: _cur,
+            terms: _ptype == 'PARTIAL'
+                ? <dynamic>[]
+                : <dynamic>[
+                    for (final t in _terms)
+                      if (_selPos.isEmpty || _selPos.contains(pick(t, ['poNo'])))
+                        {
+                          ...Map<String, dynamic>.from(t as Map),
+                          'imgUrl': terminalTypeImageUrl(
+                              (_tinfo[pick(t, ['barcode'])] ?? <String>['', ''])[1],
+                              'terminal-types'),
+                        }
+                  ]);
       if (kind == 'pdf') {
         await sharePriceReportPdf(data);
       } else {

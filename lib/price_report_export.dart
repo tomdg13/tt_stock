@@ -20,6 +20,9 @@ class PriceReportData {
   final List<dynamic> items;
   final List<dynamic> used;
   final String Function(dynamic row, String nameKey) imgFor;
+  final List<dynamic> terms;
+  final bool termMode;
+  final String cur;
   const PriceReportData({
     required this.range,
     required this.branch,
@@ -28,7 +31,34 @@ class PriceReportData {
     required this.items,
     required this.used,
     required this.imgFor,
+    this.terms = const <dynamic>[],
+    this.termMode = false,
+    this.cur = 'LAK',
   });
+}
+
+List<List<String>> _termRows(PriceReportData d) {
+  String g(dynamic t, String k) {
+    final v = t is Map ? t[k] : null;
+    return v == null ? '' : '$v';
+  }
+
+  String dash(String s) => s.isEmpty ? '-' : s;
+  return <List<String>>[
+    for (final t in d.terms)
+      <String>[
+        dash(g(t, 'brandName')),
+        dash(g(t, 'model')),
+        dash(g(t, 'fullPart')),
+        '-',
+        '1',
+        g(t, 'atmId').isEmpty ? 'Stock' : g(t, 'atmId'),
+        dash(g(t, 'barcode')),
+        dash(g(t, 'serial')),
+        dash(g(t, 'poNo')),
+        g(t, 'imgUrl'),
+      ]
+  ];
 }
 
 class _Ln {
@@ -228,10 +258,13 @@ Future<void> sharePriceReportXlsx(PriceReportData d) async {
   final po = _poLines(d, names);
   final us = _usedLines(d, names);
   final urls = <String>{
-    for (final l in po)
-      if (l.url.isNotEmpty) l.url,
+    if (d.termMode == false)
+      for (final l in po)
+        if (l.url.isNotEmpty) l.url,
     for (final l in us)
       if (l.url.isNotEmpty) l.url,
+    for (final t in d.terms)
+      if ('${t['imgUrl'] ?? ''}'.isNotEmpty) '${t['imgUrl']}',
   };
   final thumbs = await _loadThumbs(urls);
 
@@ -274,7 +307,7 @@ Future<void> sharePriceReportXlsx(PriceReportData d) async {
     heights[rows.length] = 42.0;
     add(<Object>[]);
   }
-  add(<Object>['ລາຍງານລາຄາອາໄຫຼ່ (LAK)'], true);
+  add(<Object>['ລາຍງານລາຄາອາໄຫຼ່ (${d.cur})'], true);
   add(<Object>['ໄລຍະ', d.range]);
   add(<Object>['ສາຂາ', d.branch]);
   add(<Object>[]);
@@ -302,7 +335,54 @@ Future<void> sharePriceReportXlsx(PriceReportData d) async {
     tt.roundToDouble()
   ], true);
 
-  if (po.isNotEmpty) {
+  if (d.termMode) {
+    final tr = _termRows(d);
+    if (tr.isNotEmpty) {
+      add(<Object>[]);
+      add(<Object>['Terminal (${tr.length})'], true);
+      add(<Object>[
+        'No',
+        'Image',
+        'Brand',
+        'Model',
+        'Full part',
+        'Part',
+        'Amount',
+        'ATM',
+        'Terminal',
+        'Serial / Barcode',
+        'PO'
+      ], true);
+      var rn = 0;
+      for (final r in tr) {
+        final th = thumbs[r[9]];
+        if (th != null) {
+          images.add(XlImage(
+              row: rows.length,
+              col: 1,
+              key: r[9],
+              bytes: th.bytes,
+              w: th.w,
+              h: th.h));
+          heights[rows.length] = 40.0;
+        }
+        add(<Object>[
+          (++rn).toDouble(),
+          '',
+          r[0],
+          r[1],
+          r[2],
+          r[3],
+          double.tryParse(r[4]) ?? 0.0,
+          r[5],
+          r[6],
+          r[7],
+          r[8]
+        ]);
+      }
+    }
+  }
+  if (d.termMode == false && po.isNotEmpty) {
     add(<Object>[]);
     add(<Object>['ຊື້ເຂົ້າ (PO)'], true);
     add(<Object>[
@@ -400,7 +480,9 @@ Future<void> sharePriceReportXlsx(PriceReportData d) async {
     fileName: 'PriceReport_${_stamp()}.xlsx',
     rows: rows,
     boldRows: bold,
-    widths: [14, 22, 22, 24, 18, 36, 8, 18, 18],
+    widths: d.termMode
+        ? [6, 14, 12, 20, 22, 12, 12, 12, 16, 22, 10]
+        : [14, 22, 22, 24, 18, 36, 8, 18, 18],
     images: images,
     rowHeights: heights,
   );
@@ -422,10 +504,10 @@ pw.Widget _imgCell(Uint8List? b) => pw.Padding(
 
 pw.Widget _table(List<String> head, List<List<String>> data,
     Map<int, pw.TableColumnWidth> widths, Set<int> right,
-    {List<String>? foot, List<Uint8List?>? imgs}) {
+    {List<String>? foot, List<Uint8List?>? imgs, bool num = false}) {
   final hasImg = imgs != null;
   final List<Uint8List?> ims = imgs ?? <Uint8List?>[];
-  final off = hasImg ? 1 : 0;
+  final off = (hasImg ? 1 : 0) + (num ? 1 : 0);
   final rows = <pw.TableRow>[
     pw.TableRow(
       decoration: const pw.BoxDecoration(color: PdfColors.grey200),
@@ -440,6 +522,7 @@ pw.Widget _table(List<String> head, List<List<String>> data,
     rows.add(pw.TableRow(
       verticalAlignment: pw.TableCellVerticalAlignment.middle,
       children: [
+        if (num) _cell('${k + 1}'),
         if (hasImg) _imgCell(k < ims.length ? ims[k] : null),
         for (var i = 0; i < r.length; i++)
           _cell(r[i], right: right.contains(i + off))
@@ -489,10 +572,13 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
   final po = _poLines(d, names);
   final us = _usedLines(d, names);
   final urls = <String>{
-    for (final l in po)
-      if (l.url.isNotEmpty) l.url,
+    if (d.termMode == false)
+      for (final l in po)
+        if (l.url.isNotEmpty) l.url,
     for (final l in us)
       if (l.url.isNotEmpty) l.url,
+    for (final t in d.terms)
+      if ('${t['imgUrl'] ?? ''}'.isNotEmpty) '${t['imgUrl']}',
   };
   final thumbs = await _loadThumbs(urls);
 
@@ -530,6 +616,8 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
     ]);
   }
 
+  final termData = d.termMode ? _termRows(d) : <List<String>>[];
+  final termImgs = <Uint8List?>[for (final r in termData) thumbs[r[9]]?.bytes];
   final usData = <List<String>>[];
   final usImgs = <Uint8List?>[];
   double usSum = 0;
@@ -560,8 +648,11 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
   for (final r in usData) {
     all.addAll(r);
   }
+  for (final r in termData) {
+    all.addAll(r);
+  }
   await _prepLao(all);
-  await _renderLao('ລາຍງານລາຄາອາໄຫຼ່ (LAK)', 16, true);
+  await _renderLao('ລາຍງານລາຄາອາໄຫຼ່ (${d.cur})', 16, true);
   await _renderLao('ຊື້ເຂົ້າ (PO)', 12, true);
   await _renderLao('ນຳໃຊ້ (ສ້ອມ)', 12, true);
   await _renderLao(headLine, 9, false);
@@ -586,6 +677,7 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
   debugPrint(
       '[PDF] page width=$pageW headerH=${(pageW * lh.headerRatio).toStringAsFixed(1)} footerH=${(pageW * lh.footerRatio).toStringAsFixed(1)}');
   doc.addPage(pw.MultiPage(
+    maxPages: 200,
     pageTheme: pw.PageTheme(
       pageFormat: PdfPageFormat.a4,
       margin: pw.EdgeInsets.fromLTRB(
@@ -594,7 +686,7 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
       buildBackground: (ctx) => ldbPdfBackground(lh),
     ),
     build: (ctx) => [
-      _txt('ລາຍງານລາຄາອາໄຫຼ່ (LAK)', size: 16, bold: true),
+      _txt('ລາຍງານລາຄາອາໄຫຼ່ (${d.cur})', size: 16, bold: true),
       pw.SizedBox(height: 4),
       _txt(headLine, size: 9),
       pw.SizedBox(height: 10),
@@ -610,8 +702,29 @@ Future<void> sharePriceReportPdf(PriceReportData d) async {
         {1, 2, 3},
         foot: ['Total', _th(tb), _th(tu), _th(tt)],
       ),
-      if (poData.isNotEmpty) _heading('ຊື້ເຂົ້າ (PO)'),
-      if (poData.isNotEmpty)
+      if (termData.isNotEmpty) _heading('Terminal (${termData.length})'),
+      if (termData.isNotEmpty)
+        _table(
+            ['No', '', 'Brand', 'Model', 'Full part', 'Part', 'Amount', 'ATM', 'Terminal', 'Serial / Barcode', 'PO'],
+            [for (final r in termData) r.sublist(0, 9)],
+            <int, pw.TableColumnWidth>{
+              0: const pw.FixedColumnWidth(22),
+              1: const pw.FixedColumnWidth(34),
+              2: const pw.FlexColumnWidth(1.2),
+              3: const pw.FlexColumnWidth(2),
+              4: const pw.FlexColumnWidth(2.2),
+              5: const pw.FlexColumnWidth(1),
+              6: const pw.FixedColumnWidth(32),
+              7: const pw.FlexColumnWidth(1.6),
+              8: const pw.FlexColumnWidth(2.2),
+              9: const pw.FlexColumnWidth(2.6),
+              10: const pw.FlexColumnWidth(1.6),
+            },
+            <int>{6},
+            imgs: termImgs,
+            num: true),
+      if (d.termMode == false && poData.isNotEmpty) _heading('ຊື້ເຂົ້າ (PO)'),
+      if (d.termMode == false && poData.isNotEmpty)
         _table(
             [
               '',
@@ -1160,5 +1273,148 @@ Future<Uint8List> buildWithdrawalPdf(
     ],
   ));
 
+  return doc.save();
+}
+
+/// 100 x 150 mm parcel sticker of one withdrawal.
+/// Outgoing: sender = branch the stock is taken from, receiver = requesting branch.
+/// [back] = true swaps both (sticker for sending the old part back).
+/// [w] = a row of GET /withdrawals (fromAddress / fromPhone / toAddress / toPhone come from TT_BRANCH_CONTACT).
+Future<Uint8List> buildWithdrawalSticker(Map<String, dynamic> w,
+    {bool back = false}) async {
+  String g(String k) {
+    final v = w[k];
+    return v == null ? '' : '$v';
+  }
+
+  String t2(int n) => n.toString().padLeft(2, '0');
+  String firstOf(String a, String b) => a.isNotEmpty ? a : b;
+  final no = g('withdrawNo').isEmpty ? g('id') : g('withdrawNo');
+  final d = DateTime.tryParse(g('createdAt'));
+  final date = d == null
+      ? ''
+      : '${d.toLocal().year}-${t2(d.toLocal().month)}-${t2(d.toLocal().day)}';
+
+  final outFrom = g('branchName');
+  final outTo = firstOf(g('requestBranchName'), outFrom);
+  final outFromAddr = g('fromAddress');
+  final outToAddr = g('toAddress');
+  final outFromPh = firstOf(g('senderPhone'), g('fromPhone'));
+  final outToPh = firstOf(g('receiverPhone'), g('toPhone'));
+
+  final fromBr = back ? outTo : outFrom;
+  final toBr = back ? outFrom : outTo;
+  final fromAddr = back ? outToAddr : outFromAddr;
+  final toAddr = back ? outFromAddr : outToAddr;
+  final fromPh = back ? outToPh : outFromPh;
+  final toPh = back ? outFromPh : outToPh;
+
+  final all = w['items'] is List
+      ? [for (final x in w['items'] as List) if (x is Map) x]
+      : <Map>[];
+  final items = all.length > 4 ? all.sublist(0, 4) : all;
+  final more = all.length - items.length;
+
+  final fmt = PdfPageFormat(100 * PdfPageFormat.mm, 150 * PdfPageFormat.mm);
+  const margin = 12.0;
+  final cw = fmt.width - margin * 2;
+  final iw = cw - 12;
+
+  const lFrom = 'ສາຂາທີ່ສົ່ງ';
+  const lTo = 'ສາຂາຮັບ';
+  const lPh = 'ເບີໂທ';
+  const lItems = 'ລາຍການອາໄຫຼ່';
+  final title = back ? 'ສົ່ງຄືນ' : 'ສົ່ງໄປ';
+
+  await _wdPrep(title, 12, true, iw);
+  await _wdPrep(lFrom, 9, false, iw);
+  await _wdPrep(lTo, 9, false, iw);
+  await _wdPrep(lPh, 9, false, 60);
+  await _wdPrep(lItems, 9, false, cw);
+  for (final t in [fromBr, toBr]) {
+    await _wdPrep(t, 14, true, iw);
+  }
+  for (final t in [fromAddr, toAddr]) {
+    await _wdPrep(t, 9, false, iw);
+  }
+  for (final i in items) {
+    await _wdPrep('${i['productName'] ?? ''}', 9, false, cw - 40);
+  }
+
+  pw.Widget party(String label, String name, String addr, String phone) {
+    return pw.Container(
+      width: cw,
+      margin: const pw.EdgeInsets.only(bottom: 6),
+      padding: const pw.EdgeInsets.all(6),
+      decoration: pw.BoxDecoration(border: pw.Border.all(width: 0.8)),
+      child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            _wdBlock(label, 9, false, iw),
+            pw.SizedBox(height: 2),
+            _wdBlock(name.isEmpty ? '-' : name, 14, true, iw),
+            if (addr.isNotEmpty) ...[
+              pw.SizedBox(height: 2),
+              _wdBlock(addr, 9, false, iw),
+            ],
+            pw.SizedBox(height: 3),
+            pw.Row(children: [
+              pw.SizedBox(width: 60, child: _wdBlock(lPh, 9, false, 60)),
+              pw.Expanded(
+                  child: _wdBlock(phone.isEmpty ? '-' : phone, 13, true, iw - 60)),
+            ]),
+          ]),
+    );
+  }
+
+  final rows = <pw.Widget>[];
+  for (final i in items) {
+    rows.add(pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 2),
+      child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.Expanded(
+            child: _wdBlock('${i['productName'] ?? ''}', 9, false, cw - 40)),
+        pw.SizedBox(width: 6),
+        pw.Text('x${i['qty'] ?? ''}',
+            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+      ]),
+    ));
+  }
+  if (more > 0) {
+    rows.add(pw.Text('+$more', style: const pw.TextStyle(fontSize: 9)));
+  }
+
+  final doc = pw.Document();
+  doc.addPage(pw.Page(
+    pageFormat: fmt,
+    margin: const pw.EdgeInsets.all(margin),
+    build: (ctx) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(no,
+                    style: pw.TextStyle(
+                        fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                pw.Text(date, style: const pw.TextStyle(fontSize: 9)),
+              ]),
+          pw.SizedBox(height: 3),
+          pw.Container(
+              width: cw,
+              padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+              margin: const pw.EdgeInsets.only(bottom: 6),
+              decoration: pw.BoxDecoration(border: pw.Border.all(width: 1.6)),
+              child: _wdBlock(title, 12, true, iw)),
+          party(lFrom, fromBr, fromAddr, fromPh),
+          party(lTo, toBr, toAddr, toPh),
+          _wdBlock(lItems, 9, false, cw),
+          pw.Divider(thickness: 0.6),
+          ...rows,
+          pw.Spacer(),
+          pw.Text('Terminal ${g('barcode')}  ATM ${g('atmId')}',
+              style: const pw.TextStyle(fontSize: 8)),
+        ]),
+  ));
   return doc.save();
 }
